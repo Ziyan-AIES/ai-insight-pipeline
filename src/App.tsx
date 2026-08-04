@@ -3,8 +3,10 @@ import './App.css'
 import { demoNews, demoTheses, demoTopics } from './demoData'
 import {
   cloudConfigured,
+  createThesis,
   createTopic,
   deleteNewsItem,
+  deleteThesisItem,
   deleteTopicItem,
   importLegacyNews,
   loadWorkspace,
@@ -13,12 +15,14 @@ import {
   persistTopicNews,
   unlinkTopicNews,
   updateNewsItem,
+  updateThesisItem,
   updateTopicItem,
 } from './supabase'
 import type {
   FocusMode,
   NewsCategory,
   NewsItem,
+  Thesis,
   Topic,
   TopicStatus,
 } from './types'
@@ -105,6 +109,21 @@ function metadataObjects(
           Boolean(item) && typeof item === 'object' && !Array.isArray(item),
       )
     : []
+}
+
+function NewsWhyItMatters({
+  metadata,
+}: {
+  metadata: Record<string, unknown> | undefined
+}) {
+  const implications = metadataStrings(metadata, 'implications').slice(0, 2)
+  if (implications.length === 0) return null
+  return (
+    <div className="why-it-matters">
+      <strong>Why it matters</strong>
+      <p>{implications.join(' ')}</p>
+    </div>
+  )
 }
 
 function NewsAnalysis({
@@ -207,7 +226,10 @@ function App() {
   const [draggedTopicId, setDraggedTopicId] = useState('')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
+  const [thesisDraft, setThesisDraft] = useState<Thesis | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
+  const [creatingThesis, setCreatingThesis] = useState(false)
+  const [selectedThesisId, setSelectedThesisId] = useState('')
   const [notice, setNotice] = useState('')
   const [headerHidden, setHeaderHidden] = useState(false)
 
@@ -311,6 +333,12 @@ function App() {
       .filter(
         (topic) => topicScope === 'all' || topic.monthKey >= currentMonth,
       )
+      .filter(
+        (topic) =>
+          focus !== 'topics' ||
+          !selectedThesisId ||
+          topic.thesisId === selectedThesisId,
+      )
       .slice()
       .sort(
         (a, b) =>
@@ -323,7 +351,7 @@ function App() {
         groups.set(topic.monthKey, group)
       })
     return [...groups.entries()]
-  }, [topicScope, topics])
+  }, [focus, selectedThesisId, topicScope, topics])
 
   function linkNewsToTopic(newsId: string, topicId: string) {
     const topic = topics.find((item) => item.id === topicId)
@@ -418,6 +446,67 @@ function App() {
     setNotice('News card deleted')
   }
 
+  function openNewThesis() {
+    setCreatingThesis(true)
+    setThesisDraft({
+      id: '',
+      title: '',
+      description: '',
+      horizon: '12–24 months',
+      topicIds: [],
+    })
+  }
+
+  async function saveThesisDraft() {
+    if (!thesisDraft || !thesisDraft.title.trim()) return
+    if (creatingThesis) {
+      const id =
+        (await createThesis({
+          title: thesisDraft.title.trim(),
+          description: thesisDraft.description,
+          horizon: thesisDraft.horizon,
+        })) || `thesis-${Date.now()}`
+      setTheses((current) => [
+        ...current,
+        { ...thesisDraft, id, title: thesisDraft.title.trim() },
+      ])
+      setSelectedThesisId(id)
+      setTopicScope('all')
+      setNotice('Thesis created')
+    } else {
+      await updateThesisItem(thesisDraft.id, {
+        title: thesisDraft.title.trim(),
+        description: thesisDraft.description,
+        horizon: thesisDraft.horizon,
+      })
+      setTheses((current) =>
+        current.map((item) =>
+          item.id === thesisDraft.id
+            ? { ...thesisDraft, title: thesisDraft.title.trim() }
+            : item,
+        ),
+      )
+      setNotice('Thesis updated')
+    }
+    setThesisDraft(null)
+    setCreatingThesis(false)
+  }
+
+  async function removeThesis(id: string) {
+    const thesis = theses.find((item) => item.id === id)
+    if (thesis?.topicIds.length) {
+      setNotice('Move linked topics out of this Thesis before deleting it')
+      return
+    }
+    if (!window.confirm('Delete this Thesis?')) return
+    await deleteThesisItem(id)
+    setTheses((current) => current.filter((item) => item.id !== id))
+    if (selectedThesisId === id) setSelectedThesisId('')
+    setThesisDraft(null)
+    setCreatingThesis(false)
+    setNotice('Thesis deleted')
+  }
+
   function openNewTopic() {
     const now = new Date()
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -445,19 +534,31 @@ function App() {
           category: topicDraft.category,
           status: topicDraft.status,
           monthKey: topicDraft.monthKey,
+          thesisId: topicDraft.thesisId,
         })) || `topic-${Date.now()}`
       setTopics((current) => [
         ...current,
         { ...topicDraft, id, title: topicDraft.title.trim() },
       ])
+      if (topicDraft.thesisId) {
+        setTheses((current) =>
+          current.map((item) =>
+            item.id === topicDraft.thesisId
+              ? { ...item, topicIds: [...item.topicIds, id] }
+              : item,
+          ),
+        )
+      }
       setNotice('Topic created')
     } else {
+      const previous = topics.find((item) => item.id === topicDraft.id)
       await updateTopicItem(topicDraft.id, {
         title: topicDraft.title.trim(),
         notes: topicDraft.notes,
         category: topicDraft.category,
         status: topicDraft.status,
         scheduled_month: `${topicDraft.monthKey}-01`,
+        thesis_id: topicDraft.thesisId || null,
       })
       setTopics((current) =>
         current.map((item) =>
@@ -484,6 +585,17 @@ function App() {
           ),
         })),
       )
+      if (previous?.thesisId !== topicDraft.thesisId) {
+        setTheses((current) =>
+          current.map((item) => ({
+            ...item,
+            topicIds:
+              item.id === topicDraft.thesisId
+                ? [...item.topicIds.filter((id) => id !== topicDraft.id), topicDraft.id]
+                : item.topicIds.filter((id) => id !== topicDraft.id),
+          })),
+        )
+      }
       setNotice('Topic updated')
     }
     setTopicDraft(null)
@@ -496,6 +608,12 @@ function App() {
     }
     await deleteTopicItem(id)
     setTopics((current) => current.filter((item) => item.id !== id))
+    setTheses((current) =>
+      current.map((item) => ({
+        ...item,
+        topicIds: item.topicIds.filter((topicId) => topicId !== id),
+      })),
+    )
     setNews((current) =>
       current.map((item) => ({
         ...item,
@@ -778,7 +896,7 @@ function App() {
                     </a>
                   </h2>
                   <p>{item.summary}</p>
-                  <NewsAnalysis metadata={item.metadata} />
+                  <NewsWhyItMatters metadata={item.metadata} />
                   <div className="card-footer">
                     <span
                       className={`editorial-status ${item.editorialStatus}`}
@@ -865,22 +983,88 @@ function App() {
               </button>
             </div>
 
+            {focus === 'topics' && selectedThesisId && (
+              <div className="thesis-filter">
+                <span>
+                  Showing continuity for{' '}
+                  <strong>
+                    {theses.find((item) => item.id === selectedThesisId)?.title}
+                  </strong>
+                </span>
+                <button type="button" onClick={() => setSelectedThesisId('')}>
+                  Show all topics
+                </button>
+              </div>
+            )}
+
             <div className="topic-workspace">
               {focus === 'topics' && (
                 <aside className="thesis-portfolio">
-                  <div className="section-label">Thesis portfolio</div>
+                  <div className="portfolio-heading">
+                    <div className="section-label">Thesis portfolio</div>
+                    <button type="button" onClick={openNewThesis}>
+                      + New thesis
+                    </button>
+                  </div>
                   <p className="portfolio-intro">
                     Long-term strategic hypotheses that connect related monthly
                     topics into one evolving line of analysis.
                   </p>
-                  {theses.map((thesis) => (
-                    <article key={thesis.id} className="thesis-card">
-                      <span>{thesis.horizon}</span>
-                      <h2>{thesis.title}</h2>
-                      <p>{thesis.description}</p>
-                      <small>{thesis.topicIds.length} evolving topics</small>
-                    </article>
-                  ))}
+                  {theses.map((thesis) => {
+                    const linkedTopics = topics
+                      .filter((topic) => topic.thesisId === thesis.id)
+                      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+                    const continuity =
+                      linkedTopics.length > 1
+                        ? `${linkedTopics[0].monthLabel} → ${
+                            linkedTopics[linkedTopics.length - 1].monthLabel
+                          }`
+                        : linkedTopics[0]?.monthLabel || 'No monthly topics yet'
+                    return (
+                      <article
+                        key={thesis.id}
+                        className={`thesis-card ${
+                          selectedThesisId === thesis.id ? 'selected' : ''
+                        }`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          setSelectedThesisId(
+                            selectedThesisId === thesis.id ? '' : thesis.id,
+                          )
+                          setTopicScope('all')
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setSelectedThesisId(
+                              selectedThesisId === thesis.id ? '' : thesis.id,
+                            )
+                            setTopicScope('all')
+                          }
+                        }}
+                      >
+                        <div className="thesis-card-heading">
+                          <span>{thesis.horizon}</span>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setCreatingThesis(false)
+                              setThesisDraft({ ...thesis })
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                        <h2>{thesis.title}</h2>
+                        <p>{thesis.description}</p>
+                        <small>
+                          {thesis.topicIds.length} evolving topics · {continuity}
+                        </small>
+                      </article>
+                    )
+                  })}
                   {theses.length === 0 && (
                     <div className="portfolio-empty">
                       No thesis has been created yet. Use this area when a
@@ -962,6 +1146,15 @@ function App() {
                             </div>
                           </div>
                           <h3>{topic.title}</h3>
+                          {topic.thesisId && (
+                            <span className="topic-thesis-tag">
+                              {
+                                theses.find(
+                                  (thesis) => thesis.id === topic.thesisId,
+                                )?.title
+                              }
+                            </span>
+                          )}
                           <p>{topic.notes}</p>
                           <div className="supporting-news">
                             {topic.supportingNews.map((newsId) => {
@@ -1007,6 +1200,12 @@ function App() {
                     </div>
                   </section>
                 ))}
+                {monthGroups.length === 0 && selectedThesisId && (
+                  <div className="portfolio-empty">
+                    No monthly topics are linked to this Thesis yet. Edit a
+                    Topic to add it.
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -1088,6 +1287,7 @@ function App() {
                 }
               />
             </label>
+            <NewsAnalysis metadata={newsDraft.metadata} />
             <label className="archive-control">
               <input
                 type="checkbox"
@@ -1130,6 +1330,114 @@ function App() {
                   onClick={() => void saveNewsDraft()}
                 >
                   Save changes
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {thesisDraft && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-thesis-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">Long-range portfolio</span>
+                <h2 id="edit-thesis-title">
+                  {creatingThesis ? 'Create Thesis' : 'Edit Thesis'}
+                </h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => {
+                  setThesisDraft(null)
+                  setCreatingThesis(false)
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              Thesis title
+              <input
+                value={thesisDraft.title}
+                onChange={(event) =>
+                  setThesisDraft({
+                    ...thesisDraft,
+                    title: event.target.value,
+                  })
+                }
+                placeholder="A durable strategic hypothesis"
+                autoFocus
+              />
+            </label>
+            <label>
+              Horizon
+              <input
+                value={thesisDraft.horizon}
+                onChange={(event) =>
+                  setThesisDraft({
+                    ...thesisDraft,
+                    horizon: event.target.value,
+                  })
+                }
+                placeholder="12–24 months"
+              />
+            </label>
+            <label>
+              Description
+              <textarea
+                rows={6}
+                value={thesisDraft.description}
+                onChange={(event) =>
+                  setThesisDraft({
+                    ...thesisDraft,
+                    description: event.target.value,
+                  })
+                }
+                placeholder="What are we testing across multiple months?"
+              />
+            </label>
+            <p className="modal-note">
+              Link Monthly Topics to this Thesis from each Topic editor. When
+              selected, the portfolio filters the timeline to show continuity.
+            </p>
+            <div className="modal-actions split-actions">
+              {!creatingThesis ? (
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => void removeThesis(thesisDraft.id)}
+                >
+                  Delete Thesis
+                </button>
+              ) : (
+                <span />
+              )}
+              <div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    setThesisDraft(null)
+                    setCreatingThesis(false)
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void saveThesisDraft()}
+                >
+                  {creatingThesis ? 'Create Thesis' : 'Save changes'}
                 </button>
               </div>
             </div>
@@ -1222,6 +1530,25 @@ function App() {
                 {Object.entries(categoryLabels).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Long-term Thesis <span>optional</span>
+              <select
+                value={topicDraft.thesisId || ''}
+                onChange={(event) =>
+                  setTopicDraft({
+                    ...topicDraft,
+                    thesisId: event.target.value || undefined,
+                  })
+                }
+              >
+                <option value="">No Thesis</option>
+                {theses.map((thesis) => (
+                  <option key={thesis.id} value={thesis.id}>
+                    {thesis.title}
                   </option>
                 ))}
               </select>

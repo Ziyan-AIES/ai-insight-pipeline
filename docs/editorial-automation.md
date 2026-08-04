@@ -40,7 +40,8 @@ the repository, logs, prompts, or task arguments.
    - write a factual title and short summary;
    - assign one category from interaction, AI software, AI hardware, ecosystem, AI capability, or industry events;
    - keep hardware, devices, and form-factor stories in AI hardware even when interaction is prominent;
-   - return two or three concrete implications when evidence supports them.
+   - return at most two non-obvious implications when evidence supports them;
+   - leave implications empty when they only repeat the summary.
 4. Generate or update the current week-to-date readout with a one- or two-sentence lede and two or three specific bullets.
 5. POST the reviewed payload to `EDITORIAL_SYNC_URL` with `x-extension-token`. Never print the token.
 6. Query Supabase after the write and verify:
@@ -67,8 +68,9 @@ The local runner separates acquisition, reasoning, validation, and publication:
 
 Each processed item records source-backed evidence, first- through third-order
 impact paths, open research questions, and an audit record containing the run
-identifier, review time, source mode, and evidence count. These fields appear
-under **AI analysis trail** on the News card.
+identifier, review time, source mode, and evidence count. News cards show only
+the concise **Why it matters** result; the full **AI analysis trail** is
+available in the News editor when an audit is needed.
 
 ## Payload shape
 

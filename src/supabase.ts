@@ -249,6 +249,7 @@ export async function createTopic(input: {
   category: NewsCategory
   status: TopicStatus
   monthKey: string
+  thesisId?: string
 }) {
   if (!supabase) return null
   const session = await supabase.auth.getSession()
@@ -261,6 +262,7 @@ export async function createTopic(input: {
       category: input.category,
       status: input.status,
       scheduled_month: `${input.monthKey}-01`,
+      thesis_id: input.thesisId || null,
       created_by: userId,
       updated_by: userId,
     })
@@ -278,6 +280,7 @@ export async function updateTopicItem(
     category?: NewsCategory
     status?: TopicStatus
     scheduled_month?: string
+    thesis_id?: string | null
   },
 ) {
   if (!supabase) return
@@ -289,6 +292,46 @@ export async function updateTopicItem(
       updated_by: session.data.session?.user.id || null,
     })
     .eq('id', id)
+  if (error) throw error
+}
+
+export async function createThesis(input: {
+  title: string
+  description: string
+  horizon: string
+}) {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const { data, error } = await supabase
+    .from('theses')
+    .insert({
+      title: input.title,
+      description: input.description,
+      horizon: input.horizon,
+      created_by: session.data.session?.user.id || null,
+    })
+    .select('id')
+    .single()
+  if (error) throw error
+  return data.id as string
+}
+
+export async function updateThesisItem(
+  id: string,
+  patch: {
+    title?: string
+    description?: string
+    horizon?: string
+  },
+) {
+  if (!supabase) return
+  const { error } = await supabase.from('theses').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteThesisItem(id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('theses').delete().eq('id', id)
   if (error) throw error
 }
 

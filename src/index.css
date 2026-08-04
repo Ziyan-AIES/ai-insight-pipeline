@@ -2,7 +2,8 @@
   font-family:
     Aptos, "Helvetica Neue", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-editorial:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    "Aptos Display", Aptos, Inter, "Helvetica Neue", "Segoe UI", ui-sans-serif,
+    system-ui, sans-serif;
   color: #20242a;
   background: #f5f6f8;
   font-synthesis: none;

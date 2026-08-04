@@ -248,7 +248,7 @@ function validatePayload(
           stringArray(item.news_facts).length > 0
             ? stringArray(item.news_facts)
             : evidence.map((entry) => entry.claim),
-        implications: stringArray(item.implications),
+        implications: stringArray(item.implications).slice(0, 2),
         evidence,
         impact_paths: objectArray(item.impact_paths)
           .flatMap((entry) =>
@@ -267,8 +267,8 @@ function validatePayload(
                 ]
               : [],
           )
-          .slice(0, 6),
-        open_questions: stringArray(item.open_questions),
+          .slice(0, 3),
+        open_questions: stringArray(item.open_questions).slice(0, 2),
         editorial_audit: {
           run_id: runId,
           reviewed_at: new Date().toISOString(),
@@ -351,14 +351,15 @@ For each item:
 - open the source URL only when the supplied raw_text is insufficient;
 - translate Chinese material into concise English;
 - separate source evidence from interpretation;
-- produce a factual title, a concise 2-4 sentence summary, one valid category, 2-5 concrete facts, and 2-3 implications;
+- produce a factual title, a concise 2-3 sentence summary, one valid category, 2-5 concrete facts, and at most 2 non-obvious implications;
 - use exactly one category: interaction, ai_software, ai_hardware, ecosystem, ai_capability, industry_events;
 - keep hardware, devices, and form-factor stories in ai_hardware.
 - mark status "reviewed" only when at least one claim is supported by supplied or fetched source material;
 - otherwise mark status "insufficient_evidence", explain failure_reason, and do not invent missing facts;
 - include evidence entries with claim, source_url, and a short supporting excerpt;
-- include first-, second-, or third-order impact_paths only where the mechanism can be explained;
-- include open_questions for important claims that still require data or human judgment.
+- leave implications empty when the article has no meaningful consequence beyond its summary;
+- include impact_paths only when a multi-stage mechanism materially changes interpretation;
+- include open_questions only when missing information blocks a research or product decision.
 
 Also create one current week-to-date readout using period_type "week" and period_key "${isoWeekKey()}". Base it on <week_context> plus the newly reviewed items. The readout needs a 1-2 sentence lede and 2-5 specific bullets.
 
