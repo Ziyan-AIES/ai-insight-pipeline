@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { response, supabase } from './_supabase.mjs'
 
 async function authenticatedUser(event) {
@@ -33,11 +33,13 @@ export async function handler(event) {
       return response(403, { ok: false, error: 'Admin access required' })
     }
 
-    const newsSeedPath = fileURLToPath(
-      new URL('../../supabase/seed-legacy-news.json', import.meta.url),
+    const newsSeedPath = path.resolve(
+      process.cwd(),
+      'supabase/seed-legacy-news.json',
     )
-    const topicSeedPath = fileURLToPath(
-      new URL('../../supabase/seed-legacy-topics.json', import.meta.url),
+    const topicSeedPath = path.resolve(
+      process.cwd(),
+      'supabase/seed-legacy-topics.json',
     )
     const newsRows = JSON.parse(await fs.readFile(newsSeedPath, 'utf8'))
     const topicRows = JSON.parse(await fs.readFile(topicSeedPath, 'utf8'))
