@@ -26,6 +26,7 @@ type NewsRow = {
   captured_by: string | null
   image_url: string
   editorial_status: 'pending' | 'processed' | 'failed'
+  metadata: Record<string, unknown> | null
   topic_news?: Array<{
     topics: {
       id: string
@@ -35,13 +36,24 @@ type NewsRow = {
   }>
 }
 
+function sessionUserLabel(user: {
+  email?: string
+  user_metadata?: Record<string, unknown>
+} | null) {
+  const metadataName =
+    typeof user?.user_metadata?.full_name === 'string'
+      ? user.user_metadata.full_name
+      : ''
+  return metadataName || user?.email?.split('@')[0] || 'Team member'
+}
+
 export async function loadWorkspace() {
   if (!supabase) return null
-  const [newsResult, topicResult, thesisResult] = await Promise.all([
+  const [newsResult, topicResult, thesisResult, memberResult] = await Promise.all([
     supabase
       .from('news_items')
       .select(
-        'id,canonical_url,title,source,summary,category,captured_at,captured_by,image_url,editorial_status,topic_news(topics(id,title,scheduled_month))',
+        'id,canonical_url,title,source,summary,category,captured_at,captured_by,image_url,editorial_status,metadata,topic_news(topics(id,title,scheduled_month))',
       )
       .order('captured_at', { ascending: false }),
     supabase
@@ -50,12 +62,31 @@ export async function loadWorkspace() {
       .order('scheduled_month')
       .order('display_order'),
     supabase.from('theses').select('*').order('display_order'),
+    supabase.from('team_members').select('user_id,display_name,email'),
   ])
-  const error = newsResult.error || topicResult.error || thesisResult.error
+  const error =
+    newsResult.error ||
+    topicResult.error ||
+    thesisResult.error ||
+    memberResult.error
   if (error) throw error
 
+  const memberNames = new Map(
+    (memberResult.data || []).map((member) => [
+      member.user_id,
+      member.display_name || member.email?.split('@')[0] || 'Team member',
+    ]),
+  )
   const news: NewsItem[] = ((newsResult.data || []) as unknown as NewsRow[]).map(
-    (row) => ({
+    (row) => {
+      const metadata = row.metadata || {}
+      const contributedName =
+        (typeof metadata.contributor_name === 'string' &&
+          metadata.contributor_name) ||
+        (typeof metadata.legacy_user === 'string' && metadata.legacy_user) ||
+        (row.captured_by ? memberNames.get(row.captured_by) : '') ||
+        'Imported'
+      return {
       id: row.id,
       url: row.canonical_url,
       title: row.title,
@@ -63,7 +94,16 @@ export async function loadWorkspace() {
       summary: row.summary,
       category: row.category,
       capturedAt: row.captured_at,
-      capturedBy: row.captured_by || 'Team',
+      capturedBy: contributedName,
+      lastEditedBy:
+        typeof metadata.last_edited_by === 'string'
+          ? metadata.last_edited_by
+          : undefined,
+      archivedAt:
+        typeof metadata.archived_at === 'string'
+          ? metadata.archived_at
+          : undefined,
+      metadata,
       imageUrl: row.image_url,
       editorialStatus:
         row.editorial_status === 'processed' ? 'processed' : 'pending',
@@ -79,7 +119,8 @@ export async function loadWorkspace() {
             timeZone: 'UTC',
           }).format(new Date(`${topic.scheduled_month}T00:00:00Z`)),
         })),
-    }),
+      }
+    },
   )
 
   const topics: Topic[] = (topicResult.data || []).map((row) => ({
@@ -138,6 +179,7 @@ export async function persistNewsLink(input: {
 }) {
   if (!supabase) return null
   const session = await supabase.auth.getSession()
+  const user = session.data.session?.user || null
   const { data, error } = await supabase
     .from('news_items')
     .upsert(
@@ -145,16 +187,22 @@ export async function persistNewsLink(input: {
         canonical_url: input.url,
         title: input.title,
         source: input.source,
-        captured_by: session.data.session?.user.id || null,
+        captured_by: user?.id || null,
         captured_via: 'dashboard',
         editorial_status: 'pending',
+        metadata: {
+          contributor_name: sessionUserLabel(user),
+        },
       },
       { onConflict: 'canonical_url' },
     )
     .select('id')
     .single()
   if (error) throw error
-  return data.id as string
+  return {
+    id: data.id as string,
+    contributorName: sessionUserLabel(user),
+  }
 }
 
 export async function updateNewsItem(
@@ -163,14 +211,27 @@ export async function updateNewsItem(
     title?: string
     summary?: string
     category?: NewsCategory
+    metadata?: Record<string, unknown>
   },
 ) {
   if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const user = session.data.session?.user || null
+  const editorName = sessionUserLabel(user)
   const { error } = await supabase
     .from('news_items')
-    .update(patch)
+    .update({
+      ...patch,
+      metadata: patch.metadata
+        ? {
+            ...patch.metadata,
+            last_edited_by: editorName,
+          }
+        : undefined,
+    })
     .eq('id', id)
   if (error) throw error
+  return editorName
 }
 
 export async function deleteNewsItem(id: string) {

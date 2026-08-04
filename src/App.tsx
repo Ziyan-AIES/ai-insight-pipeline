@@ -41,6 +41,9 @@ const topicStatusLabels: Record<TopicStatus, string> = {
   archived: 'Archived',
 }
 
+type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived'
+type TopicScope = 'current' | 'all'
+
 function monthName(key: string) {
   const [year, month] = key.split('-').map(Number)
   return new Intl.DateTimeFormat('en', {
@@ -50,12 +53,45 @@ function monthName(key: string) {
   }).format(new Date(Date.UTC(year, month - 1, 1)))
 }
 
+function isoWeekKey(value: string) {
+  const date = new Date(value)
+  const utc = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  )
+  const day = utc.getUTCDay() || 7
+  utc.setUTCDate(utc.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1))
+  const week = Math.ceil(
+    ((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+  )
+  return `${utc.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+function weekLabel(key: string) {
+  const [yearText, weekText] = key.split('-W')
+  const year = Number(yearText)
+  const week = Number(weekText)
+  const jan4 = new Date(Date.UTC(year, 0, 4))
+  const monday = new Date(jan4)
+  monday.setUTCDate(jan4.getUTCDate() - (jan4.getUTCDay() || 7) + 1 + (week - 1) * 7)
+  const sunday = new Date(monday)
+  sunday.setUTCDate(monday.getUTCDate() + 6)
+  const dateFormat = new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+  return `Week ${week} · ${dateFormat.format(monday)}–${dateFormat.format(sunday)}`
+}
+
 function App() {
   const [news, setNews] = useState(demoNews)
   const [topics, setTopics] = useState(demoTopics)
   const [theses, setTheses] = useState(demoTheses)
   const [focus, setFocus] = useState<FocusMode>('split')
   const [period, setPeriod] = useState('all')
+  const [newsScope, setNewsScope] = useState<NewsScope>('all')
+  const [topicScope, setTopicScope] = useState<TopicScope>('current')
   const [category, setCategory] = useState<NewsCategory | 'all'>('all')
   const [query, setQuery] = useState('')
   const [showAddLink, setShowAddLink] = useState(false)
@@ -68,6 +104,20 @@ function App() {
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
   const [notice, setNotice] = useState('')
+  const [headerHidden, setHeaderHidden] = useState(false)
+
+  const buildLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Shanghai',
+      }).format(new Date(import.meta.env.VITE_BUILD_DATE)),
+    [],
+  )
 
   useEffect(() => {
     if (!cloudConfigured) return
@@ -95,20 +145,39 @@ function App() {
     })()
   }, [])
 
+  useEffect(() => {
+    const handleWindowScroll = () => setHeaderHidden(window.scrollY > 16)
+    window.addEventListener('scroll', handleWindowScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleWindowScroll)
+  }, [])
+
   const visibleNews = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return news.filter((item) => {
       const matchesCategory = category === 'all' || item.category === category
       const matchesPeriod =
-        period === 'all' || item.capturedAt.slice(0, 7) === period
+        period === 'all' ||
+        (period.startsWith('month:') &&
+          item.capturedAt.slice(0, 7) === period.slice(6)) ||
+        (period.startsWith('week:') &&
+          isoWeekKey(item.capturedAt) === period.slice(5))
+      const matchesScope =
+        newsScope === 'all' ||
+        (newsScope === 'undecided' &&
+          !item.archivedAt &&
+          item.topicLinks.length === 0) ||
+        (newsScope === 'pipeline' && item.topicLinks.length > 0) ||
+        (newsScope === 'archived' &&
+          item.topicLinks.length === 0 &&
+          Boolean(item.archivedAt))
       const matchesQuery =
         !needle ||
         `${item.title} ${item.summary} ${item.source}`
           .toLowerCase()
           .includes(needle)
-      return matchesCategory && matchesPeriod && matchesQuery
+      return matchesCategory && matchesPeriod && matchesScope && matchesQuery
     })
-  }, [category, news, period, query])
+  }, [category, news, newsScope, period, query])
 
   const availableMonths = useMemo(
     () =>
@@ -118,9 +187,21 @@ function App() {
     [news],
   )
 
+  const availableWeeks = useMemo(
+    () =>
+      [...new Set(news.map((item) => isoWeekKey(item.capturedAt)))].sort(
+        (a, b) => b.localeCompare(a),
+      ),
+    [news],
+  )
+
   const monthGroups = useMemo(() => {
     const groups = new Map<string, Topic[]>()
+    const currentMonth = new Date().toISOString().slice(0, 7)
     topics
+      .filter(
+        (topic) => topicScope === 'all' || topic.monthKey >= currentMonth,
+      )
       .slice()
       .sort(
         (a, b) =>
@@ -133,7 +214,7 @@ function App() {
         groups.set(topic.monthKey, group)
       })
     return [...groups.entries()]
-  }, [topics])
+  }, [topicScope, topics])
 
   function linkNewsToTopic(newsId: string, topicId: string) {
     const topic = topics.find((item) => item.id === topicId)
@@ -183,13 +264,28 @@ function App() {
 
   async function saveNewsDraft() {
     if (!newsDraft) return
-    await updateNewsItem(newsDraft.id, {
+    const metadata = {
+      ...(newsDraft.metadata || {}),
+      archived_at: newsDraft.archivedAt || null,
+    }
+    const editorName = await updateNewsItem(newsDraft.id, {
       title: newsDraft.title,
       summary: newsDraft.summary,
       category: newsDraft.category,
+      metadata,
     })
+    const updatedDraft = {
+      ...newsDraft,
+      metadata: {
+        ...metadata,
+        ...(editorName ? { last_edited_by: editorName } : {}),
+      },
+      lastEditedBy: editorName || newsDraft.lastEditedBy,
+    }
     setNews((current) =>
-      current.map((item) => (item.id === newsDraft.id ? newsDraft : item)),
+      current.map((item) =>
+        item.id === newsDraft.id ? updatedDraft : item,
+      ),
     )
     setNewsDraft(null)
     setNotice('News card updated')
@@ -335,12 +431,13 @@ function App() {
     } catch {
       return
     }
-    const id =
-      (await persistNewsLink({
-        url,
-        title: linkTitle.trim() || hostname,
-        source: hostname,
-      })) || `news-${Date.now()}`
+    const persisted = await persistNewsLink({
+      url,
+      title: linkTitle.trim() || hostname,
+      source: hostname,
+    })
+    const id = persisted?.id || `news-${Date.now()}`
+    const contributorName = persisted?.contributorName || 'Current user'
     const topic = topics.find((candidate) => candidate.id === targetTopicId)
     const item: NewsItem = {
       id,
@@ -350,7 +447,8 @@ function App() {
       summary: 'Pending AI editorial review.',
       category: 'ecosystem',
       capturedAt: new Date().toISOString(),
-      capturedBy: 'Current user',
+      capturedBy: contributorName,
+      metadata: { contributor_name: contributorName },
       editorialStatus: 'pending',
       topicLinks: topic
         ? [
@@ -383,13 +481,17 @@ function App() {
   }
 
   return (
-    <div className={`app-shell focus-${focus}`}>
-      <header className="topbar">
+    <div
+      className={`app-shell focus-${focus} ${
+        headerHidden ? 'banner-hidden' : ''
+      }`}
+    >
+      <header className="topbar" title="Scroll either pane to the top to show this banner">
         <div className="brand">
-          <span className="brand-mark">SI</span>
+          <span className="brand-mark">ASI</span>
           <div>
             <strong>Signal Intelligence</strong>
-            <span>News discovery to thesis portfolio</span>
+            <span>Version {buildLabel} · Beijing time</span>
           </div>
         </div>
         <div className="sync-status">
@@ -415,7 +517,13 @@ function App() {
 
       <main className="dashboard">
         {focus !== 'topics' && (
-          <section className="news-pane" aria-label="News dashboard">
+          <section
+            className="news-pane"
+            aria-label="News dashboard"
+            onScroll={(event) =>
+              setHeaderHidden(event.currentTarget.scrollTop > 16)
+            }
+          >
             <div className="pane-heading">
               <div>
                 <span className="eyebrow">Signal stream</span>
@@ -454,14 +562,23 @@ function App() {
               <select
                 value={period}
                 onChange={(event) => setPeriod(event.target.value)}
-                aria-label="Filter by month"
+                aria-label="Filter by month or week"
               >
-                <option value="all">All months</option>
-                {availableMonths.map((month) => (
-                  <option value={month} key={month}>
-                    {monthName(month)}
-                  </option>
-                ))}
+                <option value="all">All dates</option>
+                <optgroup label="Weeks">
+                  {availableWeeks.map((week) => (
+                    <option value={`week:${week}`} key={week}>
+                      {weekLabel(week)}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Months">
+                  {availableMonths.map((month) => (
+                    <option value={`month:${month}`} key={month}>
+                      {monthName(month)}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               <select
                 value={category}
@@ -476,6 +593,18 @@ function App() {
                     {label}
                   </option>
                 ))}
+              </select>
+              <select
+                value={newsScope}
+                onChange={(event) =>
+                  setNewsScope(event.target.value as NewsScope)
+                }
+                aria-label="Filter by review status"
+              >
+                <option value="undecided">Undiscussed</option>
+                <option value="pipeline">In pipeline</option>
+                <option value="archived">Read & archived</option>
+                <option value="all">All news</option>
               </select>
             </div>
 
@@ -507,6 +636,7 @@ function App() {
                       {categoryLabels[item.category]}
                     </span>
                     <span>{item.source}</span>
+                    <span>Shared by {item.capturedBy}</span>
                     <span>
                       {new Intl.DateTimeFormat('en', {
                         month: 'short',
@@ -543,6 +673,9 @@ function App() {
                         ? 'AI reviewed'
                         : 'Pending editorial'}
                     </span>
+                    {item.archivedAt && (
+                      <span className="archive-status">Read & archived</span>
+                    )}
                     <div className="pipeline-tags">
                       {item.topicLinks.map((link) => (
                         <span key={link.topicId}>
@@ -550,6 +683,11 @@ function App() {
                         </span>
                       ))}
                     </div>
+                    {item.lastEditedBy && (
+                      <span className="edit-attribution">
+                        Edited by {item.lastEditedBy}
+                      </span>
+                    )}
                     <span className="drag-hint">Drag to topic →</span>
                   </div>
                 </article>
@@ -559,7 +697,13 @@ function App() {
         )}
 
         {focus !== 'news' && (
-          <section className="topic-pane" aria-label="Topic dashboard">
+          <section
+            className="topic-pane"
+            aria-label="Topic dashboard"
+            onScroll={(event) =>
+              setHeaderHidden(event.currentTarget.scrollTop > 16)
+            }
+          >
             <div className="pane-heading">
               <div>
                 <span className="eyebrow">Analysis pipeline</span>
@@ -590,10 +734,31 @@ function App() {
               </div>
             </div>
 
+            <div className="topic-scope-toggle" aria-label="Topic time range">
+              <button
+                className={topicScope === 'current' ? 'active' : ''}
+                type="button"
+                onClick={() => setTopicScope('current')}
+              >
+                Current & upcoming
+              </button>
+              <button
+                className={topicScope === 'all' ? 'active' : ''}
+                type="button"
+                onClick={() => setTopicScope('all')}
+              >
+                Full history
+              </button>
+            </div>
+
             <div className="topic-workspace">
               {focus === 'topics' && (
                 <aside className="thesis-portfolio">
                   <div className="section-label">Thesis portfolio</div>
+                  <p className="portfolio-intro">
+                    Long-term strategic hypotheses that connect related monthly
+                    topics into one evolving line of analysis.
+                  </p>
                   {theses.map((thesis) => (
                     <article key={thesis.id} className="thesis-card">
                       <span>{thesis.horizon}</span>
@@ -602,6 +767,12 @@ function App() {
                       <small>{thesis.topicIds.length} evolving topics</small>
                     </article>
                   ))}
+                  {theses.length === 0 && (
+                    <div className="portfolio-empty">
+                      No thesis has been created yet. Use this area when a
+                      recurring topic should continue across several months.
+                    </div>
+                  )}
                 </aside>
               )}
 
@@ -777,6 +948,13 @@ function App() {
                 ))}
               </select>
             </label>
+            <div className="contributor-readout">
+              <span>Contributor</span>
+              <strong>{newsDraft.capturedBy}</strong>
+              {newsDraft.lastEditedBy && (
+                <small>Last edited by {newsDraft.lastEditedBy}</small>
+              )}
+            </div>
             <label>
               Summary
               <textarea
@@ -786,6 +964,26 @@ function App() {
                   setNewsDraft({ ...newsDraft, summary: event.target.value })
                 }
               />
+            </label>
+            <label className="archive-control">
+              <input
+                type="checkbox"
+                checked={Boolean(newsDraft.archivedAt)}
+                onChange={(event) =>
+                  setNewsDraft({
+                    ...newsDraft,
+                    archivedAt: event.target.checked
+                      ? new Date().toISOString()
+                      : undefined,
+                  })
+                }
+              />
+              <span>
+                <strong>Read and archive</strong>
+                <small>
+                  Remove this item from the default Undiscussed review queue.
+                </small>
+              </span>
             </label>
             <div className="modal-actions split-actions">
               <button

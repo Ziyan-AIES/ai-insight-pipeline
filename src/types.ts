@@ -23,6 +23,9 @@ export interface NewsItem {
   category: NewsCategory
   capturedAt: string
   capturedBy: string
+  lastEditedBy?: string
+  archivedAt?: string
+  metadata?: Record<string, unknown>
   imageUrl?: string
   editorialStatus: 'pending' | 'processed'
   topicLinks: Array<{

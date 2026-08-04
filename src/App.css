@@ -10,6 +10,7 @@
   top: 0;
   z-index: 20;
   min-height: 64px;
+  height: 64px;
   padding: 0 24px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -17,6 +18,20 @@
   border-bottom: 1px solid #cce8ec;
   background: rgba(249, 254, 255, 0.96);
   backdrop-filter: blur(16px);
+  overflow: hidden;
+  transition:
+    height 180ms ease,
+    min-height 180ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+
+.banner-hidden .topbar {
+  height: 0;
+  min-height: 0;
+  border-bottom: 0;
+  opacity: 0;
+  transform: translateY(-100%);
 }
 
 .brand,
@@ -37,14 +52,14 @@
 }
 
 .brand-mark {
-  width: 34px;
+  width: 38px;
   height: 34px;
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: #197f83;
+  background: #4d467d;
   color: #fff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -59,7 +74,7 @@
   font-size: 14px;
 }
 
-.brand span,
+.brand > div span,
 .sync-status {
   color: #737984;
   font-size: 11px;
@@ -92,6 +107,11 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+  transition: height 180ms ease;
+}
+
+.banner-hidden .dashboard {
+  height: 100vh;
 }
 
 .focus-news .dashboard,
@@ -133,7 +153,7 @@
 .pane-heading h1 {
   margin: 2px 0 0;
   color: #20242a;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 31px;
   line-height: 1;
   font-weight: 500;
@@ -192,7 +212,7 @@ button {
 .filters {
   margin: 15px 0;
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(120px, auto));
   gap: 8px;
 }
 
@@ -240,7 +260,7 @@ button {
 .readout strong {
   display: block;
   margin-top: 5px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 18px;
   font-weight: 500;
 }
@@ -304,7 +324,7 @@ button {
 .news-card h2 {
   margin: 11px 0 7px;
   max-width: 760px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 20px;
   line-height: 1.28;
   font-weight: 500;
@@ -330,7 +350,8 @@ button {
 }
 
 .editorial-status,
-.pipeline-tags span {
+.pipeline-tags span,
+.archive-status {
   padding: 4px 7px;
   border-radius: 5px;
   font-size: 9px;
@@ -360,6 +381,16 @@ button {
   color: #655f8b;
 }
 
+.archive-status {
+  background: #e9edf0;
+  color: #5e6970;
+}
+
+.edit-attribution {
+  color: #8a9097;
+  font-size: 9px;
+}
+
 .drag-hint {
   margin-left: auto;
   color: #9a9ea5;
@@ -368,6 +399,29 @@ button {
 
 .topic-workspace {
   margin-top: 15px;
+}
+
+.topic-scope-toggle {
+  margin-top: 14px;
+  display: flex;
+  gap: 6px;
+}
+
+.topic-scope-toggle button {
+  min-height: 30px;
+  border: 1px solid #d8d5e8;
+  border-radius: 999px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #6d6980;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.topic-scope-toggle button.active {
+  border-color: #71699b;
+  background: #71699b;
+  color: #fff;
 }
 
 .focus-topics .topic-workspace {
@@ -385,6 +439,25 @@ button {
   border-right: 1px solid #d5d8dc;
 }
 
+.portfolio-intro,
+.portfolio-empty {
+  color: #737080;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.portfolio-intro {
+  margin: 9px 0 5px;
+}
+
+.portfolio-empty {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px dashed #cdc8e0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
 .thesis-card {
   padding: 18px 0;
   border-bottom: 1px solid #d5d8dc;
@@ -399,7 +472,7 @@ button {
 
 .thesis-card h2 {
   margin: 8px 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 19px;
   font-weight: 500;
   line-height: 1.25;
@@ -439,13 +512,13 @@ button {
   border-radius: 50%;
   background: #f8f8f8;
   color: #6f747c;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 12px;
 }
 
 .month-group header h2 {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 17px;
   font-weight: 500;
 }
@@ -518,7 +591,7 @@ button {
 
 .topic-card h3 {
   margin: 8px 0 5px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 17px;
   line-height: 1.25;
   font-weight: 500;
@@ -608,7 +681,7 @@ button {
 
 .modal-heading h2 {
   margin: 4px 0 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 26px;
   font-weight: 500;
 }
@@ -638,6 +711,58 @@ button {
 
 .editor-modal {
   width: min(600px, 100%);
+}
+
+.contributor-readout {
+  margin-top: 14px;
+  padding: 11px 12px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid #e0dde9;
+  border-radius: 8px;
+  background: #faf9fd;
+}
+
+.contributor-readout span,
+.contributor-readout small {
+  color: #85818f;
+  font-size: 10px;
+}
+
+.contributor-readout strong {
+  color: #383445;
+  font-size: 12px;
+}
+
+.archive-control {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid #dce3e5;
+  border-radius: 9px;
+  background: #f7fbfb;
+}
+
+.link-modal .archive-control input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+
+.archive-control > span {
+  display: grid;
+  gap: 3px;
+}
+
+.archive-control > span strong {
+  color: #3d4c51;
+  font-size: 11px;
+}
+
+.archive-control > span small {
+  color: #7e898d;
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .form-grid {
@@ -752,7 +877,7 @@ button {
 .auth-card h1 {
   margin: 5px 0 10px;
   color: #20242a;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-editorial);
   font-size: 31px;
   font-weight: 500;
 }
