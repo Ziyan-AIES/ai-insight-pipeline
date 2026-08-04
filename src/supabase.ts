@@ -176,10 +176,13 @@ export async function persistNewsLink(input: {
   url: string
   title: string
   source: string
+  contributorName?: string
 }) {
   if (!supabase) return null
   const session = await supabase.auth.getSession()
   const user = session.data.session?.user || null
+  const contributorName =
+    input.contributorName?.trim() || sessionUserLabel(user)
   const { data, error } = await supabase
     .from('news_items')
     .upsert(
@@ -191,7 +194,7 @@ export async function persistNewsLink(input: {
         captured_via: 'dashboard',
         editorial_status: 'pending',
         metadata: {
-          contributor_name: sessionUserLabel(user),
+          contributor_name: contributorName,
         },
       },
       { onConflict: 'canonical_url' },
@@ -201,7 +204,7 @@ export async function persistNewsLink(input: {
   if (error) throw error
   return {
     id: data.id as string,
-    contributorName: sessionUserLabel(user),
+    contributorName,
   }
 }
 

@@ -97,6 +97,7 @@ function App() {
   const [showAddLink, setShowAddLink] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const [linkTitle, setLinkTitle] = useState('')
+  const [linkContributor, setLinkContributor] = useState('')
   const [targetTopicId, setTargetTopicId] = useState('')
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
@@ -151,6 +152,12 @@ function App() {
     return () => window.removeEventListener('scroll', handleWindowScroll)
   }, [])
 
+  useEffect(() => {
+    if (!notice) return
+    const timeout = window.setTimeout(() => setNotice(''), 4000)
+    return () => window.clearTimeout(timeout)
+  }, [notice])
+
   const visibleNews = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return news.filter((item) => {
@@ -167,9 +174,7 @@ function App() {
           !item.archivedAt &&
           item.topicLinks.length === 0) ||
         (newsScope === 'pipeline' && item.topicLinks.length > 0) ||
-        (newsScope === 'archived' &&
-          item.topicLinks.length === 0 &&
-          Boolean(item.archivedAt))
+        (newsScope === 'archived' && Boolean(item.archivedAt))
       const matchesQuery =
         !needle ||
         `${item.title} ${item.summary} ${item.source}`
@@ -266,6 +271,7 @@ function App() {
     if (!newsDraft) return
     const metadata = {
       ...(newsDraft.metadata || {}),
+      contributor_name: newsDraft.capturedBy.trim() || 'Team member',
       archived_at: newsDraft.archivedAt || null,
     }
     const editorName = await updateNewsItem(newsDraft.id, {
@@ -276,6 +282,7 @@ function App() {
     })
     const updatedDraft = {
       ...newsDraft,
+      capturedBy: newsDraft.capturedBy.trim() || 'Team member',
       metadata: {
         ...metadata,
         ...(editorName ? { last_edited_by: editorName } : {}),
@@ -435,6 +442,7 @@ function App() {
       url,
       title: linkTitle.trim() || hostname,
       source: hostname,
+      contributorName: linkContributor.trim() || undefined,
     })
     const id = persisted?.id || `news-${Date.now()}`
     const contributorName = persisted?.contributorName || 'Current user'
@@ -476,6 +484,7 @@ function App() {
     }
     setLinkUrl('')
     setLinkTitle('')
+    setLinkContributor('')
     setTargetTopicId('')
     setShowAddLink(false)
   }
@@ -488,7 +497,7 @@ function App() {
     >
       <header className="topbar" title="Scroll either pane to the top to show this banner">
         <div className="brand">
-          <span className="brand-mark">ASI</span>
+          <span className="brand-mark">SI</span>
           <div>
             <strong>Signal Intelligence</strong>
             <span>Version {buildLabel} · Beijing time</span>
@@ -948,13 +957,22 @@ function App() {
                 ))}
               </select>
             </label>
-            <div className="contributor-readout">
-              <span>Contributor</span>
-              <strong>{newsDraft.capturedBy}</strong>
+            <label>
+              Contributor
+              <input
+                value={newsDraft.capturedBy}
+                onChange={(event) =>
+                  setNewsDraft({
+                    ...newsDraft,
+                    capturedBy: event.target.value,
+                  })
+                }
+                placeholder="Name of the person who shared this"
+              />
               {newsDraft.lastEditedBy && (
                 <small>Last edited by {newsDraft.lastEditedBy}</small>
               )}
-            </div>
+            </label>
             <label>
               Summary
               <textarea
@@ -1191,6 +1209,14 @@ function App() {
                 value={linkTitle}
                 onChange={(event) => setLinkTitle(event.target.value)}
                 placeholder="Use the page title when available"
+              />
+            </label>
+            <label>
+              Contributor <span>optional</span>
+              <input
+                value={linkContributor}
+                onChange={(event) => setLinkContributor(event.target.value)}
+                placeholder="Defaults to your signed-in name"
               />
             </label>
             <label>

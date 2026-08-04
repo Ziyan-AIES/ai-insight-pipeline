@@ -52,7 +52,7 @@
 }
 
 .brand-mark {
-  width: 38px;
+  width: 34px;
   height: 34px;
   display: grid;
   place-items: center;
@@ -713,27 +713,6 @@ button {
   width: min(600px, 100%);
 }
 
-.contributor-readout {
-  margin-top: 14px;
-  padding: 11px 12px;
-  display: grid;
-  gap: 3px;
-  border: 1px solid #e0dde9;
-  border-radius: 8px;
-  background: #faf9fd;
-}
-
-.contributor-readout span,
-.contributor-readout small {
-  color: #85818f;
-  font-size: 10px;
-}
-
-.contributor-readout strong {
-  color: #383445;
-  font-size: 12px;
-}
-
 .archive-control {
   grid-template-columns: auto 1fr;
   align-items: start;
@@ -836,6 +815,12 @@ button {
 
 .link-modal label span {
   color: #9a9ea4;
+  font-weight: 400;
+}
+
+.link-modal label small {
+  color: #85818f;
+  font-size: 10px;
   font-weight: 400;
 }
 
