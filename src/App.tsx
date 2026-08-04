@@ -3,12 +3,25 @@ import './App.css'
 import { demoNews, demoTheses, demoTopics } from './demoData'
 import {
   cloudConfigured,
+  createTopic,
+  deleteNewsItem,
+  deleteTopicItem,
+  importLegacyNews,
   loadWorkspace,
   persistNewsLink,
   persistTopicMonth,
   persistTopicNews,
+  unlinkTopicNews,
+  updateNewsItem,
+  updateTopicItem,
 } from './supabase'
-import type { FocusMode, NewsCategory, NewsItem, Topic } from './types'
+import type {
+  FocusMode,
+  NewsCategory,
+  NewsItem,
+  Topic,
+  TopicStatus,
+} from './types'
 
 const categoryLabels: Record<NewsCategory, string> = {
   interaction: 'Interaction',
@@ -17,6 +30,15 @@ const categoryLabels: Record<NewsCategory, string> = {
   ecosystem: 'Ecosystem',
   ai_capability: 'AI capability',
   industry_events: 'Industry events',
+}
+
+const topicStatusLabels: Record<TopicStatus, string> = {
+  idea: 'Idea',
+  researching: 'Researching',
+  scheduled: 'Scheduled',
+  published: 'Published',
+  completed: 'Completed',
+  archived: 'Archived',
 }
 
 function monthName(key: string) {
@@ -42,15 +64,35 @@ function App() {
   const [targetTopicId, setTargetTopicId] = useState('')
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
+  const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
+  const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
+  const [creatingTopic, setCreatingTopic] = useState(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     if (!cloudConfigured) return
-    void loadWorkspace().then((workspace) => {
-      if (!workspace) return
-      setNews(workspace.news)
-      setTopics(workspace.topics)
-      setTheses(workspace.theses)
-    })
+    void (async () => {
+      try {
+        let workspace = await loadWorkspace()
+        if (!workspace) return
+        const legacyImportKey = 'legacy-workspace-import-2026-08-v2'
+        if (!window.localStorage.getItem(legacyImportKey)) {
+          const imported = await importLegacyNews()
+          workspace = (await loadWorkspace()) || workspace
+          window.localStorage.setItem(legacyImportKey, 'complete')
+          if (imported) setNotice(`Synced ${imported} historical news items`)
+        }
+        setNews(workspace.news)
+        setTopics(workspace.topics)
+        setTheses(workspace.theses)
+      } catch (error: unknown) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : 'Could not load the team workspace.',
+        )
+      }
+    })()
   }, [])
 
   const visibleNews = useMemo(() => {
@@ -67,6 +109,14 @@ function App() {
       return matchesCategory && matchesPeriod && matchesQuery
     })
   }, [category, news, period, query])
+
+  const availableMonths = useMemo(
+    () =>
+      [...new Set(news.map((item) => item.capturedAt.slice(0, 7)))].sort(
+        (a, b) => b.localeCompare(a),
+      ),
+    [news],
+  )
 
   const monthGroups = useMemo(() => {
     const groups = new Map<string, Topic[]>()
@@ -129,6 +179,151 @@ function App() {
       ),
     )
     if (cloudConfigured) void persistTopicMonth(topicId, monthKey)
+  }
+
+  async function saveNewsDraft() {
+    if (!newsDraft) return
+    await updateNewsItem(newsDraft.id, {
+      title: newsDraft.title,
+      summary: newsDraft.summary,
+      category: newsDraft.category,
+    })
+    setNews((current) =>
+      current.map((item) => (item.id === newsDraft.id ? newsDraft : item)),
+    )
+    setNewsDraft(null)
+    setNotice('News card updated')
+  }
+
+  async function removeNews(id: string) {
+    if (!window.confirm('Delete this news card and all of its topic links?')) {
+      return
+    }
+    await deleteNewsItem(id)
+    setNews((current) => current.filter((item) => item.id !== id))
+    setTopics((current) =>
+      current.map((topic) => ({
+        ...topic,
+        supportingNews: topic.supportingNews.filter((newsId) => newsId !== id),
+      })),
+    )
+    setNewsDraft(null)
+    setNotice('News card deleted')
+  }
+
+  function openNewTopic() {
+    const now = new Date()
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    setCreatingTopic(true)
+    setTopicDraft({
+      id: '',
+      title: '',
+      monthKey,
+      monthLabel: monthName(monthKey),
+      category: 'ai_capability',
+      status: 'idea',
+      notes: '',
+      displayOrder: 1,
+      supportingNews: [],
+    })
+  }
+
+  async function saveTopicDraft() {
+    if (!topicDraft || !topicDraft.title.trim()) return
+    if (creatingTopic) {
+      const id =
+        (await createTopic({
+          title: topicDraft.title.trim(),
+          notes: topicDraft.notes,
+          category: topicDraft.category,
+          status: topicDraft.status,
+          monthKey: topicDraft.monthKey,
+        })) || `topic-${Date.now()}`
+      setTopics((current) => [
+        ...current,
+        { ...topicDraft, id, title: topicDraft.title.trim() },
+      ])
+      setNotice('Topic created')
+    } else {
+      await updateTopicItem(topicDraft.id, {
+        title: topicDraft.title.trim(),
+        notes: topicDraft.notes,
+        category: topicDraft.category,
+        status: topicDraft.status,
+        scheduled_month: `${topicDraft.monthKey}-01`,
+      })
+      setTopics((current) =>
+        current.map((item) =>
+          item.id === topicDraft.id
+            ? {
+                ...topicDraft,
+                title: topicDraft.title.trim(),
+                monthLabel: monthName(topicDraft.monthKey),
+              }
+            : item,
+        ),
+      )
+      setNews((current) =>
+        current.map((item) => ({
+          ...item,
+          topicLinks: item.topicLinks.map((link) =>
+            link.topicId === topicDraft.id
+              ? {
+                  ...link,
+                  topicTitle: topicDraft.title.trim(),
+                  monthLabel: monthName(topicDraft.monthKey),
+                }
+              : link,
+          ),
+        })),
+      )
+      setNotice('Topic updated')
+    }
+    setTopicDraft(null)
+    setCreatingTopic(false)
+  }
+
+  async function removeTopic(id: string) {
+    if (!window.confirm('Delete this topic? Supporting news will stay in News.')) {
+      return
+    }
+    await deleteTopicItem(id)
+    setTopics((current) => current.filter((item) => item.id !== id))
+    setNews((current) =>
+      current.map((item) => ({
+        ...item,
+        topicLinks: item.topicLinks.filter((link) => link.topicId !== id),
+      })),
+    )
+    setTopicDraft(null)
+    setNotice('Topic deleted')
+  }
+
+  async function unlinkNews(topicId: string, newsId: string) {
+    await unlinkTopicNews(topicId, newsId)
+    setTopics((current) =>
+      current.map((topic) =>
+        topic.id === topicId
+          ? {
+              ...topic,
+              supportingNews: topic.supportingNews.filter((id) => id !== newsId),
+            }
+          : topic,
+      ),
+    )
+    setNews((current) =>
+      current.map((item) =>
+        item.id === newsId
+          ? {
+              ...item,
+              topicLinks: item.topicLinks.filter(
+                (link) => link.topicId !== topicId,
+              ),
+            }
+          : item,
+      ),
+    )
+    setNotice('News returned to the News stream')
   }
 
   async function addLink() {
@@ -208,6 +403,16 @@ function App() {
         </button>
       </header>
 
+      {notice && (
+        <button
+          className="notice"
+          type="button"
+          onClick={() => setNotice('')}
+        >
+          {notice} <span>×</span>
+        </button>
+      )}
+
       <main className="dashboard">
         {focus !== 'topics' && (
           <section className="news-pane" aria-label="News dashboard">
@@ -252,8 +457,11 @@ function App() {
                 aria-label="Filter by month"
               >
                 <option value="all">All months</option>
-                <option value="2026-08">August 2026</option>
-                <option value="2026-07">July 2026</option>
+                {availableMonths.map((month) => (
+                  <option value={month} key={month}>
+                    {monthName(month)}
+                  </option>
+                ))}
               </select>
               <select
                 value={category}
@@ -305,6 +513,21 @@ function App() {
                         day: 'numeric',
                       }).format(new Date(item.capturedAt))}
                     </span>
+                    <div className="card-actions">
+                      <button
+                        type="button"
+                        onClick={() => setNewsDraft({ ...item })}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="danger-action"
+                        type="button"
+                        onClick={() => void removeNews(item.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                   <h2>
                     <a href={item.url} target="_blank" rel="noreferrer">
@@ -343,7 +566,11 @@ function App() {
                 <h1>Topics</h1>
               </div>
               <div className="heading-actions">
-                <button className="secondary-button" type="button">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={openNewTopic}
+                >
                   + New topic
                 </button>
                 <button
@@ -434,9 +661,20 @@ function App() {
                         >
                           <div className="topic-card-head">
                             <span className={`topic-status ${topic.status}`}>
-                              {topic.status}
+                              {topicStatusLabels[topic.status]}
                             </span>
-                            <span className="grip">⋮⋮</span>
+                            <div className="card-actions">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCreatingTopic(false)
+                                  setTopicDraft({ ...topic })
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <span className="grip">⋮⋮</span>
+                            </div>
                           </div>
                           <h3>{topic.title}</h3>
                           <p>{topic.notes}</p>
@@ -447,15 +685,26 @@ function App() {
                               )
                               if (!supportingItem) return null
                               return (
-                                <a
-                                  href={supportingItem.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  key={newsId}
-                                >
-                                  <span>NEWS</span>
-                                  {supportingItem.title}
-                                </a>
+                                <div className="support-row" key={newsId}>
+                                  <a
+                                    href={supportingItem.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <span>NEWS</span>
+                                    {supportingItem.title}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    title="Remove from topic"
+                                    aria-label={`Remove ${supportingItem.title} from topic`}
+                                    onClick={() =>
+                                      void unlinkNews(topic.id, newsId)
+                                    }
+                                  >
+                                    ×
+                                  </button>
+                                </div>
                               )
                             })}
                             <button
@@ -478,6 +727,229 @@ function App() {
           </section>
         )}
       </main>
+
+      {newsDraft && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-news-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">News management</span>
+                <h2 id="edit-news-title">Edit news card</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setNewsDraft(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              Title
+              <input
+                value={newsDraft.title}
+                onChange={(event) =>
+                  setNewsDraft({ ...newsDraft, title: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Category
+              <select
+                value={newsDraft.category}
+                onChange={(event) =>
+                  setNewsDraft({
+                    ...newsDraft,
+                    category: event.target.value as NewsCategory,
+                  })
+                }
+              >
+                {Object.entries(categoryLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Summary
+              <textarea
+                rows={7}
+                value={newsDraft.summary}
+                onChange={(event) =>
+                  setNewsDraft({ ...newsDraft, summary: event.target.value })
+                }
+              />
+            </label>
+            <div className="modal-actions split-actions">
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => void removeNews(newsDraft.id)}
+              >
+                Delete news
+              </button>
+              <div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setNewsDraft(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void saveNewsDraft()}
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {topicDraft && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-topic-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">Analysis pipeline</span>
+                <h2 id="edit-topic-title">
+                  {creatingTopic ? 'Create topic' : 'Edit topic'}
+                </h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => {
+                  setTopicDraft(null)
+                  setCreatingTopic(false)
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              Topic title
+              <input
+                value={topicDraft.title}
+                onChange={(event) =>
+                  setTopicDraft({ ...topicDraft, title: event.target.value })
+                }
+                autoFocus
+              />
+            </label>
+            <div className="form-grid">
+              <label>
+                Month
+                <input
+                  type="month"
+                  value={topicDraft.monthKey}
+                  onChange={(event) =>
+                    setTopicDraft({
+                      ...topicDraft,
+                      monthKey: event.target.value,
+                      monthLabel: monthName(event.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Status
+                <select
+                  value={topicDraft.status}
+                  onChange={(event) =>
+                    setTopicDraft({
+                      ...topicDraft,
+                      status: event.target.value as TopicStatus,
+                    })
+                  }
+                >
+                  {Object.entries(topicStatusLabels).map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label>
+              Category
+              <select
+                value={topicDraft.category}
+                onChange={(event) =>
+                  setTopicDraft({
+                    ...topicDraft,
+                    category: event.target.value as NewsCategory,
+                  })
+                }
+              >
+                {Object.entries(categoryLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Working notes
+              <textarea
+                rows={5}
+                value={topicDraft.notes}
+                onChange={(event) =>
+                  setTopicDraft({ ...topicDraft, notes: event.target.value })
+                }
+              />
+            </label>
+            <div className="modal-actions split-actions">
+              {!creatingTopic ? (
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => void removeTopic(topicDraft.id)}
+                >
+                  Delete topic
+                </button>
+              ) : (
+                <span />
+              )}
+              <div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    setTopicDraft(null)
+                    setCreatingTopic(false)
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void saveTopicDraft()}
+                >
+                  {creatingTopic ? 'Create topic' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {showAddLink && (
         <div

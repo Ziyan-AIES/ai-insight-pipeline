@@ -1,5 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
-import type { NewsCategory, NewsItem, Thesis, Topic } from './types'
+import type {
+  NewsCategory,
+  NewsItem,
+  Thesis,
+  Topic,
+  TopicStatus,
+} from './types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
@@ -149,4 +155,105 @@ export async function persistNewsLink(input: {
     .single()
   if (error) throw error
   return data.id as string
+}
+
+export async function updateNewsItem(
+  id: string,
+  patch: {
+    title?: string
+    summary?: string
+    category?: NewsCategory
+  },
+) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from('news_items')
+    .update(patch)
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteNewsItem(id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('news_items').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createTopic(input: {
+  title: string
+  notes: string
+  category: NewsCategory
+  status: TopicStatus
+  monthKey: string
+}) {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id || null
+  const { data, error } = await supabase
+    .from('topics')
+    .insert({
+      title: input.title,
+      notes: input.notes,
+      category: input.category,
+      status: input.status,
+      scheduled_month: `${input.monthKey}-01`,
+      created_by: userId,
+      updated_by: userId,
+    })
+    .select('id')
+    .single()
+  if (error) throw error
+  return data.id as string
+}
+
+export async function updateTopicItem(
+  id: string,
+  patch: {
+    title?: string
+    notes?: string
+    category?: NewsCategory
+    status?: TopicStatus
+    scheduled_month?: string
+  },
+) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('topics')
+    .update({
+      ...patch,
+      updated_by: session.data.session?.user.id || null,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteTopicItem(id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('topics').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function unlinkTopicNews(topicId: string, newsId: string) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from('topic_news')
+    .delete()
+    .eq('topic_id', topicId)
+    .eq('news_id', newsId)
+  if (error) throw error
+}
+
+export async function importLegacyNews() {
+  if (!supabase) return 0
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token
+  if (!token) throw new Error('Sign in before importing legacy news')
+  const result = await fetch('/api/import-legacy', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+  })
+  const body = await result.json()
+  if (!result.ok) throw new Error(body.error || 'Legacy import failed')
+  return Number(body.imported || 0)
 }

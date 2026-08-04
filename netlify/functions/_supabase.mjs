@@ -6,6 +6,7 @@ export function response(statusCode, body, extraHeaders = {}) {
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
+      'access-control-allow-origin': '*',
       ...extraHeaders,
     },
     body: JSON.stringify(body),
@@ -18,9 +19,9 @@ export function handleOptions(event) {
     204,
     {},
     {
-      'access-control-allow-origin': process.env.APP_ORIGIN || '',
+      'access-control-allow-origin': '*',
       'access-control-allow-headers':
-        'authorization, content-type, x-extension-token',
+        'authorization, content-type, x-extension-token, x-bsw-token',
       'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     },
   )

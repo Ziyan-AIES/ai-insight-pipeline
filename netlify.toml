@@ -6,6 +6,12 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."import-legacy"]
+  included_files = [
+    "supabase/seed-legacy-news.json",
+    "supabase/seed-legacy-topics.json",
+  ]
+
 [[redirects]]
   from = "/api/capture"
   to = "/.netlify/functions/capture"
@@ -19,6 +25,11 @@
 [[redirects]]
   from = "/api/editorial-sync"
   to = "/.netlify/functions/editorial-sync"
+  status = 200
+
+[[redirects]]
+  from = "/api/import-legacy"
+  to = "/.netlify/functions/import-legacy"
   status = 200
 
 [[redirects]]

@@ -6,7 +6,13 @@ export type NewsCategory =
   | 'ai_capability'
   | 'industry_events'
 
-export type TopicStatus = 'idea' | 'researching' | 'scheduled' | 'published'
+export type TopicStatus =
+  | 'idea'
+  | 'researching'
+  | 'scheduled'
+  | 'published'
+  | 'completed'
+  | 'archived'
 
 export interface NewsItem {
   id: string
