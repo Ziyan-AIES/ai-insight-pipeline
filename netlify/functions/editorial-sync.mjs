@@ -27,29 +27,61 @@ export async function handler(event) {
   }
 
   try {
-    const rows = body.news.map((item) => ({
-      canonical_url: canonicalizeUrl(item.url),
-      title: String(item.title || 'Untitled').slice(0, 500),
-      source: String(item.source || '').slice(0, 200),
-      raw_text: String(item.text || '').slice(0, 60000),
-      summary: String(item.summary || '').slice(0, 4000),
-      category: categories.has(item.category) ? item.category : 'ecosystem',
-      image_url: String(item.image_url || item.selected_image || '').slice(
-        0,
-        2000,
-      ),
-      captured_at: String(item.captured_at || item.created_at),
-      captured_via: String(item.captured_via || 'automation'),
-      editorial_status: 'processed',
-      editorial_updated_at: new Date().toISOString(),
-      metadata: {
-        news_facts: Array.isArray(item.news_facts) ? item.news_facts : [],
-        implications: Array.isArray(item.implications)
-          ? item.implications
-          : [],
-        legacy_id: item.legacy_id || null,
-      },
-    }))
+    const rows = await Promise.all(
+      body.news.map(async (item) => {
+        const canonicalUrl = canonicalizeUrl(item.url)
+        const existingRows = await supabase(
+          `news_items?select=raw_text,image_url,captured_at,captured_via,metadata&canonical_url=eq.${encodeURIComponent(canonicalUrl)}&limit=1`,
+          { method: 'GET', headers: { prefer: '' } },
+        )
+        const existing = existingRows?.[0] || {}
+        return {
+          canonical_url: canonicalUrl,
+          title: String(item.title || 'Untitled').slice(0, 500),
+          source: String(item.source || '').slice(0, 200),
+          raw_text: String(item.text || existing.raw_text || '').slice(0, 60000),
+          summary: String(item.summary || '').slice(0, 4000),
+          category: categories.has(item.category) ? item.category : 'ecosystem',
+          image_url: String(
+            item.image_url || item.selected_image || existing.image_url || '',
+          ).slice(0, 2000),
+          captured_at: String(
+            existing.captured_at ||
+              item.captured_at ||
+              item.created_at ||
+              new Date().toISOString(),
+          ),
+          captured_via: String(existing.captured_via || 'automation'),
+          editorial_status: 'processed',
+          editorial_updated_at: new Date().toISOString(),
+          metadata: {
+            ...(existing.metadata || {}),
+            news_facts: Array.isArray(item.news_facts)
+              ? item.news_facts.slice(0, 5)
+              : [],
+            implications: Array.isArray(item.implications)
+              ? item.implications.slice(0, 5)
+              : [],
+            evidence: Array.isArray(item.evidence)
+              ? item.evidence.slice(0, 6)
+              : [],
+            impact_paths: Array.isArray(item.impact_paths)
+              ? item.impact_paths.slice(0, 6)
+              : [],
+            open_questions: Array.isArray(item.open_questions)
+              ? item.open_questions.slice(0, 5)
+              : [],
+            editorial_audit:
+              item.editorial_audit &&
+              typeof item.editorial_audit === 'object' &&
+              !Array.isArray(item.editorial_audit)
+                ? item.editorial_audit
+                : {},
+            ...(item.legacy_id ? { legacy_id: item.legacy_id } : {}),
+          },
+        }
+      }),
+    )
 
     if (rows.length) {
       await supabase('news_items?on_conflict=canonical_url', {

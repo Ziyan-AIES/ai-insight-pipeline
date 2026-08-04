@@ -84,6 +84,110 @@ function weekLabel(key: string) {
   return `Week ${week} · ${dateFormat.format(monday)}–${dateFormat.format(sunday)}`
 }
 
+function metadataStrings(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function metadataObjects(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key]
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item) && typeof item === 'object' && !Array.isArray(item),
+      )
+    : []
+}
+
+function NewsAnalysis({
+  metadata,
+}: {
+  metadata: Record<string, unknown> | undefined
+}) {
+  const evidence = metadataObjects(metadata, 'evidence')
+  const implications = metadataStrings(metadata, 'implications')
+  const impactPaths = metadataObjects(metadata, 'impact_paths')
+  const questions = metadataStrings(metadata, 'open_questions')
+  const audit =
+    metadata?.editorial_audit &&
+    typeof metadata.editorial_audit === 'object' &&
+    !Array.isArray(metadata.editorial_audit)
+      ? (metadata.editorial_audit as Record<string, unknown>)
+      : null
+  if (
+    evidence.length === 0 &&
+    implications.length === 0 &&
+    impactPaths.length === 0 &&
+    questions.length === 0
+  ) {
+    return null
+  }
+
+  return (
+    <details className="ai-analysis">
+      <summary>AI analysis trail</summary>
+      {evidence.length > 0 && (
+        <section>
+          <strong>Source-backed evidence</strong>
+          <ul>
+            {evidence.map((item, index) => (
+              <li key={`${String(item.claim)}-${index}`}>
+                {String(item.claim || '')}
+                {typeof item.source_url === 'string' && (
+                  <a href={item.source_url} target="_blank" rel="noreferrer">
+                    Source
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {(implications.length > 0 || impactPaths.length > 0) && (
+        <section>
+          <strong>Implications and transmission paths</strong>
+          <ul>
+            {implications.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+            {impactPaths.map((item, index) => (
+              <li key={`${String(item.effect)}-${index}`}>
+                <span>Order {String(item.order || '?')}</span>
+                {String(item.effect || '')}
+                {item.rationale ? ` — ${String(item.rationale)}` : ''}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {questions.length > 0 && (
+        <section>
+          <strong>Open questions</strong>
+          <ul>
+            {questions.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {audit && (
+        <small>
+          Reviewed from {String(audit.source_mode || 'source material')} ·{' '}
+          {String(audit.evidence_count || evidence.length)} evidence points
+        </small>
+      )}
+    </details>
+  )
+}
+
 function App() {
   const [news, setNews] = useState(demoNews)
   const [topics, setTopics] = useState(demoTopics)
@@ -674,6 +778,7 @@ function App() {
                     </a>
                   </h2>
                   <p>{item.summary}</p>
+                  <NewsAnalysis metadata={item.metadata} />
                   <div className="card-footer">
                     <span
                       className={`editorial-status ${item.editorialStatus}`}
