@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handler } from './capture.mjs'
+import { handler } from '../../netlify/functions/capture.mjs'
 
 const originalEnv = { ...process.env }
 

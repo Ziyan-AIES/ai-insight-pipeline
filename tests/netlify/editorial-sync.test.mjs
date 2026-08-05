@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handler } from './editorial-sync.mjs'
+import { handler } from '../../netlify/functions/editorial-sync.mjs'
 
 const originalEnv = { ...process.env }
 
@@ -50,7 +50,9 @@ describe('editorial synchronization contract', () => {
             title: 'Reviewed',
             summary: 'Evidence-backed summary',
             category: 'ai_capability',
-            evidence: [{ claim: 'Fact', source_url: 'https://example.com/story' }],
+            evidence: [
+              { claim: 'Fact', source_url: 'https://example.com/story' },
+            ],
           },
         ],
       }),

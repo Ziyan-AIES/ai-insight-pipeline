@@ -5,7 +5,7 @@ import {
   requireCaptureToken,
   requireEditorialToken,
   requireExtensionToken,
-} from './_supabase.mjs'
+} from '../../netlify/functions/_supabase.mjs'
 
 const originalToken = process.env.EXTENSION_WRITE_TOKEN
 const originalCaptureToken = process.env.CAPTURE_WRITE_TOKEN
