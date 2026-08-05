@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import type {
+  ActivityEvent,
+  EditorialReadout,
+  EditorialHealth,
   NewsCategory,
   NewsItem,
   Thesis,
+  TeamMemberSummary,
   Topic,
   TopicStatus,
 } from './types'
@@ -23,15 +27,21 @@ type NewsRow = {
   summary: string
   category: NewsCategory
   captured_at: string
+  published_at: string | null
   captured_by: string | null
   image_url: string
   editorial_status: 'pending' | 'processed' | 'failed'
   metadata: Record<string, unknown> | null
+  updated_at: string
+  version?: number
+  deleted_at?: string | null
   topic_news?: Array<{
+    deleted_at?: string | null
     topics: {
       id: string
       title: string
       scheduled_month: string
+      deleted_at?: string | null
     } | null
   }>
 }
@@ -47,28 +57,43 @@ function sessionUserLabel(user: {
   return metadataName || user?.email?.split('@')[0] || 'Team member'
 }
 
-export async function loadWorkspace() {
+export async function loadWorkspace(includeDeleted = false) {
   if (!supabase) return null
-  const [newsResult, topicResult, thesisResult, memberResult] = await Promise.all([
-    supabase
-      .from('news_items')
-      .select(
-        'id,canonical_url,title,source,summary,category,captured_at,captured_by,image_url,editorial_status,metadata,topic_news(topics(id,title,scheduled_month))',
-      )
-      .order('captured_at', { ascending: false }),
-    supabase
-      .from('topics')
-      .select('*,topic_news(news_id)')
-      .order('scheduled_month')
-      .order('display_order'),
-    supabase.from('theses').select('*').order('display_order'),
-    supabase.from('team_members').select('user_id,display_name,email'),
-  ])
+  let newsQuery = supabase
+    .from('news_items')
+    .select(
+      'id,canonical_url,title,source,summary,category,captured_at,published_at,captured_by,image_url,editorial_status,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
+    )
+    .order('captured_at', { ascending: false })
+  let topicQuery = supabase
+    .from('topics')
+    .select('*,topic_news(news_id,deleted_at)')
+    .order('scheduled_month')
+    .order('display_order')
+  let thesisQuery = supabase.from('theses').select('*').order('display_order')
+  if (!includeDeleted) {
+    newsQuery = newsQuery.is('deleted_at', null)
+    topicQuery = topicQuery.is('deleted_at', null)
+    thesisQuery = thesisQuery.is('deleted_at', null)
+  }
+  const [newsResult, topicResult, thesisResult, memberResult, readoutResult] =
+    await Promise.all([
+      newsQuery,
+      topicQuery,
+      thesisQuery,
+      supabase.from('team_members').select('user_id,display_name,email'),
+      supabase
+        .from('editorial_readouts')
+        .select('period_type,period_key,lede,bullets,generated_at')
+        .order('generated_at', { ascending: false })
+        .limit(1),
+    ])
   const error =
     newsResult.error ||
     topicResult.error ||
     thesisResult.error ||
-    memberResult.error
+    memberResult.error ||
+    readoutResult.error
   if (error) throw error
 
   const memberNames = new Map(
@@ -87,38 +112,46 @@ export async function loadWorkspace() {
         (row.captured_by ? memberNames.get(row.captured_by) : '') ||
         'Imported'
       return {
-      id: row.id,
-      url: row.canonical_url,
-      title: row.title,
-      source: row.source,
-      summary: row.summary,
-      category: row.category,
-      capturedAt: row.captured_at,
-      capturedBy: contributedName,
-      lastEditedBy:
-        typeof metadata.last_edited_by === 'string'
-          ? metadata.last_edited_by
-          : undefined,
-      archivedAt:
-        typeof metadata.archived_at === 'string'
-          ? metadata.archived_at
-          : undefined,
-      metadata,
-      imageUrl: row.image_url,
-      editorialStatus:
-        row.editorial_status === 'processed' ? 'processed' : 'pending',
-      topicLinks: (row.topic_news || [])
-        .map((link) => link.topics)
-        .filter((topic): topic is NonNullable<typeof topic> => Boolean(topic))
-        .map((topic) => ({
-          topicId: topic.id,
-          topicTitle: topic.title,
-          monthLabel: new Intl.DateTimeFormat('en', {
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'UTC',
-          }).format(new Date(`${topic.scheduled_month}T00:00:00Z`)),
-        })),
+        id: row.id,
+        url: row.canonical_url,
+        title: row.title,
+        source: row.source,
+        summary: row.summary,
+        category: row.category,
+        capturedAt: row.captured_at,
+        publishedAt: row.published_at || undefined,
+        capturedBy: contributedName,
+        lastEditedBy:
+          typeof metadata.last_edited_by === 'string'
+            ? metadata.last_edited_by
+            : undefined,
+        archivedAt:
+          typeof metadata.archived_at === 'string'
+            ? metadata.archived_at
+            : undefined,
+        metadata,
+        imageUrl: row.image_url,
+        editorialStatus:
+          row.editorial_status === 'processed' ? 'processed' : 'pending',
+        updatedAt: row.updated_at,
+        version: row.version,
+        deletedAt: row.deleted_at || undefined,
+        topicLinks: (row.topic_news || [])
+          .filter((link) => !link.deleted_at)
+          .map((link) => link.topics)
+          .filter(
+            (topic): topic is NonNullable<typeof topic> =>
+              Boolean(topic && !topic.deleted_at),
+          )
+          .map((topic) => ({
+            topicId: topic.id,
+            topicTitle: topic.title,
+            monthLabel: new Intl.DateTimeFormat('en', {
+              month: 'long',
+              year: 'numeric',
+              timeZone: 'UTC',
+            }).format(new Date(`${topic.scheduled_month}T00:00:00Z`)),
+          })),
       }
     },
   )
@@ -138,9 +171,12 @@ export async function loadWorkspace() {
     status: row.status,
     notes: row.notes,
     displayOrder: row.display_order,
-    supportingNews: (row.topic_news || []).map(
-      (link: { news_id: string }) => link.news_id,
-    ),
+    updatedAt: row.updated_at,
+    version: row.version,
+    deletedAt: row.deleted_at || undefined,
+    supportingNews: (row.topic_news || [])
+      .filter((link: { deleted_at?: string | null }) => !link.deleted_at)
+      .map((link: { news_id: string }) => link.news_id),
   }))
 
   const theses: Thesis[] = (thesisResult.data || []).map((row) => ({
@@ -148,28 +184,74 @@ export async function loadWorkspace() {
     title: row.title,
     description: row.description,
     horizon: row.horizon,
+    updatedAt: row.updated_at,
+    version: row.version,
+    deletedAt: row.deleted_at || undefined,
     topicIds: topics
       .filter((topic) => topic.thesisId === row.id)
       .map((topic) => topic.id),
   }))
-  return { news, topics, theses }
+  const latestReadout = readoutResult.data?.[0]
+  const readout: EditorialReadout | null = latestReadout
+    ? {
+        periodType: latestReadout.period_type as EditorialReadout['periodType'],
+        periodKey: latestReadout.period_key,
+        lede: latestReadout.lede,
+        bullets: Array.isArray(latestReadout.bullets)
+          ? latestReadout.bullets.filter(
+              (item): item is string => typeof item === 'string',
+            )
+          : [],
+        generatedAt: latestReadout.generated_at,
+      }
+    : null
+  return { news, topics, theses, readout }
 }
 
 export async function persistTopicNews(topicId: string, newsId: string) {
   if (!supabase) return
+  const session = await supabase.auth.getSession()
   const { error } = await supabase
     .from('topic_news')
-    .upsert({ topic_id: topicId, news_id: newsId })
+    .upsert({
+      topic_id: topicId,
+      news_id: newsId,
+      linked_by: session.data.session?.user.id || null,
+      deleted_at: null,
+      deleted_by: null,
+    })
   if (error) throw error
 }
 
-export async function persistTopicMonth(topicId: string, monthKey: string) {
+export async function persistTopicMonth(
+  topicId: string,
+  monthKey: string,
+  expectedVersion?: number,
+) {
   if (!supabase) return
-  const { error } = await supabase
+  let query = supabase
     .from('topics')
     .update({ scheduled_month: `${monthKey}-01` })
     .eq('id', topicId)
+  if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
+  const { data, error } = await query.select('version').maybeSingle()
   if (error) throw error
+  if (!data) throw new Error('This topic changed elsewhere. Reload and try again.')
+  return data.version as number
+}
+
+export function canonicalizeUrl(value: string) {
+  const url = new URL(value.trim())
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Only HTTP(S) URLs are allowed')
+  }
+  url.hash = ''
+  for (const key of [...url.searchParams.keys()]) {
+    if (key.startsWith('utm_') || key === 'fbclid' || key === 'gclid') {
+      url.searchParams.delete(key)
+    }
+  }
+  return url.toString()
 }
 
 export async function persistNewsLink(input: {
@@ -183,28 +265,45 @@ export async function persistNewsLink(input: {
   const user = session.data.session?.user || null
   const contributorName =
     input.contributorName?.trim() || sessionUserLabel(user)
+  const canonicalUrl = canonicalizeUrl(input.url)
+  const existing = await supabase
+    .from('news_items')
+    .select('id,metadata,deleted_at')
+    .eq('canonical_url', canonicalUrl)
+    .maybeSingle()
+  if (existing.error) throw existing.error
+  if (existing.data) {
+    return {
+      id: existing.data.id as string,
+      contributorName:
+        typeof existing.data.metadata?.contributor_name === 'string'
+          ? existing.data.metadata.contributor_name
+          : contributorName,
+      canonicalUrl,
+      alreadyExisted: true,
+      removed: Boolean(existing.data.deleted_at),
+    }
+  }
   const { data, error } = await supabase
     .from('news_items')
-    .upsert(
-      {
-        canonical_url: input.url,
-        title: input.title,
-        source: input.source,
-        captured_by: user?.id || null,
-        captured_via: 'dashboard',
-        editorial_status: 'pending',
-        metadata: {
-          contributor_name: contributorName,
-        },
-      },
-      { onConflict: 'canonical_url' },
-    )
+    .insert({
+      canonical_url: canonicalUrl,
+      title: input.title,
+      source: input.source,
+      captured_by: user?.id || null,
+      captured_via: 'dashboard',
+      editorial_status: 'pending',
+      metadata: { contributor_name: contributorName },
+    })
     .select('id')
     .single()
   if (error) throw error
   return {
     id: data.id as string,
     contributorName,
+    canonicalUrl,
+    alreadyExisted: false,
+    removed: false,
   }
 }
 
@@ -214,14 +313,16 @@ export async function updateNewsItem(
     title?: string
     summary?: string
     category?: NewsCategory
+    published_at?: string | null
     metadata?: Record<string, unknown>
   },
+  expectedVersion?: number,
 ) {
   if (!supabase) return
   const session = await supabase.auth.getSession()
   const user = session.data.session?.user || null
   const editorName = sessionUserLabel(user)
-  const { error } = await supabase
+  let query = supabase
     .from('news_items')
     .update({
       ...patch,
@@ -233,13 +334,23 @@ export async function updateNewsItem(
         : undefined,
     })
     .eq('id', id)
+  if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
+  const { data, error } = await query.select('version').maybeSingle()
   if (error) throw error
-  return editorName
+  if (!data) throw new Error('This news item changed elsewhere. Reload and try again.')
+  return { editorName, version: data.version as number }
 }
 
 export async function deleteNewsItem(id: string) {
   if (!supabase) return
-  const { error } = await supabase.from('news_items').delete().eq('id', id)
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('news_items')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
+    .eq('id', id)
   if (error) throw error
 }
 
@@ -282,17 +393,22 @@ export async function updateTopicItem(
     scheduled_month?: string
     thesis_id?: string | null
   },
+  expectedVersion?: number,
 ) {
   if (!supabase) return
   const session = await supabase.auth.getSession()
-  const { error } = await supabase
+  let query = supabase
     .from('topics')
     .update({
       ...patch,
       updated_by: session.data.session?.user.id || null,
     })
     .eq('id', id)
+  if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
+  const { data, error } = await query.select('version').maybeSingle()
   if (error) throw error
+  if (!data) throw new Error('This topic changed elsewhere. Reload and try again.')
+  return data.version as number
 }
 
 export async function createThesis(input: {
@@ -323,29 +439,64 @@ export async function updateThesisItem(
     description?: string
     horizon?: string
   },
+  expectedVersion?: number,
 ) {
   if (!supabase) return
-  const { error } = await supabase.from('theses').update(patch).eq('id', id)
+  let query = supabase.from('theses').update(patch).eq('id', id)
+  if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
+  const { data, error } = await query.select('version').maybeSingle()
   if (error) throw error
+  if (!data) throw new Error('This thesis changed elsewhere. Reload and try again.')
+  return data.version as number
 }
 
 export async function deleteThesisItem(id: string) {
   if (!supabase) return
-  const { error } = await supabase.from('theses').delete().eq('id', id)
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('theses')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
+    .eq('id', id)
   if (error) throw error
 }
 
 export async function deleteTopicItem(id: string) {
   if (!supabase) return
-  const { error } = await supabase.from('topics').delete().eq('id', id)
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('topics')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function restoreContent(
+  table: 'news_items' | 'topics' | 'theses',
+  id: string,
+) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from(table)
+    .update({ deleted_at: null, deleted_by: null })
+    .eq('id', id)
   if (error) throw error
 }
 
 export async function unlinkTopicNews(topicId: string, newsId: string) {
   if (!supabase) return
+  const session = await supabase.auth.getSession()
   const { error } = await supabase
     .from('topic_news')
-    .delete()
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
     .eq('topic_id', topicId)
     .eq('news_id', newsId)
   if (error) throw error
@@ -363,4 +514,123 @@ export async function importLegacyNews() {
   const body = await result.json()
   if (!result.ok) throw new Error(body.error || 'Legacy import failed')
   return Number(body.imported || 0)
+}
+
+export function subscribeToWorkspace(
+  onChange: () => void,
+  onStatus?: (status: 'connecting' | 'synced' | 'error') => void,
+) {
+  if (!supabase) return () => undefined
+  onStatus?.('connecting')
+  const channel = supabase.channel('workspace-pilot')
+  for (const table of [
+    'news_items',
+    'topics',
+    'theses',
+    'topic_news',
+    'editorial_readouts',
+    'editorial_job_runs',
+  ]) {
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table },
+      onChange,
+    )
+  }
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') onStatus?.('synced')
+    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      onStatus?.('error')
+    }
+  })
+  return () => {
+    void supabase.removeChannel(channel)
+  }
+}
+
+export async function loadActivityEvents(
+  entityType: 'news_items' | 'topics' | 'theses',
+  entityId: string,
+) {
+  if (!supabase) return [] as ActivityEvent[]
+  const { data, error } = await supabase
+    .from('activity_events')
+    .select('id,action,occurred_at,actor_id')
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId)
+    .order('occurred_at', { ascending: false })
+    .limit(20)
+  if (error) throw error
+  const actorIds = [
+    ...new Set(
+      (data || [])
+        .map((item) => item.actor_id)
+        .filter((id): id is string => typeof id === 'string'),
+    ),
+  ]
+  const members = actorIds.length
+    ? await supabase
+        .from('team_members')
+        .select('user_id,display_name,email')
+        .in('user_id', actorIds)
+    : { data: [], error: null }
+  if (members.error) throw members.error
+  const names = new Map(
+    (members.data || []).map((member) => [
+      member.user_id,
+      member.display_name || member.email?.split('@')[0] || 'Team member',
+    ]),
+  )
+  return (data || []).map((item) => ({
+    id: item.id as number,
+    action: item.action as string,
+    occurredAt: item.occurred_at as string,
+    actorName: item.actor_id ? names.get(item.actor_id) || 'Team member' : 'Automation',
+  }))
+}
+
+export async function loadEditorialHealth() {
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from('editorial_job_runs')
+    .select('status,started_at,finished_at,processed_count,error_message')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    status: data.status,
+    startedAt: data.started_at,
+    finishedAt: data.finished_at || undefined,
+    processedCount: data.processed_count,
+    errorMessage: data.error_message || undefined,
+  } as EditorialHealth
+}
+
+export async function loadTeamMembers() {
+  if (!supabase) return [] as TeamMemberSummary[]
+  const { data, error } = await supabase
+    .from('team_members')
+    .select('user_id,email,display_name,role')
+    .order('display_name')
+  if (error) throw error
+  return (data || []).map((member) => ({
+    userId: member.user_id,
+    email: member.email,
+    displayName: member.display_name || member.email?.split('@')[0] || 'Team member',
+    role: member.role as TeamMemberSummary['role'],
+  }))
+}
+
+export async function updateTeamMemberRole(
+  userId: string,
+  role: TeamMemberSummary['role'],
+) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from('team_members')
+    .update({ role })
+    .eq('user_id', userId)
+  if (error) throw error
 }

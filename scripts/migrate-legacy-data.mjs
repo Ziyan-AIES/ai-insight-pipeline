@@ -3,9 +3,12 @@ import process from 'node:process'
 
 const targetUrl = (process.env.SUPABASE_URL || '').replace(/\/$/, '')
 const targetKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const actorId = process.env.LEGACY_MIGRATION_ACTOR_ID || ''
 
-if (!targetUrl || !targetKey) {
-  throw new Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for the new project')
+if (!targetUrl || !targetKey || !actorId) {
+  throw new Error(
+    'Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and LEGACY_MIGRATION_ACTOR_ID for the new project',
+  )
 }
 
 async function target(path, options = {}) {
@@ -15,11 +18,13 @@ async function target(path, options = {}) {
       apikey: targetKey,
       authorization: `Bearer ${targetKey}`,
       'content-type': 'application/json',
-      prefer: 'resolution=merge-duplicates,return=minimal',
+      prefer: 'return=representation',
       ...(options.headers || {}),
     },
   })
   if (!response.ok) throw new Error(await response.text())
+  const text = await response.text()
+  return text ? JSON.parse(text) : null
 }
 
 function canonicalUrl(value) {
@@ -30,7 +35,7 @@ function canonicalUrl(value) {
 
 async function migrateNews() {
   const sourcePath = process.env.BSW_ARTICLES_JSON
-  if (!sourcePath) return 0
+  if (!sourcePath) return []
   const parsed = JSON.parse(await fs.readFile(sourcePath, 'utf8'))
   const articles = Array.isArray(parsed) ? parsed : parsed.articles || []
   const rows = articles.map((item) => ({
@@ -52,19 +57,13 @@ async function migrateNews() {
       legacy_comments: item.comments || [],
     },
   }))
-  if (rows.length) {
-    await target('news_items?on_conflict=canonical_url', {
-      method: 'POST',
-      body: JSON.stringify(rows),
-    })
-  }
-  return rows.length
+  return rows
 }
 
 async function migrateTopics() {
   const oldUrl = (process.env.OLD_TOPIC_SUPABASE_URL || '').replace(/\/$/, '')
   const oldKey = process.env.OLD_TOPIC_SUPABASE_ANON_KEY || ''
-  if (!oldUrl || !oldKey) return 0
+  if (!oldUrl || !oldKey) return []
   const response = await fetch(
     `${oldUrl}/rest/v1/monthly_topics?select=*&order=month_order.asc,display_order.asc`,
     {
@@ -85,23 +84,26 @@ async function migrateTopics() {
     scheduled_month: `${String(item.month_order).slice(0, 4)}-${String(item.month_order).slice(4, 6)}-01`,
     display_order: item.display_order || 1,
   }))
-  if (rows.length) {
-    await target('topics?on_conflict=id', {
-      method: 'POST',
-      body: JSON.stringify(rows),
-    })
-  }
-  return rows.length
+  return rows
 }
 
-const [newsCount, topicCount] = await Promise.all([
+const [newsRows, topicRows] = await Promise.all([
   migrateNews(),
   migrateTopics(),
 ])
+const result = await target('rpc/import_legacy_data_once', {
+  method: 'POST',
+  body: JSON.stringify({
+    p_migration_key:
+      process.env.LEGACY_MIGRATION_KEY || 'external-legacy-migration-v1',
+    p_actor_id: actorId,
+    p_news: newsRows,
+    p_topics: topicRows,
+  }),
+})
 console.log(
   JSON.stringify({
     ok: true,
-    migrated_news: newsCount,
-    migrated_topics: topicCount,
+    ...result,
   }),
 )

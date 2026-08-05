@@ -31,7 +31,8 @@ Without Supabase environment variables, the app runs against representative demo
 
 ## Database
 
-Apply `supabase/migrations/202608030001_unified_schema.sql` to a new Supabase project. Then add the first admin after they have signed in:
+Apply every file in `supabase/migrations` in timestamp order to a new Supabase
+project. Then add the first admin after they have signed in:
 
 ```sql
 insert into public.team_members (user_id, email, display_name, role)
@@ -39,6 +40,11 @@ select id, email, 'Admin', 'admin'
 from auth.users
 where email = 'your-team-email@example.com';
 ```
+
+Provision additional authentication users through the Supabase admin console,
+insert their `team_members` row, then use the dashboard's admin-only **Team**
+panel to assign `member`, `editor`, or `admin`. The database prevents removal
+of the final admin.
 
 All browser-facing tables use RLS. The extension writes through Netlify Functions with a separate token and a server-side service-role key. Missing write-token configuration fails closed.
 
@@ -48,8 +54,13 @@ All browser-facing tables use RLS. The extension writes through Netlify Function
 - `VITE_SUPABASE_ANON_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `EXTENSION_WRITE_TOKEN`
-- `APP_ORIGIN`
+- `CAPTURE_WRITE_TOKEN`
+- `EDITORIAL_WRITE_TOKEN`
+- `APP_ORIGIN` (exact allowed origin, or a comma-separated allowlist)
+
+`EXTENSION_WRITE_TOKEN` is accepted as a temporary fallback when either scoped
+token is unset, so existing extension and local editorial clients can be
+rotated without downtime.
 
 Never commit real values.
 
@@ -60,9 +71,26 @@ Set the target service credentials plus:
 - `BSW_ARTICLES_JSON`: local Browser Signal Watcher `articles.json`
 - `OLD_TOPIC_SUPABASE_URL`
 - `OLD_TOPIC_SUPABASE_ANON_KEY`
+- `LEGACY_MIGRATION_ACTOR_ID`: the approving admin's Supabase user ID
 
-Then run `npm run migrate:legacy`. The migration upserts by canonical URL or legacy topic UUID and can be rerun.
+Then run `npm run migrate:legacy` once from an explicitly approved admin
+operation. The database writes a durable migration marker and rejects replay;
+the dashboard no longer launches migration from a browser session.
 
 ## Editorial automation
 
 See `docs/editorial-automation.md`. The intended weekday 18:00 job exports pending news, edits it under the preserved Browser Signal Watcher editorial rules, posts the result to `/api/editorial-sync`, and verifies pending/processed counts.
+
+## Quality and pilot
+
+```powershell
+npm run lint
+npm test
+npm run build
+npm run test:e2e
+npx supabase test db
+```
+
+Pull requests run these checks in GitHub Actions. Local database tests require
+Docker and the Supabase CLI. See `docs/pilot-runbook.md` before inviting
+colleagues or considering replacement of the existing SharePoint list.

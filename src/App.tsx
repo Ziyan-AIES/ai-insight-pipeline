@@ -1,20 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { demoNews, demoTheses, demoTopics } from './demoData'
+import { useTeamAuth } from './auth-context'
 import {
+  canonicalizeUrl,
   cloudConfigured,
   createThesis,
   createTopic,
   deleteNewsItem,
   deleteThesisItem,
   deleteTopicItem,
-  importLegacyNews,
+  loadActivityEvents,
+  loadEditorialHealth,
+  loadTeamMembers,
   loadWorkspace,
   persistNewsLink,
   persistTopicMonth,
   persistTopicNews,
+  restoreContent,
+  subscribeToWorkspace,
   unlinkTopicNews,
   updateNewsItem,
+  updateTeamMemberRole,
   updateThesisItem,
   updateTopicItem,
 } from './supabase'
@@ -25,6 +32,10 @@ import type {
   Thesis,
   Topic,
   TopicStatus,
+  EditorialReadout,
+  EditorialHealth,
+  TeamMemberSummary,
+  ActivityEvent,
 } from './types'
 
 const categoryLabels: Record<NewsCategory, string> = {
@@ -45,7 +56,7 @@ const topicStatusLabels: Record<TopicStatus, string> = {
   archived: 'Archived',
 }
 
-type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived'
+type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
 type TopicScope = 'current' | 'all'
 
 function monthName(key: string) {
@@ -69,6 +80,10 @@ function isoWeekKey(value: string) {
     ((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
   )
   return `${utc.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+function newsDate(item: NewsItem) {
+  return item.publishedAt || item.capturedAt
 }
 
 function weekLabel(key: string) {
@@ -207,10 +222,41 @@ function NewsAnalysis({
   )
 }
 
+function ActivityHistory({ events }: { events: ActivityEvent[] }) {
+  if (!events.length) return null
+  return (
+    <details className="activity-history">
+      <summary>Activity history ({events.length})</summary>
+      <ol>
+        {events.map((event) => (
+          <li key={event.id}>
+            <strong>{event.action.replaceAll('_', ' ')}</strong>
+            <span>
+              {event.actorName} ·{' '}
+              {new Intl.DateTimeFormat('en', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }).format(new Date(event.occurredAt))}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </details>
+  )
+}
+
 function App() {
-  const [news, setNews] = useState(demoNews)
-  const [topics, setTopics] = useState(demoTopics)
-  const [theses, setTheses] = useState(demoTheses)
+  const { identity, canEdit, canAdmin, signOut } = useTeamAuth()
+  const [news, setNews] = useState(cloudConfigured ? [] : demoNews)
+  const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
+  const [theses, setTheses] = useState(cloudConfigured ? [] : demoTheses)
+  const [readout, setReadout] = useState<EditorialReadout | null>(null)
+  const [editorialHealth, setEditorialHealth] =
+    useState<EditorialHealth | null>(null)
+  const [activity, setActivity] = useState<ActivityEvent[]>([])
+  const [syncState, setSyncState] = useState<'connecting' | 'synced' | 'error'>(
+    cloudConfigured ? 'connecting' : 'synced',
+  )
   const [focus, setFocus] = useState<FocusMode>('split')
   const [period, setPeriod] = useState('all')
   const [newsScope, setNewsScope] = useState<NewsScope>('all')
@@ -218,6 +264,9 @@ function App() {
   const [category, setCategory] = useState<NewsCategory | 'all'>('all')
   const [query, setQuery] = useState('')
   const [showAddLink, setShowAddLink] = useState(false)
+  const [showRecycleBin, setShowRecycleBin] = useState(false)
+  const [showTeam, setShowTeam] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<TeamMemberSummary[]>([])
   const [linkUrl, setLinkUrl] = useState('')
   const [linkTitle, setLinkTitle] = useState('')
   const [linkContributor, setLinkContributor] = useState('')
@@ -232,45 +281,86 @@ function App() {
   const [selectedThesisId, setSelectedThesisId] = useState('')
   const [notice, setNotice] = useState('')
   const [headerHidden, setHeaderHidden] = useState(false)
+  const selectedActivityType = newsDraft
+    ? ('news_items' as const)
+    : topicDraft && !creatingTopic
+      ? ('topics' as const)
+      : thesisDraft && !creatingThesis
+        ? ('theses' as const)
+        : null
+  const selectedActivityId =
+    newsDraft?.id ||
+    (topicDraft && !creatingTopic ? topicDraft.id : '') ||
+    (thesisDraft && !creatingThesis ? thesisDraft.id : '')
 
   const buildLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en', {
+    () => {
+      const buildDate = new Date(
+        import.meta.env.VITE_BUILD_DATE || new Date().toISOString(),
+      )
+      return new Intl.DateTimeFormat('en', {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
         timeZone: 'Asia/Shanghai',
-      }).format(new Date(import.meta.env.VITE_BUILD_DATE)),
+      }).format(buildDate)
+    },
     [],
   )
 
-  useEffect(() => {
+  const reloadWorkspace = useCallback(async (quiet = false) => {
     if (!cloudConfigured) return
-    void (async () => {
-      try {
-        let workspace = await loadWorkspace()
-        if (!workspace) return
-        const legacyImportKey = 'legacy-workspace-import-2026-08-v2'
-        if (!window.localStorage.getItem(legacyImportKey)) {
-          const imported = await importLegacyNews()
-          workspace = (await loadWorkspace()) || workspace
-          window.localStorage.setItem(legacyImportKey, 'complete')
-          if (imported) setNotice(`Synced ${imported} historical news items`)
-        }
-        setNews(workspace.news)
-        setTopics(workspace.topics)
-        setTheses(workspace.theses)
-      } catch (error: unknown) {
+    try {
+      const workspace = await loadWorkspace(canAdmin)
+      if (!workspace) return
+      setNews(workspace.news)
+      setTopics(workspace.topics)
+      setTheses(workspace.theses)
+      setReadout(workspace.readout)
+      if (canEdit) {
+        setEditorialHealth(await loadEditorialHealth().catch(() => null))
+      }
+      setSyncState('synced')
+    } catch (error: unknown) {
+      setSyncState('error')
+      if (!quiet) {
         setNotice(
           error instanceof Error
             ? error.message
             : 'Could not load the team workspace.',
         )
       }
-    })()
-  }, [])
+    }
+  }, [canAdmin, canEdit])
+
+  useEffect(() => {
+    void reloadWorkspace()
+    let timeout = 0
+    const unsubscribe = subscribeToWorkspace(
+      () => {
+        window.clearTimeout(timeout)
+        timeout = window.setTimeout(() => void reloadWorkspace(true), 180)
+      },
+      setSyncState,
+    )
+    return () => {
+      window.clearTimeout(timeout)
+      unsubscribe()
+    }
+  }, [reloadWorkspace])
+
+  useEffect(() => {
+    if (!selectedActivityType || !selectedActivityId || !cloudConfigured) {
+      setActivity([])
+      return
+    }
+    setActivity([])
+    void loadActivityEvents(selectedActivityType, selectedActivityId)
+      .then(setActivity)
+      .catch(() => setActivity([]))
+  }, [selectedActivityId, selectedActivityType])
 
   useEffect(() => {
     const handleWindowScroll = () => setHeaderHidden(window.scrollY > 16)
@@ -279,40 +369,75 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!cloudConfigured) return
+    const handleOnline = () => {
+      setSyncState('connecting')
+      void reloadWorkspace(true)
+    }
+    const handleOffline = () => setSyncState('error')
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [reloadWorkspace])
+
+  useEffect(() => {
     if (!notice) return
     const timeout = window.setTimeout(() => setNotice(''), 4000)
     return () => window.clearTimeout(timeout)
   }, [notice])
 
+  useEffect(() => {
+    const closeModal = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setNewsDraft(null)
+      setTopicDraft(null)
+      setThesisDraft(null)
+      setShowAddLink(false)
+      setShowRecycleBin(false)
+      setShowTeam(false)
+      setCreatingTopic(false)
+      setCreatingThesis(false)
+    }
+    window.addEventListener('keydown', closeModal)
+    return () => window.removeEventListener('keydown', closeModal)
+  }, [])
+
   const visibleNews = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return news.filter((item) => {
-      const matchesCategory = category === 'all' || item.category === category
-      const matchesPeriod =
-        period === 'all' ||
-        (period.startsWith('month:') &&
-          item.capturedAt.slice(0, 7) === period.slice(6)) ||
-        (period.startsWith('week:') &&
-          isoWeekKey(item.capturedAt) === period.slice(5))
-      const matchesScope =
-        newsScope === 'all' ||
-        (newsScope === 'undecided' &&
-          !item.archivedAt &&
-          item.topicLinks.length === 0) ||
-        (newsScope === 'pipeline' && item.topicLinks.length > 0) ||
-        (newsScope === 'archived' && Boolean(item.archivedAt))
-      const matchesQuery =
-        !needle ||
-        `${item.title} ${item.summary} ${item.source}`
-          .toLowerCase()
-          .includes(needle)
-      return matchesCategory && matchesPeriod && matchesScope && matchesQuery
-    })
+    return news
+      .filter((item) => {
+        const matchesCategory = category === 'all' || item.category === category
+        const matchesPeriod =
+          period === 'all' ||
+          (period.startsWith('month:') &&
+            newsDate(item).slice(0, 7) === period.slice(6)) ||
+          (period.startsWith('week:') &&
+            isoWeekKey(newsDate(item)) === period.slice(5))
+        const matchesScope =
+          (newsScope === 'removed' && Boolean(item.deletedAt)) ||
+          (!item.deletedAt &&
+            (newsScope === 'all' ||
+              (newsScope === 'undecided' &&
+                !item.archivedAt &&
+                item.topicLinks.length === 0) ||
+              (newsScope === 'pipeline' && item.topicLinks.length > 0) ||
+              (newsScope === 'archived' && Boolean(item.archivedAt))))
+        const matchesQuery =
+          !needle ||
+          `${item.title} ${item.summary} ${item.source}`
+            .toLowerCase()
+            .includes(needle)
+        return matchesCategory && matchesPeriod && matchesScope && matchesQuery
+      })
+      .sort((a, b) => newsDate(b).localeCompare(newsDate(a)))
   }, [category, news, newsScope, period, query])
 
   const availableMonths = useMemo(
     () =>
-      [...new Set(news.map((item) => item.capturedAt.slice(0, 7)))].sort(
+      [...new Set(news.map((item) => newsDate(item).slice(0, 7)))].sort(
         (a, b) => b.localeCompare(a),
       ),
     [news],
@@ -320,7 +445,7 @@ function App() {
 
   const availableWeeks = useMemo(
     () =>
-      [...new Set(news.map((item) => isoWeekKey(item.capturedAt)))].sort(
+      [...new Set(news.map((item) => isoWeekKey(newsDate(item))))].sort(
         (a, b) => b.localeCompare(a),
       ),
     [news],
@@ -330,6 +455,7 @@ function App() {
     const groups = new Map<string, Topic[]>()
     const currentMonth = new Date().toISOString().slice(0, 7)
     topics
+      .filter((topic) => !topic.deletedAt)
       .filter(
         (topic) => topicScope === 'all' || topic.monthKey >= currentMonth,
       )
@@ -353,9 +479,71 @@ function App() {
     return [...groups.entries()]
   }, [focus, selectedThesisId, topicScope, topics])
 
-  function linkNewsToTopic(newsId: string, topicId: string) {
+  const removedItems = useMemo(
+    () => ({
+      news: news.filter((item) => item.deletedAt),
+      topics: topics.filter((item) => item.deletedAt),
+      theses: theses.filter((item) => item.deletedAt),
+    }),
+    [news, topics, theses],
+  )
+
+  async function restoreItem(
+    table: 'news_items' | 'topics' | 'theses',
+    id: string,
+  ) {
+    try {
+      await restoreContent(table, id)
+      await reloadWorkspace(true)
+      setNotice('Item restored')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not restore item')
+    }
+  }
+
+  async function openTeamManagement() {
+    setShowTeam(true)
+    try {
+      setTeamMembers(await loadTeamMembers())
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not load team')
+    }
+  }
+
+  async function changeMemberRole(
+    member: TeamMemberSummary,
+    role: TeamMemberSummary['role'],
+  ) {
+    if (
+      member.userId === identity?.userId &&
+      member.role === 'admin' &&
+      role !== 'admin' &&
+      !window.confirm('Remove your own admin access?')
+    ) {
+      return
+    }
+    try {
+      await updateTeamMemberRole(member.userId, role)
+      setTeamMembers((current) =>
+        current.map((item) =>
+          item.userId === member.userId ? { ...item, role } : item,
+        ),
+      )
+      setNotice(`${member.displayName} is now ${role}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not update role')
+    }
+  }
+
+  async function linkNewsToTopic(newsId: string, topicId: string) {
     const topic = topics.find((item) => item.id === topicId)
     if (!topic || !news.some((item) => item.id === newsId)) return
+    try {
+      if (cloudConfigured) await persistTopicNews(topicId, newsId)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not link news')
+      return
+    }
     setTopics((current) =>
       current.map((candidate) =>
         candidate.id === topicId &&
@@ -385,18 +573,30 @@ function App() {
           : candidate,
       ),
     )
-    if (cloudConfigured) void persistTopicNews(topicId, newsId)
   }
 
-  function moveTopic(topicId: string, monthKey: string) {
+  async function moveTopic(topicId: string, monthKey: string) {
+    const existingTopic = topics.find((topic) => topic.id === topicId)
+    let version = existingTopic?.version
+    try {
+      if (cloudConfigured) {
+        version = await persistTopicMonth(
+          topicId,
+          monthKey,
+          existingTopic?.version,
+        )
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not move topic')
+      return
+    }
     setTopics((current) =>
       current.map((topic) =>
         topic.id === topicId
-          ? { ...topic, monthKey, monthLabel: monthName(monthKey) }
+          ? { ...topic, monthKey, monthLabel: monthName(monthKey), version }
           : topic,
       ),
     )
-    if (cloudConfigured) void persistTopicMonth(topicId, monthKey)
   }
 
   async function saveNewsDraft() {
@@ -406,12 +606,24 @@ function App() {
       contributor_name: newsDraft.capturedBy.trim() || 'Team member',
       archived_at: newsDraft.archivedAt || null,
     }
-    const editorName = await updateNewsItem(newsDraft.id, {
-      title: newsDraft.title,
-      summary: newsDraft.summary,
-      category: newsDraft.category,
-      metadata,
-    })
+    let result
+    try {
+      result = await updateNewsItem(
+        newsDraft.id,
+        {
+          title: newsDraft.title,
+          summary: newsDraft.summary,
+          category: newsDraft.category,
+          published_at: newsDraft.publishedAt || null,
+          metadata,
+        },
+        newsDraft.version,
+      )
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not save news')
+      return
+    }
+    const editorName = result?.editorName
     const updatedDraft = {
       ...newsDraft,
       capturedBy: newsDraft.capturedBy.trim() || 'Team member',
@@ -420,6 +632,7 @@ function App() {
         ...(editorName ? { last_edited_by: editorName } : {}),
       },
       lastEditedBy: editorName || newsDraft.lastEditedBy,
+      version: result?.version || newsDraft.version,
     }
     setNews((current) =>
       current.map((item) =>
@@ -434,7 +647,12 @@ function App() {
     if (!window.confirm('Delete this news card and all of its topic links?')) {
       return
     }
-    await deleteNewsItem(id)
+    try {
+      await deleteNewsItem(id)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not remove news')
+      return
+    }
     setNews((current) => current.filter((item) => item.id !== id))
     setTopics((current) =>
       current.map((topic) => ({
@@ -460,29 +678,45 @@ function App() {
   async function saveThesisDraft() {
     if (!thesisDraft || !thesisDraft.title.trim()) return
     if (creatingThesis) {
-      const id =
-        (await createThesis({
-          title: thesisDraft.title.trim(),
-          description: thesisDraft.description,
-          horizon: thesisDraft.horizon,
-        })) || `thesis-${Date.now()}`
+      let id: string
+      try {
+        id =
+          (await createThesis({
+            title: thesisDraft.title.trim(),
+            description: thesisDraft.description,
+            horizon: thesisDraft.horizon,
+          })) || `thesis-${Date.now()}`
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not create Thesis')
+        return
+      }
       setTheses((current) => [
         ...current,
-        { ...thesisDraft, id, title: thesisDraft.title.trim() },
+        { ...thesisDraft, id, title: thesisDraft.title.trim(), version: 1 },
       ])
       setSelectedThesisId(id)
       setTopicScope('all')
       setNotice('Thesis created')
     } else {
-      await updateThesisItem(thesisDraft.id, {
-        title: thesisDraft.title.trim(),
-        description: thesisDraft.description,
-        horizon: thesisDraft.horizon,
-      })
+      let version
+      try {
+        version = await updateThesisItem(
+          thesisDraft.id,
+          {
+            title: thesisDraft.title.trim(),
+            description: thesisDraft.description,
+            horizon: thesisDraft.horizon,
+          },
+          thesisDraft.version,
+        )
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not save Thesis')
+        return
+      }
       setTheses((current) =>
         current.map((item) =>
           item.id === thesisDraft.id
-            ? { ...thesisDraft, title: thesisDraft.title.trim() }
+            ? { ...thesisDraft, title: thesisDraft.title.trim(), version }
             : item,
         ),
       )
@@ -499,7 +733,12 @@ function App() {
       return
     }
     if (!window.confirm('Delete this Thesis?')) return
-    await deleteThesisItem(id)
+    try {
+      await deleteThesisItem(id)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not remove Thesis')
+      return
+    }
     setTheses((current) => current.filter((item) => item.id !== id))
     if (selectedThesisId === id) setSelectedThesisId('')
     setThesisDraft(null)
@@ -527,18 +766,24 @@ function App() {
   async function saveTopicDraft() {
     if (!topicDraft || !topicDraft.title.trim()) return
     if (creatingTopic) {
-      const id =
-        (await createTopic({
-          title: topicDraft.title.trim(),
-          notes: topicDraft.notes,
-          category: topicDraft.category,
-          status: topicDraft.status,
-          monthKey: topicDraft.monthKey,
-          thesisId: topicDraft.thesisId,
-        })) || `topic-${Date.now()}`
+      let id: string
+      try {
+        id =
+          (await createTopic({
+            title: topicDraft.title.trim(),
+            notes: topicDraft.notes,
+            category: topicDraft.category,
+            status: topicDraft.status,
+            monthKey: topicDraft.monthKey,
+            thesisId: topicDraft.thesisId,
+          })) || `topic-${Date.now()}`
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not create topic')
+        return
+      }
       setTopics((current) => [
         ...current,
-        { ...topicDraft, id, title: topicDraft.title.trim() },
+        { ...topicDraft, id, title: topicDraft.title.trim(), version: 1 },
       ])
       if (topicDraft.thesisId) {
         setTheses((current) =>
@@ -552,14 +797,24 @@ function App() {
       setNotice('Topic created')
     } else {
       const previous = topics.find((item) => item.id === topicDraft.id)
-      await updateTopicItem(topicDraft.id, {
-        title: topicDraft.title.trim(),
-        notes: topicDraft.notes,
-        category: topicDraft.category,
-        status: topicDraft.status,
-        scheduled_month: `${topicDraft.monthKey}-01`,
-        thesis_id: topicDraft.thesisId || null,
-      })
+      let version
+      try {
+        version = await updateTopicItem(
+          topicDraft.id,
+          {
+            title: topicDraft.title.trim(),
+            notes: topicDraft.notes,
+            category: topicDraft.category,
+            status: topicDraft.status,
+            scheduled_month: `${topicDraft.monthKey}-01`,
+            thesis_id: topicDraft.thesisId || null,
+          },
+          topicDraft.version,
+        )
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not save topic')
+        return
+      }
       setTopics((current) =>
         current.map((item) =>
           item.id === topicDraft.id
@@ -567,6 +822,7 @@ function App() {
                 ...topicDraft,
                 title: topicDraft.title.trim(),
                 monthLabel: monthName(topicDraft.monthKey),
+                version,
               }
             : item,
         ),
@@ -606,7 +862,12 @@ function App() {
     if (!window.confirm('Delete this topic? Supporting news will stay in News.')) {
       return
     }
-    await deleteTopicItem(id)
+    try {
+      await deleteTopicItem(id)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not remove topic')
+      return
+    }
     setTopics((current) => current.filter((item) => item.id !== id))
     setTheses((current) =>
       current.map((item) => ({
@@ -625,7 +886,12 @@ function App() {
   }
 
   async function unlinkNews(topicId: string, newsId: string) {
-    await unlinkTopicNews(topicId, newsId)
+    try {
+      await unlinkTopicNews(topicId, newsId)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not unlink news')
+      return
+    }
     setTopics((current) =>
       current.map((topic) =>
         topic.id === topicId
@@ -652,26 +918,44 @@ function App() {
   }
 
   async function addLink() {
-    const url = linkUrl.trim()
+    let url = linkUrl.trim()
     if (!url) return
     let hostname = ''
     try {
+      url = canonicalizeUrl(url)
       hostname = new URL(url).hostname.replace(/^www\./, '')
     } catch {
+      setNotice('Enter a valid http or https URL')
       return
     }
-    const persisted = await persistNewsLink({
-      url,
-      title: linkTitle.trim() || hostname,
-      source: hostname,
-      contributorName: linkContributor.trim() || undefined,
-    })
+    let persisted
+    try {
+      persisted = await persistNewsLink({
+        url,
+        title: linkTitle.trim() || hostname,
+        source: hostname,
+        contributorName: linkContributor.trim() || undefined,
+      })
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not add link')
+      return
+    }
+    if (persisted?.alreadyExisted) {
+      setNotice(
+        persisted.removed
+          ? 'This link exists in the recycle bin. Ask an admin to restore it.'
+          : 'This link already exists. The existing card was preserved.',
+      )
+      setShowAddLink(false)
+      setQuery(linkTitle.trim() || hostname)
+      return
+    }
     const id = persisted?.id || `news-${Date.now()}`
     const contributorName = persisted?.contributorName || 'Current user'
     const topic = topics.find((candidate) => candidate.id === targetTopicId)
     const item: NewsItem = {
       id,
-      url,
+      url: persisted?.canonicalUrl || url,
       title: linkTitle.trim() || hostname,
       source: hostname,
       summary: 'Pending AI editorial review.',
@@ -680,6 +964,7 @@ function App() {
       capturedBy: contributorName,
       metadata: { contributor_name: contributorName },
       editorialStatus: 'pending',
+      version: 1,
       topicLinks: topic
         ? [
             {
@@ -726,14 +1011,53 @@ function App() {
           </div>
         </div>
         <div className="sync-status">
-          <span className="status-dot" />
+          <span className={`status-dot ${syncState}`} />
           {cloudConfigured
-            ? 'Private team workspace · live sync'
+            ? syncState === 'synced'
+              ? 'Private team workspace · synced'
+              : syncState === 'error'
+                ? 'Sync interrupted · retrying'
+                : 'Connecting to team workspace'
             : 'Demo workspace · cloud setup pending'}
         </div>
-        <button className="avatar-button" type="button" aria-label="Account">
-          ZL
-        </button>
+        <div className="account-actions">
+          {canAdmin && cloudConfigured && (
+            <>
+              <button
+                className="recycle-button"
+                type="button"
+                onClick={() => void openTeamManagement()}
+              >
+                Team
+              </button>
+              <button
+                className="recycle-button"
+                type="button"
+                onClick={() => setShowRecycleBin(true)}
+              >
+                Recycle bin (
+                {removedItems.news.length +
+                  removedItems.topics.length +
+                  removedItems.theses.length}
+                )
+              </button>
+            </>
+          )}
+          <button
+            className="avatar-button"
+            type="button"
+            aria-label={`Sign out ${identity?.displayName || ''}`}
+            title={`${identity?.displayName || 'Demo user'}${identity ? ` · ${identity.role}` : ''} · click to sign out`}
+            onClick={() => void signOut()}
+          >
+            {(identity?.displayName || 'DU')
+              .split(/\s+/)
+              .map((part) => part[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase()}
+          </button>
+        </div>
       </header>
 
       {notice && (
@@ -836,18 +1160,44 @@ function App() {
                 <option value="pipeline">In pipeline</option>
                 <option value="archived">Read & archived</option>
                 <option value="all">All news</option>
+                {canAdmin && <option value="removed">Removed</option>}
               </select>
             </div>
 
             <div className="readout">
               <div>
                 <span className="eyebrow">Current readout</span>
-                <strong>From captured signal to scheduled analysis</strong>
+                <strong>
+                  {readout
+                    ? `${readout.periodType} · ${readout.periodKey}`
+                    : 'From captured signal to scheduled analysis'}
+                </strong>
               </div>
-              <p>
-                Drag a card into the topic pipeline when it becomes evidence for
-                a new analysis. Its pipeline status remains visible here.
-              </p>
+              <div>
+                <p>
+                  {readout?.lede ||
+                    'Drag a card into the topic pipeline when it becomes evidence for a new analysis. Its pipeline status remains visible here.'}
+                </p>
+                {readout && readout.bullets.length > 0 && (
+                  <ul>
+                    {readout.bullets.map((bullet) => (
+                      <li key={bullet}>{bullet}</li>
+                    ))}
+                  </ul>
+                )}
+                {canEdit && editorialHealth && (
+                  <small className={`editorial-health ${editorialHealth.status}`}>
+                    Last editorial run: {editorialHealth.status} ·{' '}
+                    {new Intl.DateTimeFormat('en', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    }).format(new Date(editorialHealth.startedAt))}
+                    {editorialHealth.status === 'completed'
+                      ? ` · ${editorialHealth.processedCount} processed`
+                      : ''}
+                  </small>
+                )}
+              </div>
             </div>
 
             <div className="news-list">
@@ -869,25 +1219,41 @@ function App() {
                     <span>{item.source}</span>
                     <span>Shared by {item.capturedBy}</span>
                     <span>
+                      {item.publishedAt ? 'Published ' : 'Added '}
                       {new Intl.DateTimeFormat('en', {
                         month: 'short',
                         day: 'numeric',
-                      }).format(new Date(item.capturedAt))}
+                        timeZone: 'UTC',
+                      }).format(new Date(newsDate(item)))}
                     </span>
                     <div className="card-actions">
-                      <button
-                        type="button"
-                        onClick={() => setNewsDraft({ ...item })}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="danger-action"
-                        type="button"
-                        onClick={() => void removeNews(item.id)}
-                      >
-                        Delete
-                      </button>
+                      {item.deletedAt ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void restoreItem('news_items', item.id)
+                          }
+                        >
+                          Restore
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setNewsDraft({ ...item })}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="danger-action"
+                            type="button"
+                            onClick={() => void removeNews(item.id)}
+                            hidden={!canAdmin}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <h2>
@@ -946,6 +1312,7 @@ function App() {
                   className="secondary-button"
                   type="button"
                   onClick={openNewTopic}
+                  hidden={!canEdit}
                 >
                   + New topic
                 </button>
@@ -1002,7 +1369,7 @@ function App() {
                 <aside className="thesis-portfolio">
                   <div className="portfolio-heading">
                     <div className="section-label">Thesis portfolio</div>
-                    <button type="button" onClick={openNewThesis}>
+                    <button type="button" onClick={openNewThesis} hidden={!canEdit}>
                       + New thesis
                     </button>
                   </div>
@@ -1053,6 +1420,7 @@ function App() {
                               setCreatingThesis(false)
                               setThesisDraft({ ...thesis })
                             }}
+                            hidden={!canEdit}
                           >
                             Edit
                           </button>
@@ -1139,6 +1507,7 @@ function App() {
                                   setCreatingTopic(false)
                                   setTopicDraft({ ...topic })
                                 }}
+                                hidden={!canEdit}
                               >
                                 Edit
                               </button>
@@ -1161,7 +1530,9 @@ function App() {
                               const supportingItem = news.find(
                                 (item) => item.id === newsId,
                               )
-                              if (!supportingItem) return null
+                              if (!supportingItem || supportingItem.deletedAt) {
+                                return null
+                              }
                               return (
                                 <div className="support-row" key={newsId}>
                                   <a
@@ -1278,6 +1649,28 @@ function App() {
               )}
             </label>
             <label>
+              Publication date
+              <input
+                type="date"
+                value={newsDraft.publishedAt?.slice(0, 10) || ''}
+                onChange={(event) =>
+                  setNewsDraft({
+                    ...newsDraft,
+                    publishedAt: event.target.value || undefined,
+                  })
+                }
+              />
+              <small>
+                Use the article&apos;s publication date. Leave blank to show
+                the date it was added (
+                {new Intl.DateTimeFormat('en', {
+                  dateStyle: 'medium',
+                  timeZone: 'UTC',
+                }).format(new Date(newsDraft.capturedAt))}
+                ).
+              </small>
+            </label>
+            <label>
               Summary
               <textarea
                 rows={7}
@@ -1288,10 +1681,12 @@ function App() {
               />
             </label>
             <NewsAnalysis metadata={newsDraft.metadata} />
+            <ActivityHistory events={activity} />
             <label className="archive-control">
               <input
                 type="checkbox"
                 checked={Boolean(newsDraft.archivedAt)}
+                disabled={!canEdit}
                 onChange={(event) =>
                   setNewsDraft({
                     ...newsDraft,
@@ -1313,8 +1708,9 @@ function App() {
                 className="danger-button"
                 type="button"
                 onClick={() => void removeNews(newsDraft.id)}
+                hidden={!canAdmin}
               >
-                Delete news
+                Remove news
               </button>
               <div>
                 <button
@@ -1409,14 +1805,16 @@ function App() {
               Link Monthly Topics to this Thesis from each Topic editor. When
               selected, the portfolio filters the timeline to show continuity.
             </p>
+            {!creatingThesis && <ActivityHistory events={activity} />}
             <div className="modal-actions split-actions">
               {!creatingThesis ? (
                 <button
                   className="danger-button"
                   type="button"
                   onClick={() => void removeThesis(thesisDraft.id)}
+                  hidden={!canAdmin}
                 >
-                  Delete Thesis
+                  Remove Thesis
                 </button>
               ) : (
                 <span />
@@ -1563,14 +1961,16 @@ function App() {
                 }
               />
             </label>
+            {!creatingTopic && <ActivityHistory events={activity} />}
             <div className="modal-actions split-actions">
               {!creatingTopic ? (
                 <button
                   className="danger-button"
                   type="button"
                   onClick={() => void removeTopic(topicDraft.id)}
+                  hidden={!canAdmin}
                 >
-                  Delete topic
+                  Remove topic
                 </button>
               ) : (
                 <span />
@@ -1594,6 +1994,127 @@ function App() {
                   {creatingTopic ? 'Create topic' : 'Save changes'}
                 </button>
               </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showTeam && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-management-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">Admin access</span>
+                <h2 id="team-management-title">Team roles</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setShowTeam(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="modal-note">
+              Create or invite authentication users in Supabase first, then add
+              their user ID to <code>team_members</code>. Roles can be maintained
+              here after membership is provisioned.
+            </p>
+            <div className="team-list">
+              {teamMembers.map((member) => (
+                <div key={member.userId}>
+                  <span>
+                    <strong>{member.displayName}</strong>
+                    <small>{member.email}</small>
+                  </span>
+                  <select
+                    aria-label={`Role for ${member.displayName}`}
+                    value={member.role}
+                    onChange={(event) =>
+                      void changeMemberRole(
+                        member,
+                        event.target.value as TeamMemberSummary['role'],
+                      )
+                    }
+                  >
+                    <option value="member">Member</option>
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showRecycleBin && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recycle-bin-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">Admin recovery</span>
+                <h2 id="recycle-bin-title">Recycle bin</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setShowRecycleBin(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="recycle-list">
+              {[
+                ...removedItems.news.map((item) => ({
+                  table: 'news_items' as const,
+                  id: item.id,
+                  kind: 'News',
+                  title: item.title,
+                })),
+                ...removedItems.topics.map((item) => ({
+                  table: 'topics' as const,
+                  id: item.id,
+                  kind: 'Topic',
+                  title: item.title,
+                })),
+                ...removedItems.theses.map((item) => ({
+                  table: 'theses' as const,
+                  id: item.id,
+                  kind: 'Thesis',
+                  title: item.title,
+                })),
+              ].map((item) => (
+                <div key={`${item.table}-${item.id}`}>
+                  <span>
+                    <small>{item.kind}</small>
+                    <strong>{item.title}</strong>
+                  </span>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void restoreItem(item.table, item.id)}
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+              {removedItems.news.length +
+                removedItems.topics.length +
+                removedItems.theses.length ===
+                0 && <p className="modal-note">No removed items.</p>}
             </div>
           </section>
         </div>
@@ -1629,6 +2150,8 @@ function App() {
             <label>
               URL
               <input
+                type="url"
+                required
                 value={linkUrl}
                 onChange={(event) => setLinkUrl(event.target.value)}
                 placeholder="https://"

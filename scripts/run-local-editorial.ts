@@ -1,14 +1,17 @@
 import { Agent, Cursor, CursorAgentError } from '@cursor/sdk'
+import crypto from 'node:crypto'
+import { lookup } from 'node:dns/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import process from 'node:process'
+import ipaddr from 'ipaddr.js'
+import { Agent as UndiciAgent, fetch as undiciFetch } from 'undici-pinned'
 
 const requiredVariables = [
   'CURSOR_API_KEY',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'EDITORIAL_SYNC_URL',
-  'EXTENSION_WRITE_TOKEN',
 ] as const
 
 const categories = new Set([
@@ -58,13 +61,27 @@ function environment() {
   if (missing.length) {
     throw new Error(`Missing local environment variables: ${missing.join(', ')}`)
   }
-  return Object.fromEntries(
+  const values = Object.fromEntries(
     requiredVariables.map((name) => [name, process.env[name]!.trim()]),
   ) as Record<(typeof requiredVariables)[number], string>
+  const editorialToken = (
+    process.env.EDITORIAL_WRITE_TOKEN ||
+    process.env.EXTENSION_WRITE_TOKEN ||
+    ''
+  ).trim()
+  if (!editorialToken) {
+    throw new Error(
+      'Missing local environment variable: EDITORIAL_WRITE_TOKEN (or temporary EXTENSION_WRITE_TOKEN fallback)',
+    )
+  }
+  return { ...values, EDITORIAL_WRITE_TOKEN: editorialToken }
 }
 
 function canonicalizeUrl(value: string) {
   const url = new URL(value)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Only HTTP(S) URLs are allowed')
+  }
   url.hash = ''
   for (const key of [...url.searchParams.keys()]) {
     if (key.startsWith('utm_') || key === 'fbclid' || key === 'gclid') {
@@ -72,6 +89,77 @@ function canonicalizeUrl(value: string) {
     }
   }
   return url.toString()
+}
+
+function isPrivateHostname(hostname: string) {
+  const value = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (
+    value === 'localhost' ||
+    value.endsWith('.localhost') ||
+    value.endsWith('.local')
+  ) {
+    return true
+  }
+  if (!ipaddr.isValid(value)) return false
+  let address = ipaddr.parse(value)
+  if (address.kind() === 'ipv6' && address.isIPv4MappedAddress()) {
+    address = address.toIPv4Address()
+  }
+  return address.range() !== 'unicast'
+}
+
+async function assertPublicUrl(value: string) {
+  const url = new URL(canonicalizeUrl(value))
+  if (isPrivateHostname(url.hostname)) {
+    throw new Error('Private source URLs are not allowed')
+  }
+  const addresses = await lookup(url.hostname, { all: true, verbatim: true })
+  if (!addresses.length || addresses.some((entry) => isPrivateHostname(entry.address))) {
+    throw new Error('Source URL resolves to a private address')
+  }
+  return { url, address: addresses[0].address, family: addresses[0].family }
+}
+
+async function fetchPublicHtml(value: string) {
+  let current = value
+  for (let redirects = 0; redirects <= 5; redirects += 1) {
+    const { url, address, family } = await assertPublicUrl(current)
+    const dispatcher = new UndiciAgent({
+      connect: {
+        lookup: (_hostname, _options, callback) =>
+          callback(null, address, family),
+      },
+    })
+    try {
+      const response = await undiciFetch(url, {
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (compatible; SignalIntelligenceEditorial/1.0)',
+        },
+        dispatcher,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15000),
+      })
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location')
+        if (!location) {
+          await response.body?.cancel()
+          return { ok: response.ok, contentType: '', text: '' }
+        }
+        await response.body?.cancel()
+        current = new URL(location, url).toString()
+        continue
+      }
+      const contentType = response.headers.get('content-type') || ''
+      const shouldRead = response.ok && contentType.includes('text/html')
+      const text = shouldRead ? await response.text() : ''
+      if (!shouldRead) await response.body?.cancel()
+      return { ok: response.ok, contentType, text }
+    } finally {
+      await dispatcher.close()
+    }
+  }
+  throw new Error('Source URL redirected too many times')
 }
 
 function isoWeekKey(value = new Date()) {
@@ -123,6 +211,67 @@ async function queryNews(
   return (await response.json()) as QueueItem[]
 }
 
+async function claimEditorialJob(
+  env: ReturnType<typeof environment>,
+  externalRunId: string,
+  batchSize: number,
+) {
+  const response = await fetch(
+    `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/claim_editorial_job`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_external_run_id: externalRunId,
+        p_lease_owner: `local:${process.env.COMPUTERNAME || 'editorial-runner'}`,
+        p_batch_size: batchSize,
+        p_lease_seconds: 1800,
+      }),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`Editorial queue claim failed (${response.status})`)
+  }
+  const result = (await response.json()) as { news?: QueueItem[] }
+  return result.news || []
+}
+
+async function recordEditorialFailure(
+  env: ReturnType<typeof environment>,
+  externalRunId: string,
+  message: string,
+) {
+  const response = await fetch(
+    `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/record_editorial_run_failure`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_external_run_id: externalRunId,
+        p_error_message: message.slice(0, 2000),
+      }),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`Editorial lease release failed (${response.status})`)
+  }
+}
+
+let activeClaim:
+  | {
+      env: ReturnType<typeof environment>
+      externalRunId: string
+    }
+  | undefined
+
 function htmlToText(html: string) {
   return html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
@@ -141,16 +290,9 @@ async function enrichItem(item: QueueItem) {
     return { ...item, source_mode: 'extension_text' as const }
   }
   try {
-    const response = await fetch(item.canonical_url, {
-      headers: {
-        'user-agent':
-          'Mozilla/5.0 (compatible; SignalIntelligenceEditorial/1.0)',
-      },
-      signal: AbortSignal.timeout(15000),
-    })
-    const contentType = response.headers.get('content-type') || ''
-    if (!response.ok || !contentType.includes('text/html')) return item
-    const rawText = htmlToText(await response.text()).slice(0, 30000)
+    const response = await fetchPublicHtml(item.canonical_url)
+    if (!response.ok || !response.contentType.includes('text/html')) return item
+    const rawText = htmlToText(response.text).slice(0, 30000)
     return rawText.length > item.raw_text.length
       ? { ...item, raw_text: rawText, source_mode: 'fetched_html' as const }
       : { ...item, source_mode: 'url_only' as const }
@@ -316,7 +458,7 @@ async function main() {
   )
   const select =
     'id,canonical_url,title,source,raw_text,summary,category,captured_at,metadata'
-  const pending = await queryNews(env, {
+  let pending = await queryNews(env, {
     select,
     editorial_status: 'eq.pending',
     order: 'captured_at.asc',
@@ -332,6 +474,19 @@ async function main() {
   }
   if (!pending.length) {
     console.log('No pending news. Nothing was changed.')
+    return
+  }
+  const externalRunId = `local-${new Date().toISOString()}-${crypto.randomUUID()}`
+  pending = await claimEditorialJob(env, externalRunId, batchSize)
+  activeClaim = { env, externalRunId }
+  if (!pending.length) {
+    await recordEditorialFailure(
+      env,
+      externalRunId,
+      'No items were claimable; another run may hold the queue lease.',
+    )
+    activeClaim = undefined
+    console.log('No claimable pending news. Nothing was changed.')
     return
   }
 
@@ -385,6 +540,12 @@ Return only valid JSON with this shape:
     result.id,
   )
   if (!payload.news.length) {
+    await recordEditorialFailure(
+      env,
+      externalRunId,
+      'No claimed item passed evidence validation.',
+    )
+    activeClaim = undefined
     console.log(
       `No news was published because ${payload.skipped} item(s) lacked sufficient evidence.`,
     )
@@ -397,9 +558,9 @@ Return only valid JSON with this shape:
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-extension-token': env.EXTENSION_WRITE_TOKEN,
+      'x-editorial-token': env.EDITORIAL_WRITE_TOKEN,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, run_id: externalRunId }),
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -407,6 +568,7 @@ Return only valid JSON with this shape:
       `Editorial synchronization failed (${response.status}): ${body.error || 'unknown error'}`,
     )
   }
+  activeClaim = undefined
   console.log(
     `Editorial review complete. Processed ${body.upserted_news || payload.news.length} news items and ${body.upserted_readouts || 0} readout.`,
   )
@@ -420,7 +582,21 @@ Return only valid JSON with this shape:
   }
 }
 
-main().catch((error: unknown) => {
+main().catch(async (error: unknown) => {
+  if (activeClaim) {
+    await recordEditorialFailure(
+      activeClaim.env,
+      activeClaim.externalRunId,
+      error instanceof Error ? error.message : String(error),
+    ).catch((releaseError) => {
+      console.error(
+        `Editorial lease could not be released: ${
+          releaseError instanceof Error ? releaseError.message : String(releaseError)
+        }`,
+      )
+    })
+    activeClaim = undefined
+  }
   if (error instanceof CursorAgentError) {
     console.error(
       `Cursor agent could not start: ${error.message}; retryable=${error.isRetryable}`,

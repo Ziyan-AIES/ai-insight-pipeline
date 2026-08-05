@@ -15,7 +15,13 @@ after a missed start.
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `EDITORIAL_SYNC_URL`
-- `EXTENSION_WRITE_TOKEN`
+- `EDITORIAL_WRITE_TOKEN` for the Netlify endpoint and local runner
+
+The endpoint uses `EDITORIAL_WRITE_TOKEN`, falling back to the server's
+`EXTENSION_WRITE_TOKEN` only when the scoped token is not configured. It
+accepts `x-editorial-token`; `EXTENSION_WRITE_TOKEN` remains a temporary
+fallback during rotation. Do not give the editorial secret to the capture
+extension.
 
 Store these as Windows user environment variables. Never place their values in
 the repository, logs, prompts, or task arguments.
@@ -43,7 +49,9 @@ the repository, logs, prompts, or task arguments.
    - return at most two non-obvious implications when evidence supports them;
    - leave implications empty when they only repeat the summary.
 4. Generate or update the current week-to-date readout with a one- or two-sentence lede and two or three specific bullets.
-5. POST the reviewed payload to `EDITORIAL_SYNC_URL` with `x-extension-token`. Never print the token.
+5. POST the reviewed payload to `EDITORIAL_SYNC_URL` with
+   `x-editorial-token`. The current local runner may use the compatibility
+   `x-extension-token` path during rotation. Never print either token.
 6. Query Supabase after the write and verify:
    - every submitted URL is `processed`;
    - no existing Topic or News–Topic relation was removed;
@@ -71,6 +79,11 @@ impact paths, open research questions, and an audit record containing the run
 identifier, review time, source mode, and evidence count. News cards show only
 the concise **Why it matters** result; the full **AI analysis trail** is
 available in the News editor when an audit is needed.
+
+Each synchronization also creates or updates an `editorial_job_runs` record
+with status, processed/readout counts, timestamps, and a bounded error message.
+The runner claims work through the service-only `claim_editorial_job` RPC using
+`FOR UPDATE SKIP LOCKED` and expiring item leases before invoking a model.
 
 ## Payload shape
 

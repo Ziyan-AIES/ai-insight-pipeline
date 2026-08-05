@@ -7,30 +7,46 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:db": "supabase test db",
     "preview": "vite preview",
     "migrate:legacy": "node scripts/migrate-legacy-data.mjs",
     "editorial:export": "node scripts/export-editorial-queue.mjs",
     "editorial:check": "tsx scripts/run-local-editorial.ts --check",
     "editorial:local": "tsx scripts/run-local-editorial.ts",
-    "editorial:schedule": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/register-editorial-task.ps1"
+    "editorial:schedule": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/register-editorial-task.ps1",
+    "pilot:report": "node scripts/pilot-report.mjs"
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.26",
     "@supabase/supabase-js": "^2.112.0",
+    "ipaddr.js": "^2.5.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "undici-pinned": "npm:undici@^6.28.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^30.0.1",
     "oxlint": "^1.75.0",
     "tsx": "^4.23.5",
     "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
   },
   "overrides": {
-    "postcss": "8.5.23"
+    "postcss": "8.5.23",
+    "@connectrpc/connect-node": {
+      "undici": "^6.28.0"
+    }
   }
 }

@@ -22,12 +22,16 @@ export interface NewsItem {
   summary: string
   category: NewsCategory
   capturedAt: string
+  publishedAt?: string
   capturedBy: string
   lastEditedBy?: string
   archivedAt?: string
   metadata?: Record<string, unknown>
   imageUrl?: string
   editorialStatus: 'pending' | 'processed'
+  updatedAt?: string
+  version?: number
+  deletedAt?: string
   topicLinks: Array<{
     topicId: string
     topicTitle: string
@@ -46,6 +50,9 @@ export interface Topic {
   status: TopicStatus
   notes: string
   displayOrder: number
+  updatedAt?: string
+  version?: number
+  deletedAt?: string
   supportingNews: string[]
 }
 
@@ -54,7 +61,40 @@ export interface Thesis {
   title: string
   description: string
   horizon: string
+  updatedAt?: string
+  version?: number
+  deletedAt?: string
   topicIds: string[]
+}
+
+export interface EditorialReadout {
+  periodType: 'week' | 'month' | 'quarter'
+  periodKey: string
+  lede: string
+  bullets: string[]
+  generatedAt: string
+}
+
+export interface ActivityEvent {
+  id: number
+  action: string
+  occurredAt: string
+  actorName: string
+}
+
+export interface EditorialHealth {
+  status: 'running' | 'completed' | 'failed' | 'abandoned'
+  startedAt: string
+  finishedAt?: string
+  processedCount: number
+  errorMessage?: string
+}
+
+export interface TeamMemberSummary {
+  userId: string
+  email: string
+  displayName: string
+  role: 'admin' | 'editor' | 'member'
 }
 
 export type FocusMode = 'split' | 'news' | 'topics'

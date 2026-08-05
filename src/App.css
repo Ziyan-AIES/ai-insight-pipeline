@@ -91,8 +91,15 @@
   background: #45b8aa;
 }
 
+.status-dot.connecting {
+  background: #d79a37;
+}
+
+.status-dot.error {
+  background: #c64d55;
+}
+
 .avatar-button {
-  justify-self: end;
   width: 34px;
   height: 34px;
   border: 0;
@@ -100,6 +107,20 @@
   background: #e7e9ed;
   color: #353a42;
   font-weight: 800;
+}
+
+.account-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recycle-button {
+  border: 0;
+  background: transparent;
+  color: #737984;
+  font-size: 11px;
 }
 
 .dashboard {
@@ -270,6 +291,77 @@ button {
   color: #696c70;
   font-size: 12px;
   line-height: 1.55;
+}
+
+.readout ul {
+  margin: 7px 0 0;
+  padding-left: 17px;
+  color: #696c70;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.editorial-health {
+  display: block;
+  margin-top: 8px;
+  color: #5c7375;
+}
+
+.editorial-health.failed,
+.editorial-health.abandoned {
+  color: #a54149;
+}
+
+.activity-history {
+  padding: 11px 0;
+  border-top: 1px solid #e2e5e9;
+  border-bottom: 1px solid #e2e5e9;
+  font-size: 12px;
+}
+
+.activity-history summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.activity-history ol {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.activity-history li {
+  margin: 7px 0;
+}
+
+.activity-history li span {
+  display: block;
+  color: #737984;
+}
+
+.recycle-list,
+.team-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recycle-list > div,
+.team-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e5e9;
+}
+
+.recycle-list span,
+.team-list span {
+  display: grid;
+  gap: 3px;
+}
+
+.team-list select {
+  min-width: 110px;
 }
 
 .news-list {
