@@ -46,8 +46,10 @@ the repository, logs, prompts, or task arguments.
    - write a factual title and short summary;
    - assign one category from interaction, AI software, AI hardware, ecosystem, AI capability, or industry events;
    - keep hardware, devices, and form-factor stories in AI hardware even when interaction is prominent;
-   - return at most two non-obvious implications when evidence supports them;
-   - leave implications empty when they only repeat the summary.
+   - return at most one evidence-backed `Why it matters for Qira` sentence;
+   - merge the directional implication and main watchpoint in that sentence;
+   - leave implications empty when Qira relevance is generic, speculative, or
+     only repeats the summary.
 4. Generate or update the current week-to-date readout with a one- or two-sentence lede and two or three specific bullets.
 5. POST the reviewed payload to `EDITORIAL_SYNC_URL` with
    `x-editorial-token`. The current local runner may use the compatibility
@@ -74,11 +76,32 @@ The local runner separates acquisition, reasoning, validation, and publication:
 5. The sync endpoint merges AI fields into existing metadata so contributor,
    archive, and capture information remain intact.
 
-Each processed item records source-backed evidence, first- through third-order
-impact paths, open research questions, and an audit record containing the run
-identifier, review time, source mode, and evidence count. News cards show only
-the concise **Why it matters** result; the full **AI analysis trail** is
-available in the News editor when an audit is needed.
+Each processed item records source-backed evidence, one optional Qira
+directional implication, and an audit record containing the run identifier,
+review time, source mode, and evidence count. News cards show the concise
+**Why it matters for Qira** result; source evidence remains available in the
+News editor when an audit is needed.
+
+## Qira editorial lens
+
+Lenovo describes Qira as a permission-based Personal Ambient Intelligence
+System: one context-aware intelligence across Lenovo and Motorola PCs,
+smartphones, tablets, wearables, apps, and services. It is intended to preserve
+continuity, use multimodal and personal context selected by the user, and act
+through a hybrid of local and cloud intelligence.
+
+Use that positioning only as a directional lens. A signal is relevant when it
+could materially affect cross-device continuity, ambient interaction,
+permission and trust, hybrid local-cloud architecture, agentic action, service
+integrations, or Lenovo/Motorola ecosystem differentiation. Do not force every
+article into Qira. When relevance exists, write one plain sentence combining
+the likely consequence and the key development to watch, and qualify
+interpretation with `may` or `could`.
+
+Primary background:
+
+- [Lenovo Tech World @ CES 2026 announcement](https://news.lenovo.com/pressroom/press-releases/hybrid-ai-personalized-perceptive-proactive-ai-portfolio-tech-world-ces-2026/)
+- [Lenovo Qira introduction](https://smbcommunity.lenovo.com/resources/post/introducing-lenovo-and-motorola-qira-a-personal-ambient-intelligence-bkwFUljRWdtPbXf)
 
 Each synchronization also creates or updates an `editorial_job_runs` record
 with status, processed/readout counts, timestamps, and a bounded error message.
@@ -99,7 +122,7 @@ The sync endpoint accepts:
       "summary": "Concise editorial summary.",
       "category": "ai_capability",
       "news_facts": ["Fact one"],
-      "implications": ["Implication one"],
+      "implications": ["This could affect Qira's cross-device service orchestration; watch whether the capability exposes a permission-aware integration path."],
       "evidence": [
         {
           "claim": "Source-backed claim",
@@ -107,14 +130,8 @@ The sync endpoint accepts:
           "support": "Short supporting excerpt"
         }
       ],
-      "impact_paths": [
-        {
-          "order": 1,
-          "effect": "Direct effect",
-          "rationale": "Mechanism"
-        }
-      ],
-      "open_questions": ["What still requires verification?"],
+      "impact_paths": [],
+      "open_questions": [],
       "captured_at": "2026-08-03T10:00:00Z"
     }
   ],

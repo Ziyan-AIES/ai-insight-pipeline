@@ -19,6 +19,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(cloudConfigured)
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const sessionUserId = session?.user.id
 
   useEffect(() => {
     if (!supabase) return
@@ -37,13 +38,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!supabase || !session) return
+    if (!supabase || !sessionUserId) return
     let cancelled = false
     setLoading(true)
     void supabase
       .from('team_members')
       .select('user_id,email,display_name,role')
-      .eq('user_id', session.user.id)
+      .eq('user_id', sessionUserId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return
@@ -69,7 +70,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [session])
+  }, [sessionUserId])
 
   const context = useMemo<AuthContextValue>(
     () => ({

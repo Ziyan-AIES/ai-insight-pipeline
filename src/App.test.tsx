@@ -1,8 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-import App from './App'
+import { beforeEach, describe, expect, it } from 'vitest'
+import App, { NewsWhyItMatters } from './App'
 
 describe('dashboard pilot shell', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear()
+  })
+
   it('clearly identifies demo mode and renders both work areas', () => {
     render(<App />)
     expect(screen.getByText(/Demo workspace/)).toBeInTheDocument()
@@ -30,5 +34,70 @@ describe('dashboard pilot shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     expect(await screen.findByText('Published Jul 1')).toBeInTheDocument()
+  })
+
+  it('restores an unfinished Add link draft after a remount', () => {
+    const firstRender = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: '+ Add link' }))
+    fireEvent.change(screen.getByLabelText('URL'), {
+      target: { value: 'https://example.com/unfinished' },
+    })
+    fireEvent.change(screen.getByLabelText(/Title/), {
+      target: { value: 'Unfinished signal' },
+    })
+    firstRender.unmount()
+
+    render(<App />)
+
+    expect(screen.getByRole('dialog', { name: 'Add link' })).toBeInTheDocument()
+    expect(screen.getByLabelText('URL')).toHaveValue(
+      'https://example.com/unfinished',
+    )
+    expect(screen.getByLabelText(/Title/)).toHaveValue('Unfinished signal')
+  })
+
+  it('clears the Add link draft when the user cancels it', () => {
+    const firstRender = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: '+ Add link' }))
+    fireEvent.change(screen.getByLabelText('URL'), {
+      target: { value: 'https://example.com/cancelled' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    firstRender.unmount()
+
+    render(<App />)
+
+    expect(screen.queryByRole('dialog', { name: 'Add link' })).toBeNull()
+  })
+
+  it('opens the plain-text reader with a source-page fallback', async () => {
+    render(<App />)
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Read captured text' })[0],
+    )
+
+    expect(
+      await screen.findByText(/No captured text is stored for this item/),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Open source ↗' })[0]).toHaveAttribute(
+      'target',
+      '_blank',
+    )
+  })
+
+  it('shows one merged Qira implication', () => {
+    render(
+      <NewsWhyItMatters
+        metadata={{
+          implications: [
+            'This could change Qira integration priorities; watch for a permission-aware API.',
+            'This second implication should not be shown.',
+          ],
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Why it matters for Qira')).toBeInTheDocument()
+    expect(screen.queryByText(/second implication/)).toBeNull()
   })
 })

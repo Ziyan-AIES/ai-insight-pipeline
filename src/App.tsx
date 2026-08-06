@@ -12,6 +12,7 @@ import {
   deleteTopicItem,
   loadActivityEvents,
   loadEditorialHealth,
+  loadNewsSourceText,
   loadTeamMembers,
   loadWorkspace,
   persistNewsLink,
@@ -58,6 +59,55 @@ const topicStatusLabels: Record<TopicStatus, string> = {
 
 type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
 type TopicScope = 'current' | 'all'
+type AddLinkDraft = {
+  open: boolean
+  url: string
+  title: string
+  contributor: string
+  targetTopicId: string
+}
+type NewsReaderState = {
+  newsId: string
+  status: 'loading' | 'ready' | 'error'
+  text: string
+}
+
+const addLinkDraftKey = 'signal-intelligence:add-link-draft'
+
+function clearStoredAddLinkDraft() {
+  try {
+    window.sessionStorage.removeItem(addLinkDraftKey)
+  } catch {
+    // Draft persistence is best-effort when browser storage is unavailable.
+  }
+}
+
+function loadAddLinkDraft(): AddLinkDraft {
+  const emptyDraft = {
+    open: false,
+    url: '',
+    title: '',
+    contributor: '',
+    targetTopicId: '',
+  }
+  try {
+    if (typeof window === 'undefined') return emptyDraft
+    const stored = window.sessionStorage.getItem(addLinkDraftKey)
+    if (!stored) return emptyDraft
+    const value = JSON.parse(stored) as Partial<AddLinkDraft>
+    return {
+      open: value.open === true,
+      url: typeof value.url === 'string' ? value.url : '',
+      title: typeof value.title === 'string' ? value.title : '',
+      contributor:
+        typeof value.contributor === 'string' ? value.contributor : '',
+      targetTopicId:
+        typeof value.targetTopicId === 'string' ? value.targetTopicId : '',
+    }
+  } catch {
+    return emptyDraft
+  }
+}
 
 function monthName(key: string) {
   const [year, month] = key.split('-').map(Number)
@@ -126,17 +176,17 @@ function metadataObjects(
     : []
 }
 
-function NewsWhyItMatters({
+export function NewsWhyItMatters({
   metadata,
 }: {
   metadata: Record<string, unknown> | undefined
 }) {
-  const implications = metadataStrings(metadata, 'implications').slice(0, 2)
+  const implications = metadataStrings(metadata, 'implications').slice(0, 1)
   if (implications.length === 0) return null
   return (
     <div className="why-it-matters">
-      <strong>Why it matters</strong>
-      <p>{implications.join(' ')}</p>
+      <strong>Why it matters for Qira</strong>
+      <p>{implications[0]}</p>
     </div>
   )
 }
@@ -147,9 +197,7 @@ function NewsAnalysis({
   metadata: Record<string, unknown> | undefined
 }) {
   const evidence = metadataObjects(metadata, 'evidence')
-  const implications = metadataStrings(metadata, 'implications')
-  const impactPaths = metadataObjects(metadata, 'impact_paths')
-  const questions = metadataStrings(metadata, 'open_questions')
+  const implications = metadataStrings(metadata, 'implications').slice(0, 1)
   const audit =
     metadata?.editorial_audit &&
     typeof metadata.editorial_audit === 'object' &&
@@ -158,9 +206,7 @@ function NewsAnalysis({
       : null
   if (
     evidence.length === 0 &&
-    implications.length === 0 &&
-    impactPaths.length === 0 &&
-    questions.length === 0
+    implications.length === 0
   ) {
     return null
   }
@@ -185,28 +231,11 @@ function NewsAnalysis({
           </ul>
         </section>
       )}
-      {(implications.length > 0 || impactPaths.length > 0) && (
+      {implications.length > 0 && (
         <section>
-          <strong>Implications and transmission paths</strong>
+          <strong>Why it matters for Qira</strong>
           <ul>
             {implications.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-            {impactPaths.map((item, index) => (
-              <li key={`${String(item.effect)}-${index}`}>
-                <span>Order {String(item.order || '?')}</span>
-                {String(item.effect || '')}
-                {item.rationale ? ` — ${String(item.rationale)}` : ''}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {questions.length > 0 && (
-        <section>
-          <strong>Open questions</strong>
-          <ul>
-            {questions.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
@@ -247,6 +276,7 @@ function ActivityHistory({ events }: { events: ActivityEvent[] }) {
 
 function App() {
   const { identity, canEdit, canAdmin, signOut } = useTeamAuth()
+  const initialAddLinkDraft = useMemo(loadAddLinkDraft, [])
   const [news, setNews] = useState(cloudConfigured ? [] : demoNews)
   const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
   const [theses, setTheses] = useState(cloudConfigured ? [] : demoTheses)
@@ -263,17 +293,22 @@ function App() {
   const [topicScope, setTopicScope] = useState<TopicScope>('current')
   const [category, setCategory] = useState<NewsCategory | 'all'>('all')
   const [query, setQuery] = useState('')
-  const [showAddLink, setShowAddLink] = useState(false)
+  const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
   const [showRecycleBin, setShowRecycleBin] = useState(false)
   const [showTeam, setShowTeam] = useState(false)
   const [teamMembers, setTeamMembers] = useState<TeamMemberSummary[]>([])
-  const [linkUrl, setLinkUrl] = useState('')
-  const [linkTitle, setLinkTitle] = useState('')
-  const [linkContributor, setLinkContributor] = useState('')
-  const [targetTopicId, setTargetTopicId] = useState('')
+  const [linkUrl, setLinkUrl] = useState(initialAddLinkDraft.url)
+  const [linkTitle, setLinkTitle] = useState(initialAddLinkDraft.title)
+  const [linkContributor, setLinkContributor] = useState(
+    initialAddLinkDraft.contributor,
+  )
+  const [targetTopicId, setTargetTopicId] = useState(
+    initialAddLinkDraft.targetTopicId,
+  )
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
+  const [newsReader, setNewsReader] = useState<NewsReaderState | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
   const [thesisDraft, setThesisDraft] = useState<Thesis | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
@@ -309,6 +344,15 @@ function App() {
     },
     [],
   )
+
+  const closeAddLink = useCallback(() => {
+    setShowAddLink(false)
+    setLinkUrl('')
+    setLinkTitle('')
+    setLinkContributor('')
+    setTargetTopicId('')
+    clearStoredAddLinkDraft()
+  }, [])
 
   const reloadWorkspace = useCallback(async (quiet = false) => {
     if (!cloudConfigured) return
@@ -390,12 +434,46 @@ function App() {
   }, [notice])
 
   useEffect(() => {
+    const hasDraft = Boolean(
+      showAddLink ||
+        linkUrl ||
+        linkTitle ||
+        linkContributor ||
+        targetTopicId,
+    )
+    if (!hasDraft) {
+      clearStoredAddLinkDraft()
+      return
+    }
+    try {
+      window.sessionStorage.setItem(
+        addLinkDraftKey,
+        JSON.stringify({
+          open: showAddLink,
+          url: linkUrl,
+          title: linkTitle,
+          contributor: linkContributor,
+          targetTopicId,
+        } satisfies AddLinkDraft),
+      )
+    } catch {
+      // Keep the form usable even if session storage is blocked or full.
+    }
+  }, [
+    linkContributor,
+    linkTitle,
+    linkUrl,
+    showAddLink,
+    targetTopicId,
+  ])
+
+  useEffect(() => {
     const closeModal = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setNewsDraft(null)
       setTopicDraft(null)
       setThesisDraft(null)
-      setShowAddLink(false)
+      closeAddLink()
       setShowRecycleBin(false)
       setShowTeam(false)
       setCreatingTopic(false)
@@ -403,7 +481,7 @@ function App() {
     }
     window.addEventListener('keydown', closeModal)
     return () => window.removeEventListener('keydown', closeModal)
-  }, [])
+  }, [closeAddLink])
 
   const visibleNews = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -946,7 +1024,7 @@ function App() {
           ? 'This link exists in the recycle bin. Ask an admin to restore it.'
           : 'This link already exists. The existing card was preserved.',
       )
-      setShowAddLink(false)
+      closeAddLink()
       setQuery(linkTitle.trim() || hostname)
       return
     }
@@ -989,11 +1067,33 @@ function App() {
       )
       if (cloudConfigured) await persistTopicNews(topic.id, id)
     }
-    setLinkUrl('')
-    setLinkTitle('')
-    setLinkContributor('')
-    setTargetTopicId('')
-    setShowAddLink(false)
+    closeAddLink()
+  }
+
+  async function toggleNewsReader(item: NewsItem) {
+    if (newsReader?.newsId === item.id) {
+      setNewsReader(null)
+      return
+    }
+    setNewsReader({
+      newsId: item.id,
+      status: 'loading',
+      text: '',
+    })
+    try {
+      const text = await loadNewsSourceText(item.id)
+      setNewsReader((current) =>
+        current?.newsId === item.id
+          ? { newsId: item.id, status: 'ready', text }
+          : current,
+      )
+    } catch {
+      setNewsReader((current) =>
+        current?.newsId === item.id
+          ? { newsId: item.id, status: 'error', text: '' }
+          : current,
+      )
+    }
   }
 
   return (
@@ -1262,6 +1362,42 @@ function App() {
                     </a>
                   </h2>
                   <p>{item.summary}</p>
+                  <div className="source-actions">
+                    <button
+                      type="button"
+                      aria-expanded={newsReader?.newsId === item.id}
+                      onClick={() => void toggleNewsReader(item)}
+                    >
+                      {newsReader?.newsId === item.id
+                        ? 'Close reader'
+                        : 'Read captured text'}
+                    </button>
+                    <a href={item.url} target="_blank" rel="noreferrer">
+                      Open source ↗
+                    </a>
+                  </div>
+                  {newsReader?.newsId === item.id && (
+                    <section
+                      className="source-reader"
+                      aria-label={`Captured text for ${item.title}`}
+                    >
+                      {newsReader.status === 'loading' ? (
+                        <p>Loading captured text…</p>
+                      ) : newsReader.status === 'error' ? (
+                        <p>
+                          Captured text could not be loaded. Use Open source to
+                          read the original page.
+                        </p>
+                      ) : newsReader.text ? (
+                        <pre>{newsReader.text}</pre>
+                      ) : (
+                        <p>
+                          No captured text is stored for this item. Use Open
+                          source to read the original page.
+                        </p>
+                      )}
+                    </section>
+                  )}
                   <NewsWhyItMatters metadata={item.metadata} />
                   <div className="card-footer">
                     <span
@@ -2124,7 +2260,7 @@ function App() {
         <div
           className="modal-backdrop"
           role="presentation"
-          onMouseDown={() => setShowAddLink(false)}
+          onMouseDown={closeAddLink}
         >
           <section
             className="link-modal"
@@ -2141,7 +2277,7 @@ function App() {
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => setShowAddLink(false)}
+                onClick={closeAddLink}
                 aria-label="Close"
               >
                 ×
@@ -2196,7 +2332,7 @@ function App() {
               <button
                 className="secondary-button"
                 type="button"
-                onClick={() => setShowAddLink(false)}
+                onClick={closeAddLink}
               >
                 Cancel
               </button>
