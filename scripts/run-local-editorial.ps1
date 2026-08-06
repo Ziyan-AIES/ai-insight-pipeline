@@ -11,8 +11,11 @@ Set-Location $root
 
 try {
     $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & $npm run editorial:local *>> $logPath
     $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
     "[$(Get-Date -Format o)] Finished with exit code $exitCode." | Add-Content $logPath
     exit $exitCode
 }

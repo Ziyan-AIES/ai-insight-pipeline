@@ -869,6 +869,7 @@ button {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow-y: auto;
   background: rgba(23, 26, 30, 0.42);
 }
 
@@ -893,8 +894,13 @@ button {
 
 .link-modal {
   width: min(470px, 100%);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   padding: 24px;
   box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   border-radius: 12px;
   background: #fff;
 }
@@ -1160,6 +1166,15 @@ button {
 }
 
 @media (max-width: 680px) {
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .link-modal {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
   .topbar {
     grid-template-columns: 1fr auto;
   }
