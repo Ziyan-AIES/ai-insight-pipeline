@@ -19,7 +19,9 @@ export const config = {
 export async function handler(event) {
   const options = handleOptions(event)
   if (options) return options
-  const blockedOrigin = requireAllowedOrigin(event)
+  const blockedOrigin = requireAllowedOrigin(event, {
+    allowTokenAuthenticatedClients: true,
+  })
   if (blockedOrigin) return blockedOrigin
   if (event.httpMethod !== 'GET') {
     return response(

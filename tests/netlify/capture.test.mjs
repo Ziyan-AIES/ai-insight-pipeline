@@ -61,6 +61,24 @@ describe('capture API contract', () => {
     )
   })
 
+  it('allows token-authenticated extension captures from other origins', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ already_existed: false, news: { id: 'n1' } }), {
+        status: 200,
+      }),
+    )
+    const result = await handler({
+      httpMethod: 'POST',
+      headers: {
+        origin: 'https://news.example.com',
+        'x-bsw-token': 'capture-secret',
+      },
+      body: JSON.stringify({ url: 'https://news.example.com/a', title: 'A' }),
+    })
+    expect(result.statusCode).toBe(200)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('rejects oversized request bodies', async () => {
     const result = await handler({
       ...request({ url: 'https://example.com' }),

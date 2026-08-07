@@ -58,6 +58,12 @@ All browser-facing tables use RLS. The extension writes through Netlify Function
 - `EDITORIAL_WRITE_TOKEN`
 - `APP_ORIGIN` (exact allowed origin, or a comma-separated allowlist)
 
+`CAPTURE_WRITE_TOKEN` / `EXTENSION_WRITE_TOKEN` authorize the Chrome extension
+capture and status APIs. Those endpoints accept token-authenticated requests
+even when the request `Origin` is a `chrome-extension://` ID or a news site,
+so you do not need to list every website in `APP_ORIGIN`. Keep `APP_ORIGIN`
+scoped to the dashboard web app for browser cookie/session calls.
+
 `EXTENSION_WRITE_TOKEN` is accepted as a temporary fallback when either scoped
 token is unset, so existing extension and local editorial clients can be
 rotated without downtime.

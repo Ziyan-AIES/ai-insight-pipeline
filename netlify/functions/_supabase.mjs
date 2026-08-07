@@ -26,11 +26,20 @@ function allowedOrigins() {
 
 function corsHeaders(event) {
   const origin = header(event, 'origin').replace(/\/$/, '')
-  if (!origin || !allowedOrigins().has(origin)) return {}
-  return {
-    'access-control-allow-origin': origin,
-    vary: 'Origin',
+  if (!origin) return {}
+  if (
+    allowedOrigins().has(origin) ||
+    /^chrome-extension:\/\//i.test(origin) ||
+    header(event, 'x-capture-token') ||
+    header(event, 'x-extension-token') ||
+    header(event, 'x-bsw-token')
+  ) {
+    return {
+      'access-control-allow-origin': origin,
+      vary: 'Origin',
+    }
   }
+  return {}
 }
 
 export function response(statusCode, body, extraHeaders = {}, event = null) {
@@ -49,7 +58,11 @@ export function response(statusCode, body, extraHeaders = {}, event = null) {
 export function handleOptions(event) {
   if (event.httpMethod !== 'OPTIONS') return null
   const origin = header(event, 'origin').replace(/\/$/, '')
-  if (origin && !allowedOrigins().has(origin)) {
+  const extensionOrigin = /^chrome-extension:\/\//i.test(origin)
+  // Preflight cannot carry custom token headers reliably across all browsers,
+  // so allow extension and APP_ORIGIN callers through; real auth happens on
+  // the follow-up GET/POST.
+  if (origin && !allowedOrigins().has(origin) && !extensionOrigin) {
     return response(403, { ok: false, error: 'Origin not allowed' }, {}, event)
   }
   return response(
@@ -75,9 +88,27 @@ function tokenMatches(got, expected) {
   )
 }
 
-export function requireAllowedOrigin(event) {
+export function requireAllowedOrigin(event, options = {}) {
   const origin = header(event, 'origin').replace(/\/$/, '')
   if (!origin || allowedOrigins().has(origin)) return null
+  // Capture/status endpoints authenticate with a shared write token, so the
+  // Chrome extension may call them from chrome-extension:// or any tab origin.
+  if (options.allowTokenAuthenticatedClients) {
+    const hasCaptureToken = Boolean(
+      header(event, 'x-capture-token') ||
+        header(event, 'x-extension-token') ||
+        header(event, 'x-bsw-token'),
+    )
+    if (hasCaptureToken || /^chrome-extension:\/\//i.test(origin)) {
+      return null
+    }
+  }
+  if (
+    options.allowExtensionOrigin &&
+    /^chrome-extension:\/\//i.test(origin)
+  ) {
+    return null
+  }
   return response(403, { ok: false, error: 'Origin not allowed' }, {}, event)
 }
 
