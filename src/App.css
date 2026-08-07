@@ -354,6 +354,20 @@ button {
   border-bottom: 1px solid #e2e5e9;
 }
 
+.recycle-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.recycle-actions .danger-button,
+.modal-actions .danger-button {
+  border: 1px solid #d9a3a3;
+  background: #fff5f5;
+  color: #9b3b3b;
+}
+
 .recycle-list span,
 .team-list span {
   display: grid;

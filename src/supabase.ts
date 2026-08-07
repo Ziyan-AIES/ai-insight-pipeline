@@ -72,6 +72,33 @@ function sessionUserLabel(user: {
   return metadataName || user?.email?.split('@')[0] || 'Team member'
 }
 
+function captureContributorName(
+  metadata: Record<string, unknown> | null | undefined,
+  capturedById: string | null,
+  memberNames: Map<string, string>,
+) {
+  const capture =
+    metadata &&
+    typeof metadata.capture === 'object' &&
+    metadata.capture &&
+    !Array.isArray(metadata.capture)
+      ? (metadata.capture as Record<string, unknown>)
+      : null
+  const candidates = [
+    metadata?.contributor_name,
+    metadata?.legacy_user,
+    capture?.contributor_name,
+    capture?.legacy_user,
+    capturedById ? memberNames.get(capturedById) : '',
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim()
+    }
+  }
+  return 'Imported'
+}
+
 export async function loadWorkspace(includeDeleted = false) {
   if (!supabase) return null
   let newsQuery = supabase
@@ -120,12 +147,11 @@ export async function loadWorkspace(includeDeleted = false) {
   const news: NewsItem[] = ((newsResult.data || []) as unknown as NewsRow[]).map(
     (row) => {
       const metadata = row.metadata || {}
-      const contributedName =
-        (typeof metadata.contributor_name === 'string' &&
-          metadata.contributor_name) ||
-        (typeof metadata.legacy_user === 'string' && metadata.legacy_user) ||
-        (row.captured_by ? memberNames.get(row.captured_by) : '') ||
-        'Imported'
+      const contributedName = captureContributorName(
+        metadata,
+        row.captured_by,
+        memberNames,
+      )
       return {
         id: row.id,
         url: row.canonical_url,
@@ -503,6 +529,35 @@ export async function restoreContent(
     .update({ deleted_at: null, deleted_by: null })
     .eq('id', id)
   if (error) throw error
+}
+
+export async function purgeContent(
+  table: 'news_items' | 'topics' | 'theses',
+  id: string,
+) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq('id', id)
+    .not('deleted_at', 'is', null)
+  if (error) throw error
+}
+
+export async function purgeRecycleBin(
+  items: Array<{ table: 'news_items' | 'topics' | 'theses'; id: string }>,
+) {
+  if (!supabase || items.length === 0) return
+  // Delete theses last? Topics reference theses with ON DELETE SET NULL, so order is flexible.
+  // Delete news and topics before theses is fine; topics first if we care about links - cascade handles topic_news.
+  const ordered = [
+    ...items.filter((item) => item.table === 'news_items'),
+    ...items.filter((item) => item.table === 'topics'),
+    ...items.filter((item) => item.table === 'theses'),
+  ]
+  for (const item of ordered) {
+    await purgeContent(item.table, item.id)
+  }
 }
 
 export async function unlinkTopicNews(topicId: string, newsId: string) {

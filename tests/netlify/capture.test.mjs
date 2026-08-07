@@ -79,6 +79,29 @@ describe('capture API contract', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
+  it('forwards the extension display name as contributor metadata', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ already_existed: false, news: { id: 'n2' } }), {
+        status: 200,
+      }),
+    )
+    const result = await handler(
+      request({
+        url: 'https://example.com/named',
+        title: 'Named capture',
+        user: 'Shawn',
+        avatar: 'S',
+      }),
+    )
+    expect(result.statusCode).toBe(200)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.p_capture_metadata).toMatchObject({
+      contributor_name: 'Shawn',
+      legacy_user: 'Shawn',
+      avatar: 'S',
+    })
+  })
+
   it('rejects oversized request bodies', async () => {
     const result = await handler({
       ...request({ url: 'https://example.com' }),

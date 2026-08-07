@@ -18,6 +18,8 @@ import {
   persistTopicMonth,
   persistTopicNews,
   restoreContent,
+  purgeContent,
+  purgeRecycleBin,
   subscribeToWorkspace,
   topicMonthLabel,
   unlinkTopicNews,
@@ -590,6 +592,111 @@ function App() {
       setNotice('Item restored')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not restore item')
+    }
+  }
+
+  async function purgeItem(
+    table: 'news_items' | 'topics' | 'theses',
+    id: string,
+    title: string,
+  ) {
+    if (
+      !window.confirm(
+        `Permanently delete “${title}”? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    try {
+      if (cloudConfigured) {
+        await purgeContent(table, id)
+      }
+      if (table === 'news_items') {
+        setNews((current) => current.filter((item) => item.id !== id))
+      } else if (table === 'topics') {
+        setTopics((current) => current.filter((item) => item.id !== id))
+        setNews((current) =>
+          current.map((item) => ({
+            ...item,
+            topicLinks: item.topicLinks.filter((link) => link.topicId !== id),
+          })),
+        )
+      } else {
+        setTheses((current) => current.filter((item) => item.id !== id))
+        setTopics((current) =>
+          current.map((topic) =>
+            topic.thesisId === id ? { ...topic, thesisId: undefined } : topic,
+          ),
+        )
+      }
+      setNotice('Item permanently deleted')
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not permanently delete item',
+      )
+    }
+  }
+
+  async function emptyRecycleBin() {
+    const items = [
+      ...removedItems.news.map((item) => ({
+        table: 'news_items' as const,
+        id: item.id,
+      })),
+      ...removedItems.topics.map((item) => ({
+        table: 'topics' as const,
+        id: item.id,
+      })),
+      ...removedItems.theses.map((item) => ({
+        table: 'theses' as const,
+        id: item.id,
+      })),
+    ]
+    if (items.length === 0) return
+    if (
+      !window.confirm(
+        `Empty recycle bin and permanently delete ${items.length} item${
+          items.length === 1 ? '' : 's'
+        }? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    try {
+      if (cloudConfigured) {
+        await purgeRecycleBin(items)
+      }
+      const removedNews = new Set(removedItems.news.map((item) => item.id))
+      const removedTopics = new Set(removedItems.topics.map((item) => item.id))
+      const removedTheses = new Set(removedItems.theses.map((item) => item.id))
+      setNews((current) =>
+        current
+          .filter((item) => !removedNews.has(item.id))
+          .map((item) => ({
+            ...item,
+            topicLinks: item.topicLinks.filter(
+              (link) => !removedTopics.has(link.topicId),
+            ),
+          })),
+      )
+      setTopics((current) =>
+        current
+          .filter((item) => !removedTopics.has(item.id))
+          .map((topic) =>
+            topic.thesisId && removedTheses.has(topic.thesisId)
+              ? { ...topic, thesisId: undefined }
+              : topic,
+          ),
+      )
+      setTheses((current) =>
+        current.filter((item) => !removedTheses.has(item.id)),
+      )
+      setNotice('Recycle bin emptied')
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not empty recycle bin',
+      )
+      await reloadWorkspace(true)
     }
   }
 
@@ -2461,13 +2568,24 @@ function App() {
                     <small>{item.kind}</small>
                     <strong>{item.title}</strong>
                   </span>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => void restoreItem(item.table, item.id)}
-                  >
-                    Restore
-                  </button>
+                  <div className="recycle-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void restoreItem(item.table, item.id)}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() =>
+                        void purgeItem(item.table, item.id, item.title)
+                      }
+                    >
+                      Delete forever
+                    </button>
+                  </div>
                 </div>
               ))}
               {removedItems.news.length +
@@ -2475,6 +2593,23 @@ function App() {
                 removedItems.theses.length ===
                 0 && <p className="modal-note">No removed items.</p>}
             </div>
+            {removedItems.news.length +
+              removedItems.topics.length +
+              removedItems.theses.length >
+              0 && (
+              <div className="modal-actions split-actions">
+                <span className="modal-note">
+                  Permanent delete cannot be undone.
+                </span>
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => void emptyRecycleBin()}
+                >
+                  Empty recycle bin
+                </button>
+              </div>
+            )}
           </section>
         </div>
       )}

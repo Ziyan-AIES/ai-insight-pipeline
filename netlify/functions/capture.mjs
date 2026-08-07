@@ -97,6 +97,8 @@ export async function handler(event) {
           ? [String(payload.comment).slice(0, 4000)]
           : [],
         legacy_user: String(payload.user || '').slice(0, 200),
+        contributor_name: String(payload.user || '').slice(0, 200),
+        avatar: String(payload.avatar || '').slice(0, 16),
       },
     })
     return response(
