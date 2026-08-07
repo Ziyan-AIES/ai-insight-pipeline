@@ -1034,6 +1034,11 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
   gap: 4px;
+  cursor: grab;
+}
+
+.support-row.dragging {
+  opacity: 0.55;
 }
 
 .support-row > button {
@@ -1042,6 +1047,7 @@ button {
   padding: 0;
   text-align: center;
   font-size: 15px;
+  cursor: pointer;
 }
 
 .link-modal label span {

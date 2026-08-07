@@ -299,6 +299,7 @@ function App() {
     initialAddLinkDraft.targetTopicId,
   )
   const [draggedNewsId, setDraggedNewsId] = useState('')
+  const [draggedNewsSourceTopicId, setDraggedNewsSourceTopicId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
@@ -608,6 +609,7 @@ function App() {
   async function linkNewsToTopic(newsId: string, topicId: string) {
     const topic = topics.find((item) => item.id === topicId)
     if (!topic || !news.some((item) => item.id === newsId)) return
+    if (topic.supportingNews.includes(newsId)) return
     try {
       if (cloudConfigured) await persistTopicNews(topicId, newsId)
     } catch (error) {
@@ -643,6 +645,83 @@ function App() {
           : candidate,
       ),
     )
+  }
+
+  async function moveNewsToTopic(
+    newsId: string,
+    targetTopicId: string,
+    sourceTopicId = '',
+  ) {
+    if (!newsId || !targetTopicId) return
+    if (sourceTopicId && sourceTopicId === targetTopicId) return
+
+    const target = topics.find((item) => item.id === targetTopicId)
+    if (!target) return
+
+    if (sourceTopicId) {
+      try {
+        if (cloudConfigured) {
+          if (!target.supportingNews.includes(newsId)) {
+            await persistTopicNews(targetTopicId, newsId)
+          }
+          await unlinkTopicNews(sourceTopicId, newsId)
+        }
+      } catch (error) {
+        setNotice(
+          error instanceof Error ? error.message : 'Could not move news',
+        )
+        return
+      }
+
+      setTopics((current) =>
+        current.map((candidate) => {
+          if (candidate.id === sourceTopicId) {
+            return {
+              ...candidate,
+              supportingNews: candidate.supportingNews.filter(
+                (id) => id !== newsId,
+              ),
+            }
+          }
+          if (
+            candidate.id === targetTopicId &&
+            !candidate.supportingNews.includes(newsId)
+          ) {
+            return {
+              ...candidate,
+              supportingNews: [...candidate.supportingNews, newsId],
+            }
+          }
+          return candidate
+        }),
+      )
+      setNews((current) =>
+        current.map((candidate) => {
+          if (candidate.id !== newsId) return candidate
+          const withoutSource = candidate.topicLinks.filter(
+            (link) => link.topicId !== sourceTopicId,
+          )
+          if (withoutSource.some((link) => link.topicId === targetTopicId)) {
+            return { ...candidate, topicLinks: withoutSource }
+          }
+          return {
+            ...candidate,
+            topicLinks: [
+              ...withoutSource,
+              {
+                topicId: targetTopicId,
+                topicTitle: target.title,
+                monthLabel: target.monthLabel,
+              },
+            ],
+          }
+        }),
+      )
+      setNotice(`Moved to ${target.title}`)
+      return
+    }
+
+    await linkNewsToTopic(newsId, targetTopicId)
   }
 
   async function moveTopic(topicId: string, monthKey: string) {
@@ -1274,9 +1353,18 @@ function App() {
                   draggable
                   onDragStart={(event) => {
                     setDraggedNewsId(item.id)
+                    setDraggedNewsSourceTopicId('')
+                    event.dataTransfer.effectAllowed = 'copyMove'
                     event.dataTransfer.setData('application/x-news-id', item.id)
+                    event.dataTransfer.setData(
+                      'application/x-news-source-topic-id',
+                      '',
+                    )
                   }}
-                  onDragEnd={() => setDraggedNewsId('')}
+                  onDragEnd={() => {
+                    setDraggedNewsId('')
+                    setDraggedNewsSourceTopicId('')
+                  }}
                 >
                   <div className="news-meta">
                     <span className={`category category-${item.category}`}>
@@ -1539,26 +1627,32 @@ function App() {
                             draggedNewsId ? 'accepting-news' : ''
                           }`}
                           key={topic.id}
-                          draggable
-                          onDragStart={(event) => {
-                            setDraggedTopicId(topic.id)
-                            event.dataTransfer.setData(
-                              'application/x-topic-id',
-                              topic.id,
-                            )
-                          }}
-                          onDragEnd={() => setDraggedTopicId('')}
                           onDragOver={(event) => {
-                            if (draggedNewsId) event.preventDefault()
+                            if (draggedNewsId) {
+                              event.preventDefault()
+                              event.dataTransfer.dropEffect =
+                                draggedNewsSourceTopicId ? 'move' : 'copy'
+                            }
                           }}
                           onDrop={(event) => {
                             const newsId =
                               event.dataTransfer.getData(
                                 'application/x-news-id',
                               ) || draggedNewsId
+                            const sourceTopicId =
+                              event.dataTransfer.getData(
+                                'application/x-news-source-topic-id',
+                              ) || draggedNewsSourceTopicId
                             if (newsId) {
+                              event.preventDefault()
                               event.stopPropagation()
-                              linkNewsToTopic(newsId, topic.id)
+                              void moveNewsToTopic(
+                                newsId,
+                                topic.id,
+                                sourceTopicId,
+                              )
+                              setDraggedNewsId('')
+                              setDraggedNewsSourceTopicId('')
                             }
                           }}
                         >
@@ -1577,7 +1671,22 @@ function App() {
                               >
                                 Edit
                               </button>
-                              <span className="grip">⋮⋮</span>
+                              <span
+                                className="grip"
+                                draggable
+                                title="Drag topic to another month"
+                                onDragStart={(event) => {
+                                  setDraggedTopicId(topic.id)
+                                  event.dataTransfer.effectAllowed = 'move'
+                                  event.dataTransfer.setData(
+                                    'application/x-topic-id',
+                                    topic.id,
+                                  )
+                                }}
+                                onDragEnd={() => setDraggedTopicId('')}
+                              >
+                                ⋮⋮
+                              </span>
                             </div>
                           </div>
                           <h3>{topic.title}</h3>
@@ -1600,11 +1709,40 @@ function App() {
                                 return null
                               }
                               return (
-                                <div className="support-row" key={newsId}>
+                                <div
+                                  className={`support-row ${
+                                    draggedNewsId === newsId
+                                      ? 'dragging'
+                                      : ''
+                                  }`}
+                                  key={newsId}
+                                  draggable={canEdit}
+                                  title="Drag to another topic"
+                                  onDragStart={(event) => {
+                                    event.stopPropagation()
+                                    setDraggedNewsId(newsId)
+                                    setDraggedNewsSourceTopicId(topic.id)
+                                    event.dataTransfer.effectAllowed = 'move'
+                                    event.dataTransfer.setData(
+                                      'application/x-news-id',
+                                      newsId,
+                                    )
+                                    event.dataTransfer.setData(
+                                      'application/x-news-source-topic-id',
+                                      topic.id,
+                                    )
+                                  }}
+                                  onDragEnd={(event) => {
+                                    event.stopPropagation()
+                                    setDraggedNewsId('')
+                                    setDraggedNewsSourceTopicId('')
+                                  }}
+                                >
                                   <a
                                     href={supportingItem.url}
                                     target="_blank"
                                     rel="noreferrer"
+                                    draggable={false}
                                   >
                                     <span>NEWS</span>
                                     {supportingItem.title}
@@ -1613,6 +1751,7 @@ function App() {
                                     type="button"
                                     title="Remove from topic"
                                     aria-label={`Remove ${supportingItem.title} from topic`}
+                                    draggable={false}
                                     onClick={() =>
                                       void unlinkNews(topic.id, newsId)
                                     }
