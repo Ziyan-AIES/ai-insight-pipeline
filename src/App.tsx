@@ -12,7 +12,6 @@ import {
   deleteTopicItem,
   loadActivityEvents,
   loadEditorialHealth,
-  loadNewsSourceText,
   loadTeamMembers,
   loadWorkspace,
   persistNewsLink,
@@ -66,12 +65,6 @@ type AddLinkDraft = {
   contributor: string
   targetTopicId: string
 }
-type NewsReaderState = {
-  newsId: string
-  status: 'loading' | 'ready' | 'error'
-  text: string
-}
-
 const addLinkDraftKey = 'signal-intelligence:add-link-draft'
 
 function clearStoredAddLinkDraft() {
@@ -308,7 +301,6 @@ function App() {
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
-  const [newsReader, setNewsReader] = useState<NewsReaderState | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
   const [thesisDraft, setThesisDraft] = useState<Thesis | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
@@ -1070,32 +1062,6 @@ function App() {
     closeAddLink()
   }
 
-  async function toggleNewsReader(item: NewsItem) {
-    if (newsReader?.newsId === item.id) {
-      setNewsReader(null)
-      return
-    }
-    setNewsReader({
-      newsId: item.id,
-      status: 'loading',
-      text: '',
-    })
-    try {
-      const text = await loadNewsSourceText(item.id)
-      setNewsReader((current) =>
-        current?.newsId === item.id
-          ? { newsId: item.id, status: 'ready', text }
-          : current,
-      )
-    } catch {
-      setNewsReader((current) =>
-        current?.newsId === item.id
-          ? { newsId: item.id, status: 'error', text: '' }
-          : current,
-      )
-    }
-  }
-
   return (
     <div
       className={`app-shell focus-${focus} ${
@@ -1362,42 +1328,6 @@ function App() {
                     </a>
                   </h2>
                   <p>{item.summary}</p>
-                  <div className="source-actions">
-                    <button
-                      type="button"
-                      aria-expanded={newsReader?.newsId === item.id}
-                      onClick={() => void toggleNewsReader(item)}
-                    >
-                      {newsReader?.newsId === item.id
-                        ? 'Close reader'
-                        : 'Read captured text'}
-                    </button>
-                    <a href={item.url} target="_blank" rel="noreferrer">
-                      Open source ↗
-                    </a>
-                  </div>
-                  {newsReader?.newsId === item.id && (
-                    <section
-                      className="source-reader"
-                      aria-label={`Captured text for ${item.title}`}
-                    >
-                      {newsReader.status === 'loading' ? (
-                        <p>Loading captured text…</p>
-                      ) : newsReader.status === 'error' ? (
-                        <p>
-                          Captured text could not be loaded. Use Open source to
-                          read the original page.
-                        </p>
-                      ) : newsReader.text ? (
-                        <pre>{newsReader.text}</pre>
-                      ) : (
-                        <p>
-                          No captured text is stored for this item. Use Open
-                          source to read the original page.
-                        </p>
-                      )}
-                    </section>
-                  )}
                   <NewsWhyItMatters metadata={item.metadata} />
                   <div className="card-footer">
                     <span

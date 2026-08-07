@@ -397,7 +397,7 @@ function validatePayload(
         editorial_audit: {
           run_id: runId,
           reviewed_at: new Date().toISOString(),
-          model: 'auto',
+          model: (process.env.EDITORIAL_MODEL || 'grok-4.5').trim() || 'grok-4.5',
           source_mode: original.source_mode || 'url_only',
           source_text_characters: original.raw_text.length,
           evidence_count: evidence.length,
@@ -444,6 +444,7 @@ async function main() {
   let pending = await queryNews(env, {
     select,
     editorial_status: 'eq.pending',
+    deleted_at: 'is.null',
     order: 'captured_at.asc',
     limit: String(batchSize),
   })
@@ -511,13 +512,21 @@ Return only valid JSON with this shape:
 <week_context>${JSON.stringify(weekContext)}</week_context>`
 
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const modelId = (process.env.EDITORIAL_MODEL || 'grok-4.5').trim() || 'grok-4.5'
   const result = await Agent.prompt(prompt, {
     apiKey: env.CURSOR_API_KEY,
-    model: { id: 'auto' },
+    model: { id: modelId },
     local: { cwd: root, settingSources: [] },
   })
   if (result.status === 'error') {
-    throw new Error(`Cursor editorial run failed: ${result.id}`)
+    const detail =
+      result.error &&
+      typeof result.error === 'object' &&
+      'message' in result.error &&
+      typeof result.error.message === 'string'
+        ? result.error.message
+        : 'unknown error'
+    throw new Error(`Cursor editorial run failed: ${result.id} — ${detail}`)
   }
 
   const payload = validatePayload(
@@ -568,7 +577,11 @@ Return only valid JSON with this shape:
   }
 }
 
-main().catch(async (error: unknown) => {
+main()
+  .then(() => {
+    process.exit(0)
+  })
+  .catch(async (error: unknown) => {
   if (activeClaim) {
     await recordEditorialFailure(
       activeClaim.env,
@@ -590,5 +603,5 @@ main().catch(async (error: unknown) => {
   } else {
     console.error(error instanceof Error ? error.message : String(error))
   }
-  process.exitCode = 1
+  process.exit(1)
 })

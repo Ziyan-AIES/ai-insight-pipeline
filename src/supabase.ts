@@ -254,17 +254,6 @@ export function canonicalizeUrl(value: string) {
   return url.toString()
 }
 
-export async function loadNewsSourceText(newsId: string) {
-  if (!supabase) return ''
-  const { data, error } = await supabase
-    .from('news_items')
-    .select('raw_text')
-    .eq('id', newsId)
-    .maybeSingle()
-  if (error) throw error
-  return typeof data?.raw_text === 'string' ? data.raw_text.trim() : ''
-}
-
 export async function persistNewsLink(input: {
   url: string
   title: string

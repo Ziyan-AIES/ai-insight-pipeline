@@ -434,55 +434,6 @@ button {
   line-height: 1.55;
 }
 
-.source-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-  font-size: 11px;
-}
-
-.source-actions button,
-.source-actions a {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #52787d;
-  font: inherit;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.source-actions button:hover,
-.source-actions a:hover {
-  text-decoration: underline;
-}
-
-.source-reader {
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid #dbe7e9;
-  border-radius: 7px;
-  background: #f8fbfb;
-}
-
-.source-reader p,
-.source-reader pre {
-  margin: 0;
-  color: #4f5c61;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.source-reader pre {
-  max-height: 360px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .why-it-matters {
   margin-top: 12px;
   padding: 10px 12px;

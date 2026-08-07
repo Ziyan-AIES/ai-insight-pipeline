@@ -16,6 +16,8 @@ after a missed start.
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `EDITORIAL_SYNC_URL`
 - `EDITORIAL_WRITE_TOKEN` for the Netlify endpoint and local runner
+- Optional `EDITORIAL_MODEL` (defaults to `grok-4.5`). Team admin settings may
+  block Auto/`default`, so the runner uses an explicit model ID.
 
 The endpoint uses `EDITORIAL_WRITE_TOKEN`, falling back to the server's
 `EXTENSION_WRITE_TOKEN` only when the scoped token is not configured. It

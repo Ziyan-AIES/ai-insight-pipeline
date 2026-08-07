@@ -70,21 +70,6 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByRole('dialog', { name: 'Add link' })).toBeNull()
   })
 
-  it('opens the plain-text reader with a source-page fallback', async () => {
-    render(<App />)
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Read captured text' })[0],
-    )
-
-    expect(
-      await screen.findByText(/No captured text is stored for this item/),
-    ).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: 'Open source ↗' })[0]).toHaveAttribute(
-      'target',
-      '_blank',
-    )
-  })
-
   it('shows one merged Qira implication', () => {
     render(
       <NewsWhyItMatters
