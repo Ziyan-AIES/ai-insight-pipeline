@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { demoNews, demoTheses, demoTopics } from './demoData'
 import { useTeamAuth } from './auth-context'
@@ -58,6 +58,7 @@ const topicStatusLabels: Record<TopicStatus, string> = {
 }
 
 type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
+type TopicScope = 'current' | 'all'
 type AddLinkDraft = {
   open: boolean
   url: string
@@ -283,6 +284,7 @@ function App() {
   const [focus, setFocus] = useState<FocusMode>('split')
   const [period, setPeriod] = useState('all')
   const [newsScope, setNewsScope] = useState<NewsScope>('all')
+  const [topicScope, setTopicScope] = useState<TopicScope>('current')
   const [category, setCategory] = useState<NewsCategory | 'all'>('all')
   const [query, setQuery] = useState('')
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
@@ -302,9 +304,6 @@ function App() {
   const [draggedTopicId, setDraggedTopicId] = useState('')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
-  const topicPaneRef = useRef<HTMLElement | null>(null)
-  const currentMonthAnchorRef = useRef<HTMLElement | null>(null)
-  const topicScrollAnchoredRef = useRef(false)
   const [thesisDraft, setThesisDraft] = useState<Thesis | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
   const [creatingThesis, setCreatingThesis] = useState(false)
@@ -531,6 +530,11 @@ function App() {
 
     topics
       .filter((topic) => !topic.deletedAt)
+      .filter((topic) => {
+        if (!topic.monthKey) return true
+        if (topicScope === 'all') return true
+        return topic.monthKey >= currentMonth
+      })
       .filter(
         (topic) =>
           focus !== 'topics' ||
@@ -565,25 +569,7 @@ function App() {
       scheduled,
       poolTopics,
     }
-  }, [focus, selectedThesisId, topics])
-
-  useEffect(() => {
-    if (focus === 'news') {
-      topicScrollAnchoredRef.current = false
-      return
-    }
-    if (topicScrollAnchoredRef.current) return
-    const pane = topicPaneRef.current
-    const anchor = currentMonthAnchorRef.current
-    if (!pane || !anchor) return
-    const frame = window.requestAnimationFrame(() => {
-      const paneRect = pane.getBoundingClientRect()
-      const anchorRect = anchor.getBoundingClientRect()
-      pane.scrollTop += anchorRect.top - paneRect.top - 8
-      topicScrollAnchoredRef.current = true
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [focus, monthGroups])
+  }, [focus, selectedThesisId, topicScope, topics])
 
   const removedItems = useMemo(
     () => ({
@@ -761,17 +747,25 @@ function App() {
 
   async function moveTopic(topicId: string, monthKey: string) {
     const existingTopic = topics.find((topic) => topic.id === topicId)
-    let version = existingTopic?.version
+    if (!existingTopic) return
+    if ((existingTopic.monthKey || '') === (monthKey || '')) return
+    let version = existingTopic.version
     try {
       if (cloudConfigured) {
         version = await persistTopicMonth(
           topicId,
           monthKey,
-          existingTopic?.version,
+          existingTopic.version,
         )
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not move topic')
+      const detail =
+        error instanceof Error ? error.message : 'Could not move topic'
+      setNotice(
+        /null|not-null|scheduled_month/i.test(detail)
+          ? 'Topic pool needs the latest database migration. Apply it, then try again.'
+          : detail,
+      )
       return
     }
     setTopics((current) =>
@@ -795,6 +789,11 @@ function App() {
             : link,
         ),
       })),
+    )
+    setNotice(
+      monthKey
+        ? `Moved to ${monthName(monthKey)}`
+        : 'Moved to Topic pool',
     )
   }
 
@@ -974,7 +973,13 @@ function App() {
             thesisId: topicDraft.thesisId,
           })) || `topic-${Date.now()}`
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'Could not create topic')
+        const detail =
+          error instanceof Error ? error.message : 'Could not create topic'
+        setNotice(
+          /null|not-null|scheduled_month/i.test(detail)
+            ? 'Topic pool needs the latest database migration. Apply it, then try again.'
+            : detail,
+        )
         return
       }
       setTopics((current) => [
@@ -1010,7 +1015,13 @@ function App() {
           topicDraft.version,
         )
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'Could not save topic')
+        const detail =
+          error instanceof Error ? error.message : 'Could not save topic'
+        setNotice(
+          /null|not-null|scheduled_month/i.test(detail)
+            ? 'Topic pool needs the latest database migration. Apply it, then try again.'
+            : detail,
+        )
         return
       }
       setTopics((current) =>
@@ -1501,7 +1512,6 @@ function App() {
           <section
             className="topic-pane"
             aria-label="Topic dashboard"
-            ref={topicPaneRef}
             onScroll={(event) =>
               setHeaderHidden(event.currentTarget.scrollTop > 16)
             }
@@ -1535,6 +1545,23 @@ function App() {
                   {focus === 'topics' ? '↙' : '↗'}
                 </button>
               </div>
+            </div>
+
+            <div className="topic-scope-toggle" aria-label="Topic time range">
+              <button
+                className={topicScope === 'current' ? 'active' : ''}
+                type="button"
+                onClick={() => setTopicScope('current')}
+              >
+                Current & upcoming
+              </button>
+              <button
+                className={topicScope === 'all' ? 'active' : ''}
+                type="button"
+                onClick={() => setTopicScope('all')}
+              >
+                Full history
+              </button>
             </div>
 
             {focus === 'topics' && selectedThesisId && (
@@ -1640,21 +1667,22 @@ function App() {
                   <section
                     className={`month-group ${
                       monthKey ? '' : 'topic-pool-group'
-                    }`}
+                    } ${draggedTopicId ? 'accepting-topic' : ''}`}
                     key={monthKey || 'topic-pool'}
-                    ref={
-                      monthKey === monthGroups.currentMonth
-                        ? currentMonthAnchorRef
-                        : undefined
-                    }
                     onDragOver={(event) => {
-                      if (draggedTopicId) event.preventDefault()
+                      if (!draggedTopicId) return
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
                     }}
                     onDrop={(event) => {
+                      event.preventDefault()
                       const topicId =
                         event.dataTransfer.getData('application/x-topic-id') ||
                         draggedTopicId
-                      if (topicId) void moveTopic(topicId, monthKey)
+                      if (topicId) {
+                        void moveTopic(topicId, monthKey)
+                        setDraggedTopicId('')
+                      }
                     }}
                   >
                     <header>
@@ -1679,13 +1707,42 @@ function App() {
                         <article
                           className={`topic-card ${
                             draggedNewsId ? 'accepting-news' : ''
+                          } ${
+                            draggedTopicId && draggedTopicId !== topic.id
+                              ? 'topic-drop-passthrough'
+                              : ''
                           }`}
                           key={topic.id}
+                          draggable={canEdit}
+                          onDragStart={(event) => {
+                            const target = event.target as HTMLElement | null
+                            if (
+                              target?.closest?.(
+                                'a, button, .support-row, input, textarea, select',
+                              )
+                            ) {
+                              event.preventDefault()
+                              return
+                            }
+                            setDraggedTopicId(topic.id)
+                            event.dataTransfer.effectAllowed = 'move'
+                            event.dataTransfer.setData(
+                              'application/x-topic-id',
+                              topic.id,
+                            )
+                          }}
+                          onDragEnd={() => setDraggedTopicId('')}
                           onDragOver={(event) => {
                             if (draggedNewsId) {
                               event.preventDefault()
+                              event.stopPropagation()
                               event.dataTransfer.dropEffect =
                                 draggedNewsSourceTopicId ? 'move' : 'copy'
+                              return
+                            }
+                            if (draggedTopicId && draggedTopicId !== topic.id) {
+                              event.preventDefault()
+                              event.dataTransfer.dropEffect = 'move'
                             }
                           }}
                           onDrop={(event) => {
@@ -1707,6 +1764,17 @@ function App() {
                               )
                               setDraggedNewsId('')
                               setDraggedNewsSourceTopicId('')
+                              return
+                            }
+                            const movedTopicId =
+                              event.dataTransfer.getData(
+                                'application/x-topic-id',
+                              ) || draggedTopicId
+                            if (movedTopicId) {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void moveTopic(movedTopicId, monthKey)
+                              setDraggedTopicId('')
                             }
                           }}
                         >
@@ -1727,17 +1795,7 @@ function App() {
                               </button>
                               <span
                                 className="grip"
-                                draggable
-                                title="Drag topic to a month or the topic pool"
-                                onDragStart={(event) => {
-                                  setDraggedTopicId(topic.id)
-                                  event.dataTransfer.effectAllowed = 'move'
-                                  event.dataTransfer.setData(
-                                    'application/x-topic-id',
-                                    topic.id,
-                                  )
-                                }}
-                                onDragEnd={() => setDraggedTopicId('')}
+                                title="Drag topic to another month or Topic pool"
                               >
                                 ⋮⋮
                               </span>
@@ -2152,10 +2210,41 @@ function App() {
             </label>
             <div className="form-grid">
               <label>
+                Schedule
+                <select
+                  value={topicDraft.monthKey ? 'month' : 'pool'}
+                  onChange={(event) => {
+                    if (event.target.value === 'pool') {
+                      setTopicDraft({
+                        ...topicDraft,
+                        monthKey: '',
+                        monthLabel: monthName(''),
+                      })
+                      return
+                    }
+                    const nextMonth =
+                      topicDraft.monthKey || monthGroups.currentMonth
+                    setTopicDraft({
+                      ...topicDraft,
+                      monthKey: nextMonth,
+                      monthLabel: monthName(nextMonth),
+                    })
+                  }}
+                >
+                  <option value="pool">Topic pool (unscheduled)</option>
+                  <option value="month">Specific month</option>
+                </select>
+                <small>
+                  Use Topic pool for emerging ideas. Choose a month for planned
+                  events like IFA or Ignite.
+                </small>
+              </label>
+              <label>
                 Month
                 <input
                   type="month"
-                  value={topicDraft.monthKey}
+                  value={topicDraft.monthKey || monthGroups.currentMonth}
+                  disabled={!topicDraft.monthKey}
                   onChange={(event) =>
                     setTopicDraft({
                       ...topicDraft,
@@ -2164,27 +2253,6 @@ function App() {
                     })
                   }
                 />
-                <small>
-                  Leave empty for the Topic pool. Set a month for scheduled
-                  events like IFA or Ignite.
-                </small>
-                {topicDraft.monthKey ? (
-                  <button
-                    className="text-button"
-                    type="button"
-                    onClick={() =>
-                      setTopicDraft({
-                        ...topicDraft,
-                        monthKey: '',
-                        monthLabel: monthName(''),
-                      })
-                    }
-                  >
-                    Move to Topic pool
-                  </button>
-                ) : (
-                  <span className="field-hint">Currently in Topic pool</span>
-                )}
               </label>
               <label>
                 Status

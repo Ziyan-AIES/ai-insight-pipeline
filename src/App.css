@@ -571,7 +571,27 @@ button {
 }
 
 .topic-scope-toggle {
-  display: none;
+  margin-top: 14px;
+  display: flex;
+  gap: 6px;
+}
+
+.topic-scope-toggle button {
+  min-height: 30px;
+  border: 1px solid #d8d5e8;
+  border-radius: 999px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #6d6980;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.topic-scope-toggle button.active {
+  border-color: #71699b;
+  background: #71699b;
+  color: #fff;
 }
 
 .thesis-filter {
@@ -720,6 +740,12 @@ button {
   color: #4f5fbf;
 }
 
+.month-group.accepting-topic {
+  outline: 2px dashed #7b86d8;
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
 .month-empty {
   color: #8a9098;
   font-size: 11px;
@@ -736,16 +762,9 @@ label small {
   line-height: 1.4;
 }
 
-.text-button {
-  margin-top: 8px;
-  border: 0;
-  background: transparent;
-  color: #4f5fbf;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0;
+label input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .month-index {
@@ -786,9 +805,14 @@ label small {
   border: 1px solid #ddd8ef;
   border-radius: 9px;
   background: #fbfbfb;
+  cursor: grab;
   transition:
     border-color 140ms ease,
     background 140ms ease;
+}
+
+.topic-card:active {
+  cursor: grabbing;
 }
 
 .topic-card.accepting-news {
