@@ -40,10 +40,25 @@ type NewsRow = {
     topics: {
       id: string
       title: string
-      scheduled_month: string
+      scheduled_month: string | null
       deleted_at?: string | null
     } | null
   }>
+}
+
+export function topicMonthLabel(monthKey: string) {
+  if (!monthKey) return 'Topic pool'
+  const [year, month] = monthKey.split('-').map(Number)
+  if (!year || !month) return 'Topic pool'
+  return new Intl.DateTimeFormat('en', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1)))
+}
+
+function scheduledMonthValue(monthKey: string) {
+  return monthKey ? `${monthKey}-01` : null
 }
 
 function sessionUserLabel(user: {
@@ -68,7 +83,7 @@ export async function loadWorkspace(includeDeleted = false) {
   let topicQuery = supabase
     .from('topics')
     .select('*,topic_news(news_id,deleted_at)')
-    .order('scheduled_month')
+    .order('scheduled_month', { nullsFirst: false })
     .order('display_order')
   let thesisQuery = supabase.from('theses').select('*').order('display_order')
   if (!includeDeleted) {
@@ -143,41 +158,43 @@ export async function loadWorkspace(includeDeleted = false) {
             (topic): topic is NonNullable<typeof topic> =>
               Boolean(topic && !topic.deleted_at),
           )
-          .map((topic) => ({
-            topicId: topic.id,
-            topicTitle: topic.title,
-            monthLabel: new Intl.DateTimeFormat('en', {
-              month: 'long',
-              year: 'numeric',
-              timeZone: 'UTC',
-            }).format(new Date(`${topic.scheduled_month}T00:00:00Z`)),
-          })),
+          .map((topic) => {
+            const monthKey = topic.scheduled_month
+              ? String(topic.scheduled_month).slice(0, 7)
+              : ''
+            return {
+              topicId: topic.id,
+              topicTitle: topic.title,
+              monthLabel: topicMonthLabel(monthKey),
+            }
+          }),
       }
     },
   )
 
-  const topics: Topic[] = (topicResult.data || []).map((row) => ({
-    id: row.id,
-    title: row.title,
-    thesisId: row.thesis_id || undefined,
-    parentTopicId: row.parent_topic_id || undefined,
-    monthKey: String(row.scheduled_month).slice(0, 7),
-    monthLabel: new Intl.DateTimeFormat('en', {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(`${row.scheduled_month}T00:00:00Z`)),
-    category: row.category,
-    status: row.status,
-    notes: row.notes,
-    displayOrder: row.display_order,
-    updatedAt: row.updated_at,
-    version: row.version,
-    deletedAt: row.deleted_at || undefined,
-    supportingNews: (row.topic_news || [])
-      .filter((link: { deleted_at?: string | null }) => !link.deleted_at)
-      .map((link: { news_id: string }) => link.news_id),
-  }))
+  const topics: Topic[] = (topicResult.data || []).map((row) => {
+    const monthKey = row.scheduled_month
+      ? String(row.scheduled_month).slice(0, 7)
+      : ''
+    return {
+      id: row.id,
+      title: row.title,
+      thesisId: row.thesis_id || undefined,
+      parentTopicId: row.parent_topic_id || undefined,
+      monthKey,
+      monthLabel: topicMonthLabel(monthKey),
+      category: row.category,
+      status: row.status,
+      notes: row.notes,
+      displayOrder: row.display_order,
+      updatedAt: row.updated_at,
+      version: row.version,
+      deletedAt: row.deleted_at || undefined,
+      supportingNews: (row.topic_news || [])
+        .filter((link: { deleted_at?: string | null }) => !link.deleted_at)
+        .map((link: { news_id: string }) => link.news_id),
+    }
+  })
 
   const theses: Thesis[] = (thesisResult.data || []).map((row) => ({
     id: row.id,
@@ -231,7 +248,7 @@ export async function persistTopicMonth(
   if (!supabase) return
   let query = supabase
     .from('topics')
-    .update({ scheduled_month: `${monthKey}-01` })
+    .update({ scheduled_month: scheduledMonthValue(monthKey) })
     .eq('id', topicId)
   if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
   const { data, error } = await query.select('version').maybeSingle()
@@ -372,7 +389,7 @@ export async function createTopic(input: {
       notes: input.notes,
       category: input.category,
       status: input.status,
-      scheduled_month: `${input.monthKey}-01`,
+      scheduled_month: scheduledMonthValue(input.monthKey),
       thesis_id: input.thesisId || null,
       created_by: userId,
       updated_by: userId,
@@ -390,7 +407,7 @@ export async function updateTopicItem(
     notes?: string
     category?: NewsCategory
     status?: TopicStatus
-    scheduled_month?: string
+    scheduled_month?: string | null
     thesis_id?: string | null
   },
   expectedVersion?: number,

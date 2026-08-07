@@ -571,26 +571,7 @@ button {
 }
 
 .topic-scope-toggle {
-  margin-top: 14px;
-  display: flex;
-  gap: 6px;
-}
-
-.topic-scope-toggle button {
-  min-height: 30px;
-  border: 1px solid #d8d5e8;
-  border-radius: 999px;
-  padding: 0 11px;
-  background: rgba(255, 255, 255, 0.68);
-  color: #6d6980;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.topic-scope-toggle button.active {
-  border-color: #71699b;
-  background: #71699b;
-  color: #fff;
+  display: none;
 }
 
 .thesis-filter {
@@ -726,6 +707,45 @@ button {
   align-items: center;
   gap: 10px;
   margin-bottom: 9px;
+}
+
+.topic-pool-group {
+  border-top: 1px dashed #d5d0e4;
+  padding-top: 18px;
+}
+
+.topic-pool-group .month-index {
+  border-color: #b7c4ff;
+  background: #eef2ff;
+  color: #4f5fbf;
+}
+
+.month-empty {
+  color: #8a9098;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px 2px 4px;
+}
+
+.field-hint,
+label small {
+  display: block;
+  margin-top: 6px;
+  color: #7a8088;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.text-button {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #4f5fbf;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
 }
 
 .month-index {

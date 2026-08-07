@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { demoNews, demoTheses, demoTopics } from './demoData'
 import { useTeamAuth } from './auth-context'
@@ -19,6 +19,7 @@ import {
   persistTopicNews,
   restoreContent,
   subscribeToWorkspace,
+  topicMonthLabel,
   unlinkTopicNews,
   updateNewsItem,
   updateTeamMemberRole,
@@ -57,7 +58,6 @@ const topicStatusLabels: Record<TopicStatus, string> = {
 }
 
 type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
-type TopicScope = 'current' | 'all'
 type AddLinkDraft = {
   open: boolean
   url: string
@@ -103,12 +103,12 @@ function loadAddLinkDraft(): AddLinkDraft {
 }
 
 function monthName(key: string) {
-  const [year, month] = key.split('-').map(Number)
-  return new Intl.DateTimeFormat('en', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(year, month - 1, 1)))
+  return topicMonthLabel(key)
+}
+
+function currentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 function isoWeekKey(value: string) {
@@ -283,7 +283,6 @@ function App() {
   const [focus, setFocus] = useState<FocusMode>('split')
   const [period, setPeriod] = useState('all')
   const [newsScope, setNewsScope] = useState<NewsScope>('all')
-  const [topicScope, setTopicScope] = useState<TopicScope>('current')
   const [category, setCategory] = useState<NewsCategory | 'all'>('all')
   const [query, setQuery] = useState('')
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
@@ -303,6 +302,9 @@ function App() {
   const [draggedTopicId, setDraggedTopicId] = useState('')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
+  const topicPaneRef = useRef<HTMLElement | null>(null)
+  const currentMonthAnchorRef = useRef<HTMLElement | null>(null)
+  const topicScrollAnchoredRef = useRef(false)
   const [thesisDraft, setThesisDraft] = useState<Thesis | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
   const [creatingThesis, setCreatingThesis] = useState(false)
@@ -524,12 +526,11 @@ function App() {
 
   const monthGroups = useMemo(() => {
     const groups = new Map<string, Topic[]>()
-    const currentMonth = new Date().toISOString().slice(0, 7)
+    const currentMonth = currentMonthKey()
+    const poolTopics: Topic[] = []
+
     topics
       .filter((topic) => !topic.deletedAt)
-      .filter(
-        (topic) => topicScope === 'all' || topic.monthKey >= currentMonth,
-      )
       .filter(
         (topic) =>
           focus !== 'topics' ||
@@ -543,12 +544,46 @@ function App() {
           a.displayOrder - b.displayOrder,
       )
       .forEach((topic) => {
+        if (!topic.monthKey) {
+          poolTopics.push(topic)
+          return
+        }
         const group = groups.get(topic.monthKey) ?? []
         group.push(topic)
         groups.set(topic.monthKey, group)
       })
-    return [...groups.entries()]
-  }, [focus, selectedThesisId, topicScope, topics])
+
+    if (!groups.has(currentMonth)) {
+      groups.set(currentMonth, [])
+    }
+
+    const scheduled = [...groups.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )
+    return {
+      currentMonth,
+      scheduled,
+      poolTopics,
+    }
+  }, [focus, selectedThesisId, topics])
+
+  useEffect(() => {
+    if (focus === 'news') {
+      topicScrollAnchoredRef.current = false
+      return
+    }
+    if (topicScrollAnchoredRef.current) return
+    const pane = topicPaneRef.current
+    const anchor = currentMonthAnchorRef.current
+    if (!pane || !anchor) return
+    const frame = window.requestAnimationFrame(() => {
+      const paneRect = pane.getBoundingClientRect()
+      const anchorRect = anchor.getBoundingClientRect()
+      pane.scrollTop += anchorRect.top - paneRect.top - 8
+      topicScrollAnchoredRef.current = true
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focus, monthGroups])
 
   const removedItems = useMemo(
     () => ({
@@ -742,9 +777,24 @@ function App() {
     setTopics((current) =>
       current.map((topic) =>
         topic.id === topicId
-          ? { ...topic, monthKey, monthLabel: monthName(monthKey), version }
+          ? {
+              ...topic,
+              monthKey,
+              monthLabel: monthName(monthKey),
+              version,
+            }
           : topic,
       ),
+    )
+    setNews((current) =>
+      current.map((item) => ({
+        ...item,
+        topicLinks: item.topicLinks.map((link) =>
+          link.topicId === topicId
+            ? { ...link, monthLabel: monthName(monthKey) }
+            : link,
+        ),
+      })),
     )
   }
 
@@ -844,7 +894,6 @@ function App() {
         { ...thesisDraft, id, title: thesisDraft.title.trim(), version: 1 },
       ])
       setSelectedThesisId(id)
-      setTopicScope('all')
       setNotice('Thesis created')
     } else {
       let version
@@ -896,14 +945,12 @@ function App() {
   }
 
   function openNewTopic() {
-    const now = new Date()
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     setCreatingTopic(true)
     setTopicDraft({
       id: '',
       title: '',
-      monthKey,
-      monthLabel: monthName(monthKey),
+      monthKey: '',
+      monthLabel: monthName(''),
       category: 'ai_capability',
       status: 'idea',
       notes: '',
@@ -955,7 +1002,9 @@ function App() {
             notes: topicDraft.notes,
             category: topicDraft.category,
             status: topicDraft.status,
-            scheduled_month: `${topicDraft.monthKey}-01`,
+            scheduled_month: topicDraft.monthKey
+              ? `${topicDraft.monthKey}-01`
+              : null,
             thesis_id: topicDraft.thesisId || null,
           },
           topicDraft.version,
@@ -1452,6 +1501,7 @@ function App() {
           <section
             className="topic-pane"
             aria-label="Topic dashboard"
+            ref={topicPaneRef}
             onScroll={(event) =>
               setHeaderHidden(event.currentTarget.scrollTop > 16)
             }
@@ -1487,23 +1537,6 @@ function App() {
               </div>
             </div>
 
-            <div className="topic-scope-toggle" aria-label="Topic time range">
-              <button
-                className={topicScope === 'current' ? 'active' : ''}
-                type="button"
-                onClick={() => setTopicScope('current')}
-              >
-                Current & upcoming
-              </button>
-              <button
-                className={topicScope === 'all' ? 'active' : ''}
-                type="button"
-                onClick={() => setTopicScope('all')}
-              >
-                Full history
-              </button>
-            </div>
-
             {focus === 'topics' && selectedThesisId && (
               <div className="thesis-filter">
                 <span>
@@ -1534,7 +1567,12 @@ function App() {
                   {theses.map((thesis) => {
                     const linkedTopics = topics
                       .filter((topic) => topic.thesisId === thesis.id)
-                      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+                      .sort((a, b) => {
+                        if (!a.monthKey && !b.monthKey) return 0
+                        if (!a.monthKey) return 1
+                        if (!b.monthKey) return -1
+                        return a.monthKey.localeCompare(b.monthKey)
+                      })
                     const continuity =
                       linkedTopics.length > 1
                         ? `${linkedTopics[0].monthLabel} → ${
@@ -1553,7 +1591,6 @@ function App() {
                           setSelectedThesisId(
                             selectedThesisId === thesis.id ? '' : thesis.id,
                           )
-                          setTopicScope('all')
                         }}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
@@ -1561,7 +1598,6 @@ function App() {
                             setSelectedThesisId(
                               selectedThesisId === thesis.id ? '' : thesis.id,
                             )
-                            setTopicScope('all')
                           }
                         }}
                       >
@@ -1597,10 +1633,20 @@ function App() {
               )}
 
               <div className="month-pipeline">
-                {monthGroups.map(([monthKey, monthTopics]) => (
+                {[
+                  ...monthGroups.scheduled,
+                  ['', monthGroups.poolTopics] as [string, Topic[]],
+                ].map(([monthKey, monthTopics]) => (
                   <section
-                    className="month-group"
-                    key={monthKey}
+                    className={`month-group ${
+                      monthKey ? '' : 'topic-pool-group'
+                    }`}
+                    key={monthKey || 'topic-pool'}
+                    ref={
+                      monthKey === monthGroups.currentMonth
+                        ? currentMonthAnchorRef
+                        : undefined
+                    }
                     onDragOver={(event) => {
                       if (draggedTopicId) event.preventDefault()
                     }}
@@ -1608,16 +1654,24 @@ function App() {
                       const topicId =
                         event.dataTransfer.getData('application/x-topic-id') ||
                         draggedTopicId
-                      if (topicId) moveTopic(topicId, monthKey)
+                      if (topicId) void moveTopic(topicId, monthKey)
                     }}
                   >
                     <header>
                       <span className="month-index">
-                        {monthKey.split('-')[1]}
+                        {monthKey ? monthKey.split('-')[1] : '◎'}
                       </span>
                       <div>
                         <h2>{monthName(monthKey)}</h2>
-                        <span>{monthTopics.length} topics</span>
+                        <span>
+                          {monthTopics.length} topic
+                          {monthTopics.length === 1 ? '' : 's'}
+                          {!monthKey
+                            ? ' · unscheduled ideas'
+                            : monthKey === monthGroups.currentMonth
+                              ? ' · current month'
+                              : ''}
+                        </span>
                       </div>
                     </header>
                     <div className="topic-list">
@@ -1674,7 +1728,7 @@ function App() {
                               <span
                                 className="grip"
                                 draggable
-                                title="Drag topic to another month"
+                                title="Drag topic to a month or the topic pool"
                                 onDragStart={(event) => {
                                   setDraggedTopicId(topic.id)
                                   event.dataTransfer.effectAllowed = 'move'
@@ -1773,13 +1827,24 @@ function App() {
                           </div>
                         </article>
                       ))}
+                      {monthTopics.length === 0 && (
+                        <div className="month-empty">
+                          {monthKey
+                            ? 'No topics scheduled for this month yet.'
+                            : 'New ideas land here until you schedule them into a month.'}
+                        </div>
+                      )}
                     </div>
                   </section>
                 ))}
-                {monthGroups.length === 0 && selectedThesisId && (
+                {monthGroups.scheduled.every(
+                  ([, monthTopics]) => monthTopics.length === 0,
+                ) &&
+                  monthGroups.poolTopics.length === 0 &&
+                  selectedThesisId && (
                   <div className="portfolio-empty">
-                    No monthly topics are linked to this Thesis yet. Edit a
-                    Topic to add it.
+                    No topics are linked to this Thesis yet. Edit a Topic to add
+                    it.
                   </div>
                 )}
               </div>
@@ -2099,6 +2164,27 @@ function App() {
                     })
                   }
                 />
+                <small>
+                  Leave empty for the Topic pool. Set a month for scheduled
+                  events like IFA or Ignite.
+                </small>
+                {topicDraft.monthKey ? (
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() =>
+                      setTopicDraft({
+                        ...topicDraft,
+                        monthKey: '',
+                        monthLabel: monthName(''),
+                      })
+                    }
+                  >
+                    Move to Topic pool
+                  </button>
+                ) : (
+                  <span className="field-hint">Currently in Topic pool</span>
+                )}
               </label>
               <label>
                 Status

@@ -44,6 +44,7 @@ export interface Topic {
   title: string
   thesisId?: string
   parentTopicId?: string
+  /** YYYY-MM when scheduled; empty string means Topic Pool (unscheduled). */
   monthKey: string
   monthLabel: string
   category: NewsCategory

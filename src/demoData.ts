@@ -86,6 +86,17 @@ export const demoTopics: Topic[] = [
     displayOrder: 1,
     supportingNews: [],
   },
+  {
+    id: 'topic-pool-idea',
+    title: 'On-device agent privacy tradeoffs',
+    monthKey: '',
+    monthLabel: 'Topic pool',
+    category: 'ecosystem',
+    status: 'idea',
+    notes: 'Parked until a launch window or industry event makes timing clear.',
+    displayOrder: 1,
+    supportingNews: ['news-granola'],
+  },
 ]
 
 export const demoTheses: Thesis[] = [
