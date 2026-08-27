@@ -110,13 +110,14 @@
 
   chrome.storage.local.get(null, (values) => {
     applyStorage(values)
-    state.expanded = !state.startCollapsed
+    state.expanded = authMode() !== 'authorized' || !state.startCollapsed
     renderPanel()
   })
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return
     chrome.storage.local.get(null, (values) => {
       applyStorage(values)
+      if (authMode() !== 'authorized') state.expanded = true
       renderPanel()
     })
   })
