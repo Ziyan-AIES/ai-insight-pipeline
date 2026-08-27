@@ -46,7 +46,13 @@ insert their `team_members` row, then use the dashboard's admin-only **Team**
 panel to assign `member`, `editor`, or `admin`. The database prevents removal
 of the final admin.
 
-All browser-facing tables use RLS. The extension writes through Netlify Functions with a separate token and a server-side service-role key. Missing write-token configuration fails closed.
+All browser-facing tables use RLS. The Chrome extension signs in with the
+dashboard magic link and sends the user session. Capture is allowed only when
+that user has a `team_members` row. The Netlify functions hold the service-role
+key; the extension never receives it. `CAPTURE_WRITE_TOKEN` remains a temporary
+fallback for older unpacked builds. Missing write-token configuration fails
+closed for that fallback path. Editorial jobs keep a separate
+`EDITORIAL_WRITE_TOKEN`.
 
 ## Netlify environment
 
@@ -58,17 +64,32 @@ All browser-facing tables use RLS. The extension writes through Netlify Function
 - `EDITORIAL_WRITE_TOKEN`
 - `APP_ORIGIN` (exact allowed origin, or a comma-separated allowlist)
 
-`CAPTURE_WRITE_TOKEN` / `EXTENSION_WRITE_TOKEN` authorize the Chrome extension
-capture and status APIs. Those endpoints accept token-authenticated requests
-even when the request `Origin` is a `chrome-extension://` ID or a news site,
-so you do not need to list every website in `APP_ORIGIN`. Keep `APP_ORIGIN`
-scoped to the dashboard web app for browser cookie/session calls.
+`CAPTURE_WRITE_TOKEN` is a temporary fallback for older extension builds.
+New extension versions sign in with the dashboard magic link and send the
+Supabase user session. Capture still checks `team_members` on the server.
 
 `EXTENSION_WRITE_TOKEN` is accepted as a temporary fallback when either scoped
 token is unset, so existing extension and local editorial clients can be
 rotated without downtime.
 
 Never commit real values.
+
+## Chrome extension
+
+The capture extension lives in `extension/` in this repo (and in
+[browser-signal-watcher](https://github.com/Ziyan-AIES/browser-signal-watcher)).
+
+You **must reload the unpacked extension** in `chrome://extensions` after this
+change, then refresh open tabs.
+
+Sign-in flow:
+
+1. In the extension, choose **Sign in** (work email). There is no name or token field.
+2. The dashboard opens at `/?extension_auth=1&state=…`. Complete the magic link.
+3. Authorized `team_members` get **Capture access enabled**. Contributor names come from the team profile, not a typed name.
+4. Signed-in accounts that are not on `team_members` see **Access not enabled**. Capture stays blocked.
+
+Default workspace URL: `https://aiinsightpipeline.netlify.app`. If this agent could not push `browser-signal-watcher`, copy `extension/` from this repository over that project.
 
 ## Historical migration
 

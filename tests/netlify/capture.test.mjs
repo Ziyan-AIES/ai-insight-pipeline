@@ -15,44 +15,68 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function request(body, token = 'capture-secret') {
+function request(body, headers = {}) {
   return {
     httpMethod: 'POST',
     headers: {
       origin: 'chrome-extension://pilot',
-      'x-capture-token': token,
+      ...headers,
     },
     body: JSON.stringify(body),
   }
 }
 
+function mockBackend({ user, member, rpc } = {}) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const href = String(url)
+    if (href.includes('/auth/v1/user')) {
+      if (!user) return new Response('{}', { status: 401 })
+      return new Response(JSON.stringify(user), { status: 200 })
+    }
+    if (href.includes('team_members')) {
+      return new Response(JSON.stringify(member ? [member] : []), { status: 200 })
+    }
+    if (href.includes('rpc/capture_news_event')) {
+      return new Response(
+        JSON.stringify(rpc || { already_existed: false, news: { id: 'n1' } }),
+        { status: 200 },
+      )
+    }
+    return new Response(`unexpected ${href}`, { status: 500 })
+  })
+}
+
+const member = {
+  user_id: 'user-1',
+  email: 'person@example.com',
+  display_name: 'Pilot Person',
+  role: 'member',
+}
+
 describe('capture API contract', () => {
   it('rejects unauthorized capture before database access', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const result = await handler(request({ url: 'https://example.com' }, 'bad'))
+    const result = await handler(
+      request({ url: 'https://example.com' }, { 'x-capture-token': 'bad' }),
+    )
     expect(result.statusCode).toBe(401)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('canonicalizes and sends capture through the narrow RPC', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          already_existed: true,
-          news: { id: 'news-id', editorial_status: 'processed' },
-        }),
-        { status: 200 },
+    const fetchMock = mockBackend()
+    const result = await handler(
+      request(
+        {
+          id: 'capture-1',
+          url: 'https://example.com/news?utm_source=test&id=4#part',
+          title: 'Captured title',
+        },
+        { 'x-capture-token': 'capture-secret' },
       ),
     )
-    const result = await handler(
-      request({
-        id: 'capture-1',
-        url: 'https://example.com/news?utm_source=test&id=4#part',
-        title: 'Captured title',
-      }),
-    )
     expect(result.statusCode).toBe(200)
-    expect(JSON.parse(result.body).already_existed).toBe(true)
+    expect(JSON.parse(result.body).already_existed).toBe(false)
     expect(fetchMock).toHaveBeenCalledOnce()
     const [url, options] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('/rest/v1/rpc/capture_news_event')
@@ -62,11 +86,7 @@ describe('capture API contract', () => {
   })
 
   it('allows token-authenticated extension captures from other origins', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ already_existed: false, news: { id: 'n1' } }), {
-        status: 200,
-      }),
-    )
+    mockBackend()
     const result = await handler({
       httpMethod: 'POST',
       headers: {
@@ -76,22 +96,20 @@ describe('capture API contract', () => {
       body: JSON.stringify({ url: 'https://news.example.com/a', title: 'A' }),
     })
     expect(result.statusCode).toBe(200)
-    expect(fetchMock).toHaveBeenCalledOnce()
   })
 
-  it('forwards the extension display name as contributor metadata', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ already_existed: false, news: { id: 'n2' } }), {
-        status: 200,
-      }),
-    )
+  it('forwards the extension display name as contributor metadata for legacy tokens', async () => {
+    const fetchMock = mockBackend()
     const result = await handler(
-      request({
-        url: 'https://example.com/named',
-        title: 'Named capture',
-        user: 'Shawn',
-        avatar: 'S',
-      }),
+      request(
+        {
+          url: 'https://example.com/named',
+          title: 'Named capture',
+          user: 'Shawn',
+          avatar: 'S',
+        },
+        { 'x-capture-token': 'capture-secret' },
+      ),
     )
     expect(result.statusCode).toBe(200)
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
@@ -102,9 +120,67 @@ describe('capture API contract', () => {
     })
   })
 
+  it('uses the team profile as contributor and ignores a typed name on session capture', async () => {
+    const fetchMock = mockBackend({
+      user: { id: 'user-1', email: 'person@example.com' },
+      member,
+    })
+    const result = await handler(
+      request(
+        {
+          url: 'https://example.com/session',
+          title: 'Session capture',
+          user: 'Typed Name',
+          avatar: 'TN',
+        },
+        { authorization: 'Bearer user-session' },
+      ),
+    )
+    expect(result.statusCode).toBe(200)
+    const rpcCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('capture_news_event'),
+    )
+    const body = JSON.parse(rpcCall[1].body)
+    expect(body.p_capture_metadata).toMatchObject({
+      contributor_name: 'Pilot Person',
+      team_user_id: 'user-1',
+      legacy_user: 'Pilot Person',
+      avatar: 'PI',
+    })
+    expect(body.p_capture_metadata.legacy_user).not.toBe('Typed Name')
+  })
+
+  it('rejects a signed-in caller who is not in team_members', async () => {
+    const fetchMock = mockBackend({
+      user: { id: 'user-2', email: 'outsider@example.com' },
+    })
+    const result = await handler(
+      request(
+        { url: 'https://example.com/denied', user: 'Outsider' },
+        { authorization: 'Bearer outsider-session' },
+      ),
+    )
+    expect(result.statusCode).toBe(403)
+    expect(JSON.parse(result.body).code).toBe('not_authorized')
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('capture_news_event')),
+    ).toBe(false)
+  })
+
+  it('still allows the legacy capture token when no Bearer session is sent', async () => {
+    mockBackend()
+    const result = await handler(
+      request(
+        { url: 'https://example.com/legacy' },
+        { 'x-capture-token': 'capture-secret' },
+      ),
+    )
+    expect(result.statusCode).toBe(200)
+  })
+
   it('rejects oversized request bodies', async () => {
     const result = await handler({
-      ...request({ url: 'https://example.com' }),
+      ...request({ url: 'https://example.com' }, { 'x-capture-token': 'capture-secret' }),
       headers: {
         origin: 'chrome-extension://pilot',
         'x-capture-token': 'capture-secret',

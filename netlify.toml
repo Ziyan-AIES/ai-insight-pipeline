@@ -33,6 +33,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/extension-auth"
+  to = "/.netlify/functions/extension-auth"
+  status = 200
+
+[[redirects]]
+  from = "/api/extension-session"
+  to = "/.netlify/functions/extension-session"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

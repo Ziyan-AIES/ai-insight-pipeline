@@ -4,7 +4,7 @@ import {
   handleOptions,
   parseJsonBody,
   requireAllowedOrigin,
-  requireCaptureToken,
+  requireCaptureAccess,
   response,
   supabaseRpc,
 } from './_supabase.mjs'
@@ -41,8 +41,8 @@ export async function handler(event) {
       event,
     )
   }
-  const denied = requireCaptureToken(event)
-  if (denied) return denied
+  const access = await requireCaptureAccess(event)
+  if (access.denied) return access.denied
   const parsed = parseJsonBody(event, 256 * 1024)
   if (!parsed.value) {
     return response(
@@ -80,6 +80,11 @@ export async function handler(event) {
     created_at: eventTime,
   }
 
+  const takeaway = String(payload.takeaway || payload.comment || '').slice(0, 2000)
+  const contributorName = access.caller
+    ? access.caller.displayName
+    : String(payload.user || '').slice(0, 200)
+
   try {
     const result = await supabaseRpc('capture_news_event', {
       p_event_id: id,
@@ -96,9 +101,14 @@ export async function handler(event) {
         comments: payload.comment
           ? [String(payload.comment).slice(0, 4000)]
           : [],
-        legacy_user: String(payload.user || '').slice(0, 200),
-        contributor_name: String(payload.user || '').slice(0, 200),
-        avatar: String(payload.avatar || '').slice(0, 16),
+        takeaway,
+        category: String(payload.category || ''),
+        team_user_id: access.caller?.userId || '',
+        contributor_name: contributorName,
+        legacy_user: access.caller ? contributorName : String(payload.user || '').slice(0, 200),
+        avatar: access.caller
+          ? contributorName.slice(0, 2).toUpperCase()
+          : String(payload.avatar || '').slice(0, 16),
       },
     })
     return response(

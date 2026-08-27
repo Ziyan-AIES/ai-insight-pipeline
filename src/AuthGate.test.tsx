@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   maybeSingle: vi.fn(),
   onAuthStateChange: vi.fn(),
   signOut: vi.fn(),
+  signInWithOtp: vi.fn(),
 }))
 
 vi.mock('./supabase', () => ({
@@ -15,6 +16,7 @@ vi.mock('./supabase', () => ({
       getSession: mocks.getSession,
       onAuthStateChange: mocks.onAuthStateChange,
       signOut: mocks.signOut,
+      signInWithOtp: mocks.signInWithOtp,
     },
     from: () => ({
       select: () => ({
@@ -27,7 +29,16 @@ vi.mock('./supabase', () => ({
 import { AuthGate } from './AuthGate'
 
 const session = {
+  access_token: 'access-token',
+  refresh_token: 'refresh-token',
   user: { id: 'user-1', email: 'person@example.com' },
+}
+
+const member = {
+  user_id: 'user-1',
+  email: 'person@example.com',
+  display_name: 'Pilot Person',
+  role: 'member',
 }
 
 describe('membership gate', () => {
@@ -35,22 +46,17 @@ describe('membership gate', () => {
     mocks.getSession.mockReset()
     mocks.maybeSingle.mockReset()
     mocks.onAuthStateChange.mockReset()
+    mocks.signInWithOtp.mockReset()
     mocks.getSession.mockResolvedValue({ data: { session } })
     mocks.onAuthStateChange.mockImplementation(() => ({
       data: { subscription: { unsubscribe: vi.fn() } },
     }))
+    window.history.replaceState({}, '', '/')
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   it('renders the workspace only for a team member', async () => {
-    mocks.maybeSingle.mockResolvedValue({
-      data: {
-        user_id: 'user-1',
-        email: 'person@example.com',
-        display_name: 'Pilot Person',
-        role: 'member',
-      },
-      error: null,
-    })
+    mocks.maybeSingle.mockResolvedValue({ data: member, error: null })
     render(
       <AuthGate>
         <div>Protected workspace</div>
@@ -86,12 +92,7 @@ describe('membership gate', () => {
 
   it('keeps the workspace mounted during a same-user token refresh', async () => {
     mocks.maybeSingle.mockResolvedValue({
-      data: {
-        user_id: 'user-1',
-        email: 'person@example.com',
-        display_name: 'Pilot Person',
-        role: 'editor',
-      },
+      data: { ...member, role: 'editor' },
       error: null,
     })
     render(
@@ -113,5 +114,103 @@ describe('membership gate', () => {
     expect(screen.getByRole('button', { name: 'Draft value' })).toBe(draft)
     expect(screen.queryByText(/Connecting to the team workspace/)).toBeNull()
     expect(mocks.maybeSingle).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('extension handshake', () => {
+  beforeEach(() => {
+    mocks.getSession.mockReset()
+    mocks.maybeSingle.mockReset()
+    mocks.onAuthStateChange.mockReset()
+    mocks.getSession.mockResolvedValue({ data: { session } })
+    mocks.onAuthStateChange.mockImplementation(() => ({
+      data: { subscription: { unsubscribe: vi.fn() } },
+    }))
+    window.history.replaceState(
+      {},
+      '',
+      '/?extension_auth=1&state=handshake-state-123456',
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, authorized: true, connected: true }),
+      }),
+    )
+  })
+
+  it('completes handshake for an authorized member without opening the dashboard', async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: member, error: null })
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    expect(
+      await screen.findByRole('heading', { name: 'Capture access enabled' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/extension-auth',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer access-token',
+        }),
+      }),
+    )
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1].body)
+    expect(body).toMatchObject({
+      action: 'complete',
+      state: 'handshake-state-123456',
+      refresh_token: 'refresh-token',
+    })
+  })
+
+  it('blocks capture complete for a signed-in account that is not a team member', async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: null, error: null })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          authorized: false,
+          connected: false,
+          email: 'person@example.com',
+        }),
+      }),
+    )
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Access not enabled' })).toBeInTheDocument()
+    expect(screen.getByText(/person@example.com/)).toBeInTheDocument()
+    expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Capture access enabled' })).toBeNull()
+    expect(fetch).toHaveBeenCalled()
+  })
+
+  it('keeps the magic-link redirect on the handshake URL', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null } })
+    mocks.signInWithOtp.mockResolvedValue({ error: null })
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    fireEvent.change(await screen.findByPlaceholderText('name@company.com'), {
+      target: { value: 'person@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send sign-in link' }))
+    expect(mocks.signInWithOtp).toHaveBeenCalledWith({
+      email: 'person@example.com',
+      options: {
+        emailRedirectTo: `${window.location.origin}/?extension_auth=1&state=handshake-state-123456`,
+      },
+    })
   })
 })

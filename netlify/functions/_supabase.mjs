@@ -32,7 +32,8 @@ function corsHeaders(event) {
     /^chrome-extension:\/\//i.test(origin) ||
     header(event, 'x-capture-token') ||
     header(event, 'x-extension-token') ||
-    header(event, 'x-bsw-token')
+    header(event, 'x-bsw-token') ||
+    /^Bearer\s+\S+/i.test(header(event, 'authorization'))
   ) {
     return {
       'access-control-allow-origin': origin,
@@ -97,7 +98,8 @@ export function requireAllowedOrigin(event, options = {}) {
     const hasCaptureToken = Boolean(
       header(event, 'x-capture-token') ||
         header(event, 'x-extension-token') ||
-        header(event, 'x-bsw-token'),
+        header(event, 'x-bsw-token') ||
+        /^Bearer\s+\S+/i.test(header(event, 'authorization')),
     )
     if (hasCaptureToken || /^chrome-extension:\/\//i.test(origin)) {
       return null
@@ -137,6 +139,100 @@ export function requireCaptureToken(event) {
     ['x-capture-token', 'x-extension-token', 'x-bsw-token'],
     'Capture API',
   )
+}
+
+export function bearerToken(event) {
+  const value = header(event, 'authorization')
+  const match = value.match(/^Bearer\s+(\S+)/i)
+  return match ? match[1] : ''
+}
+
+export async function lookupTeamMember(userId) {
+  const rows = await supabase(
+    `team_members?user_id=eq.${encodeURIComponent(userId)}&select=user_id,email,display_name,role`,
+  )
+  return Array.isArray(rows) ? rows[0] || null : null
+}
+
+export function memberIdentity(member, user = {}) {
+  return {
+    userId: member.user_id,
+    email: member.email || user.email || '',
+    displayName:
+      member.display_name ||
+      (member.email || user.email || 'Team member').split('@')[0],
+    role: member.role,
+  }
+}
+
+export async function getAuthUser(accessToken, event = null) {
+  const url = process.env.SUPABASE_URL || ''
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  if (!url || !key) {
+    return {
+      user: null,
+      denied: response(
+        503,
+        { ok: false, error: 'Supabase service credentials are missing' },
+        {},
+        event,
+      ),
+    }
+  }
+  const result = await fetch(`${url.replace(/\/$/, '')}/auth/v1/user`, {
+    headers: {
+      apikey: key,
+      authorization: `Bearer ${accessToken}`,
+    },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!result.ok) {
+    return {
+      user: null,
+      denied: response(
+        401,
+        { ok: false, error: 'Invalid or expired session' },
+        {},
+        event,
+      ),
+    }
+  }
+  return { user: await result.json(), denied: null }
+}
+
+export async function resolveAuthorizedCaller(event) {
+  const accessToken = bearerToken(event)
+  if (!accessToken) return { caller: null, denied: null }
+  const auth = await getAuthUser(accessToken, event)
+  if (auth.denied) return { caller: null, denied: auth.denied }
+  const member = await lookupTeamMember(auth.user.id)
+  if (!member) {
+    return {
+      caller: null,
+      denied: response(
+        403,
+        {
+          ok: false,
+          error: 'This account is not authorized to use AI Signals',
+          code: 'not_authorized',
+          email: auth.user.email || '',
+        },
+        {},
+        event,
+      ),
+    }
+  }
+  return {
+    caller: memberIdentity(member, auth.user),
+    denied: null,
+  }
+}
+
+export async function requireCaptureAccess(event) {
+  const session = await resolveAuthorizedCaller(event)
+  if (session.denied) return session
+  if (session.caller) return session
+  return { caller: null, denied: requireCaptureToken(event) }
 }
 
 export function requireEditorialToken(event) {

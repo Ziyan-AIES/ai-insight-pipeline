@@ -13,12 +13,48 @@ import {
 } from './auth-context'
 import { cloudConfigured, supabase } from './supabase'
 
+function extensionHandshake() {
+  if (typeof window === 'undefined') {
+    return { enabled: false, state: '' }
+  }
+  const params = new URLSearchParams(window.location.search)
+  return {
+    enabled: params.get('extension_auth') === '1',
+    state: params.get('state') || '',
+  }
+}
+
+function AuthCard({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <main className="auth-screen">
+      <section className="auth-card">
+        <span className="brand-mark">SI</span>
+        <span className="eyebrow">{eyebrow}</span>
+        <h1>{title}</h1>
+        {children}
+      </section>
+    </main>
+  )
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
+  const handshake = useMemo(extensionHandshake, [])
   const [session, setSession] = useState<Session | null>(null)
   const [identity, setIdentity] = useState<TeamIdentity | null>(null)
   const [loading, setLoading] = useState(cloudConfigured)
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [extensionStatus, setExtensionStatus] = useState<
+    'idle' | 'connecting' | 'connected' | 'denied' | 'error'
+  >('idle')
   const sessionUserId = session?.user.id
 
   useEffect(() => {
@@ -72,6 +108,58 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [sessionUserId])
 
+  useEffect(() => {
+    if (!handshake.enabled || !handshake.state || !session) return
+    let cancelled = false
+    setExtensionStatus((current) =>
+      current === 'connected' ? current : 'connecting',
+    )
+    void fetch('/api/extension-auth', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        action: 'complete',
+        state: handshake.state,
+        refresh_token: session.refresh_token,
+      }),
+    })
+      .then(async (result) => {
+        if (cancelled) return
+        const body = (await result.json().catch(() => ({}))) as {
+          authorized?: boolean
+          connected?: boolean
+          error?: string
+        }
+        if (!result.ok) {
+          setExtensionStatus('error')
+          setMessage(
+            body.error ||
+              'The extension could not be connected. Try Sign in from the extension again.',
+          )
+          return
+        }
+        if (body.authorized === false || body.connected === false) {
+          setExtensionStatus('denied')
+          return
+        }
+        setExtensionStatus('connected')
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExtensionStatus('error')
+          setMessage(
+            'The extension could not be connected. Try Sign in from the extension again.',
+          )
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [handshake.enabled, handshake.state, session])
+
   const context = useMemo<AuthContextValue>(
     () => ({
       identity,
@@ -84,20 +172,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
     [identity],
   )
 
-  if (!cloudConfigured) return children
-  if (loading) {
-    return <div className="auth-screen">Connecting to the team workspace…</div>
-  }
-  if (session && identity) {
-    return <AuthContext.Provider value={context}>{children}</AuthContext.Provider>
-  }
-
   async function requestLink() {
     if (!supabase || !email.trim()) return
     setMessage('Sending secure sign-in link…')
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo:
+          handshake.enabled && handshake.state
+            ? `${window.location.origin}/?extension_auth=1&state=${encodeURIComponent(handshake.state)}`
+            : window.location.origin,
+      },
     })
     setMessage(
       error
@@ -106,23 +191,59 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )
   }
 
-  return (
-    <main className="auth-screen">
-      <section className="auth-card">
-        <span className="brand-mark">SI</span>
-        <span className="eyebrow">Private team workspace</span>
-        <h1>Signal Intelligence</h1>
-        <p>{session ? message : 'Use your approved team email to access the shared news and thesis pipeline.'}</p>
-        {session ? (
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => void supabase?.auth.signOut()}
-          >
-            Sign out and use another account
-          </button>
-        ) : (
-          <>
+  const signOutButton = (
+    <button
+      className="secondary-button"
+      type="button"
+      onClick={() => void supabase?.auth.signOut()}
+    >
+      Sign out and use another account
+    </button>
+  )
+
+  if (!cloudConfigured) return children
+  if (loading) {
+    return <div className="auth-screen">Connecting to the team workspace…</div>
+  }
+
+  if (handshake.enabled) {
+    if (session && identity) {
+      const connected = extensionStatus === 'connected'
+      return (
+        <AuthCard
+          eyebrow="Chrome extension"
+          title={connected ? 'Capture access enabled' : 'Connecting extension'}
+        >
+          <p>
+            Signed in as {identity.displayName} ({identity.email}). The
+            extension uses this same authorized account. You can close this tab
+            after the extension shows Capture access enabled.
+          </p>
+          {extensionStatus === 'error' && message ? <small>{message}</small> : null}
+        </AuthCard>
+      )
+    }
+    if (session && !identity) {
+      return (
+        <AuthCard eyebrow="Chrome extension" title="Access not enabled">
+          <p>
+            {session.user.email
+              ? `${session.user.email} is signed in but is not on the authorized team list.`
+              : message}
+            {' '}
+            Capture stays blocked until an admin adds this account to
+            team_members.
+          </p>
+          {signOutButton}
+        </AuthCard>
+      )
+    }
+    return (
+      <AuthCard eyebrow="Chrome extension" title="AI Signals">
+        <p>
+          Sign in with your work email. The Chrome extension uses the same
+          authorized user list as this workspace.
+        </p>
         <label>
           Work email
           <input
@@ -135,10 +256,44 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <button className="primary-button" type="button" onClick={requestLink}>
           Send sign-in link
         </button>
-          </>
-        )}
-        {!session && message && <small>{message}</small>}
-      </section>
-    </main>
+        {message && <small>{message}</small>}
+      </AuthCard>
+    )
+  }
+
+  if (session && identity) {
+    return <AuthContext.Provider value={context}>{children}</AuthContext.Provider>
+  }
+
+  return (
+    <AuthCard
+      eyebrow="Private team workspace"
+      title="Signal Intelligence"
+    >
+      <p>
+        {session
+          ? message
+          : 'Use your approved team email to access the shared news and thesis pipeline.'}
+      </p>
+      {session ? (
+        signOutButton
+      ) : (
+        <>
+          <label>
+            Work email
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@company.com"
+            />
+          </label>
+          <button className="primary-button" type="button" onClick={requestLink}>
+            Send sign-in link
+          </button>
+        </>
+      )}
+      {!session && message && <small>{message}</small>}
+    </AuthCard>
   )
 }

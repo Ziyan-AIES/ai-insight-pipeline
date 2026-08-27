@@ -42,4 +42,27 @@ describe('extension status API', () => {
       version: 3,
     })
   })
+
+  it('rejects a Bearer session that is not in team_members', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const href = String(url)
+      if (href.includes('/auth/v1/user')) {
+        return new Response(
+          JSON.stringify({ id: 'user-2', email: 'outsider@example.com' }),
+          { status: 200 },
+        )
+      }
+      if (href.includes('team_members')) {
+        return new Response('[]', { status: 200 })
+      }
+      return new Response('unexpected', { status: 500 })
+    })
+    const result = await handler({
+      httpMethod: 'GET',
+      headers: { authorization: 'Bearer outsider-session' },
+      queryStringParameters: { url: 'https://example.com/story' },
+    })
+    expect(result.statusCode).toBe(403)
+    expect(JSON.parse(result.body).code).toBe('not_authorized')
+  })
 })

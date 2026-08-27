@@ -2,7 +2,7 @@ import {
   canonicalizeUrl,
   handleOptions,
   requireAllowedOrigin,
-  requireCaptureToken,
+  requireCaptureAccess,
   response,
   supabaseRpc,
 } from './_supabase.mjs'
@@ -31,8 +31,8 @@ export async function handler(event) {
       event,
     )
   }
-  const denied = requireCaptureToken(event)
-  if (denied) return denied
+  const access = await requireCaptureAccess(event)
+  if (access.denied) return access.denied
 
   let canonicalUrl = ''
   try {
@@ -52,7 +52,7 @@ export async function handler(event) {
     })
     return response(
       200,
-      { ok: true, write_authorized: true, ...result },
+      { ok: true, write_authorized: true, caller: access.caller, ...result },
       {},
       event,
     )
