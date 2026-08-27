@@ -1,10 +1,13 @@
 begin;
 
-select plan(15);
+select plan(18);
 
 select has_column('public', 'news_items', 'deleted_at', 'news has soft deletion');
 select has_column('public', 'news_items', 'version', 'news has row versioning');
 select has_column('public', 'news_items', 'published_at', 'news can store publication date');
+select has_column('public', 'news_items', 'source_type', 'news records capture vs manual notes');
+select has_column('public', 'news_items', 'vote_count', 'news can be voted for discussion');
+select has_column('public', 'topics', 'kind', 'topics have insight/poc/roadmap kinds');
 select has_column('public', 'topics', 'deleted_at', 'topics have soft deletion');
 select has_column('public', 'theses', 'deleted_at', 'theses have soft deletion');
 select has_table('public', 'activity_events', 'activity history exists');

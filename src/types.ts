@@ -14,13 +14,38 @@ export type TopicStatus =
   | 'completed'
   | 'archived'
 
+export type TopicKind = 'insight' | 'poc' | 'roadmap'
+
+export type NoteSourceType = 'captured_news' | 'manual_note'
+
+export type WorkspacePage = 'daily' | 'weekly'
+
+export interface TopicAnalysis {
+  keyQuestion: string
+  observed: string
+  currentView: string
+  implications: string
+  watch: string
+}
+
+export interface TopicOutput {
+  id: string
+  kind: string
+  title: string
+  dateLabel: string
+  link: string
+  description: string
+}
+
 export interface NewsItem {
   id: string
   url: string
   title: string
   source: string
   summary: string
+  takeaway: string
   category: NewsCategory
+  sourceType: NoteSourceType
   capturedAt: string
   publishedAt?: string
   capturedBy: string
@@ -29,6 +54,9 @@ export interface NewsItem {
   metadata?: Record<string, unknown>
   imageUrl?: string
   editorialStatus: 'pending' | 'processed'
+  voteCount: number
+  votedByMe?: boolean
+  discussionOrder?: number
   updatedAt?: string
   version?: number
   deletedAt?: string
@@ -49,7 +77,11 @@ export interface Topic {
   monthLabel: string
   category: NewsCategory
   status: TopicStatus
+  kind: TopicKind
   notes: string
+  analysis: TopicAnalysis
+  outputs: TopicOutput[]
+  createdAt?: string
   displayOrder: number
   updatedAt?: string
   version?: number

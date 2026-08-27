@@ -1,13 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
+import { emptyTopicAnalysis } from './labels'
 import type {
   ActivityEvent,
   EditorialReadout,
   EditorialHealth,
   NewsCategory,
   NewsItem,
+  NoteSourceType,
   Thesis,
   TeamMemberSummary,
   Topic,
+  TopicAnalysis,
+  TopicKind,
+  TopicOutput,
   TopicStatus,
 } from './types'
 
@@ -25,6 +30,10 @@ type NewsRow = {
   title: string
   source: string
   summary: string
+  takeaway?: string | null
+  source_type?: NoteSourceType | null
+  vote_count?: number | null
+  discussion_order?: number | null
   category: NewsCategory
   captured_at: string
   published_at: string | null
@@ -99,26 +108,73 @@ function captureContributorName(
   return 'Imported'
 }
 
+function noteTakeaway(
+  takeaway: string | null | undefined,
+  metadata: Record<string, unknown>,
+) {
+  if (takeaway?.trim()) return takeaway.trim()
+  const implications = metadata.implications
+  if (Array.isArray(implications)) {
+    const first = implications.find(
+      (item): item is string => typeof item === 'string' && Boolean(item.trim()),
+    )
+    if (first) return first.trim()
+  }
+  return ''
+}
+
+function parseTopicAnalysis(value: unknown): TopicAnalysis {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ...emptyTopicAnalysis }
+  }
+  const record = value as Record<string, unknown>
+  return {
+    keyQuestion: String(record.keyQuestion || record.key_question || ''),
+    observed: String(record.observed || ''),
+    currentView: String(record.currentView || record.current_view || ''),
+    implications: String(record.implications || ''),
+    watch: String(record.watch || ''),
+  }
+}
+
+function parseTopicOutputs(value: unknown): TopicOutput[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === 'object' && !Array.isArray(item),
+    )
+    .map((item, index) => ({
+      id: String(item.id || `output-${index}`),
+      kind: String(item.kind || 'analysis'),
+      title: String(item.title || ''),
+      dateLabel: String(item.dateLabel || item.date_label || ''),
+      link: String(item.link || ''),
+      description: String(item.description || ''),
+    }))
+}
+
 export async function loadWorkspace(includeDeleted = false) {
   if (!supabase) return null
   let newsQuery = supabase
     .from('news_items')
     .select(
-      'id,canonical_url,title,source,summary,category,captured_at,published_at,captured_by,image_url,editorial_status,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
+      'id,canonical_url,title,source,summary,takeaway,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
     )
     .order('captured_at', { ascending: false })
   let topicQuery = supabase
     .from('topics')
     .select('*,topic_news(news_id,deleted_at)')
-    .order('scheduled_month', { nullsFirst: false })
-    .order('display_order')
+    .order('created_at', { ascending: false })
   let thesisQuery = supabase.from('theses').select('*').order('display_order')
   if (!includeDeleted) {
     newsQuery = newsQuery.is('deleted_at', null)
     topicQuery = topicQuery.is('deleted_at', null)
     thesisQuery = thesisQuery.is('deleted_at', null)
   }
-  const [newsResult, topicResult, thesisResult, memberResult, readoutResult] =
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id
+  const [newsResult, topicResult, thesisResult, memberResult, readoutResult, voteResult] =
     await Promise.all([
       newsQuery,
       topicQuery,
@@ -129,14 +185,21 @@ export async function loadWorkspace(includeDeleted = false) {
         .select('period_type,period_key,lede,bullets,generated_at')
         .order('generated_at', { ascending: false })
         .limit(1),
+      userId
+        ? supabase.from('news_votes').select('news_id').eq('user_id', userId)
+        : Promise.resolve({ data: [] as Array<{ news_id: string }>, error: null }),
     ])
   const error =
     newsResult.error ||
     topicResult.error ||
     thesisResult.error ||
     memberResult.error ||
-    readoutResult.error
+    readoutResult.error ||
+    voteResult.error
   if (error) throw error
+  const votedIds = new Set(
+    (voteResult.data || []).map((row) => row.news_id),
+  )
 
   const memberNames = new Map(
     (memberResult.data || []).map((member) => [
@@ -158,7 +221,15 @@ export async function loadWorkspace(includeDeleted = false) {
         title: row.title,
         source: row.source,
         summary: row.summary,
+        takeaway: noteTakeaway(row.takeaway, metadata),
         category: row.category,
+        sourceType: row.source_type === 'manual_note' ? 'manual_note' : 'captured_news',
+        voteCount: row.vote_count || 0,
+        votedByMe: votedIds.has(row.id),
+        discussionOrder:
+          typeof row.discussion_order === 'number'
+            ? row.discussion_order
+            : undefined,
         capturedAt: row.captured_at,
         publishedAt: row.published_at || undefined,
         capturedBy: contributedName,
@@ -211,7 +282,11 @@ export async function loadWorkspace(includeDeleted = false) {
       monthLabel: topicMonthLabel(monthKey),
       category: row.category,
       status: row.status,
+      kind: (row.kind as TopicKind) || 'insight',
       notes: row.notes,
+      analysis: parseTopicAnalysis(row.analysis),
+      outputs: parseTopicOutputs(row.outputs),
+      createdAt: row.created_at,
       displayOrder: row.display_order,
       updatedAt: row.updated_at,
       version: row.version,
@@ -335,6 +410,7 @@ export async function persistNewsLink(input: {
       source: input.source,
       captured_by: user?.id || null,
       captured_via: 'dashboard',
+      source_type: 'captured_news',
       editorial_status: 'pending',
       metadata: { contributor_name: contributorName },
     })
@@ -350,13 +426,84 @@ export async function persistNewsLink(input: {
   }
 }
 
+export async function persistManualNote(input: {
+  title: string
+  summary: string
+  takeaway?: string
+  category?: NewsCategory
+}) {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const user = session.data.session?.user || null
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}`
+  const canonicalUrl = `https://signal.local/notes/${id}`
+  const { data, error } = await supabase
+    .from('news_items')
+    .insert({
+      canonical_url: canonicalUrl,
+      title: input.title.trim() || 'Untitled note',
+      source: 'Team note',
+      summary: input.summary.trim(),
+      takeaway: input.takeaway?.trim() || '',
+      category: input.category || 'ecosystem',
+      captured_by: user?.id || null,
+      captured_via: 'dashboard',
+      source_type: 'manual_note',
+      editorial_status: 'processed',
+      metadata: {
+        contributor_name: sessionUserLabel(user),
+        source_type: 'manual_note',
+      },
+    })
+    .select('id,captured_at')
+    .single()
+  if (error) throw error
+  return {
+    id: data.id as string,
+    canonicalUrl,
+    capturedAt: data.captured_at as string,
+    contributorName: sessionUserLabel(user),
+  }
+}
+
+export async function toggleNewsVote(newsId: string) {
+  if (!supabase) return null
+  const { data, error } = await supabase.rpc('toggle_news_vote', {
+    p_news_id: newsId,
+  })
+  if (error) throw error
+  const result = data as { vote_count?: number; voted?: boolean } | null
+  return {
+    voteCount: Number(result?.vote_count || 0),
+    voted: Boolean(result?.voted),
+  }
+}
+
+export async function persistDiscussionOrder(newsIds: string[]) {
+  if (!supabase) return
+  const client = supabase
+  await Promise.all(
+    newsIds.map((id, index) =>
+      client
+        .from('news_items')
+        .update({ discussion_order: index + 1 })
+        .eq('id', id),
+    ),
+  )
+}
+
 export async function updateNewsItem(
   id: string,
   patch: {
     title?: string
     summary?: string
+    takeaway?: string
     category?: NewsCategory
     published_at?: string | null
+    discussion_order?: number | null
     metadata?: Record<string, unknown>
   },
   expectedVersion?: number,
@@ -402,8 +549,11 @@ export async function createTopic(input: {
   notes: string
   category: NewsCategory
   status: TopicStatus
+  kind?: TopicKind
   monthKey: string
   thesisId?: string
+  analysis?: TopicAnalysis
+  outputs?: TopicOutput[]
 }) {
   if (!supabase) return null
   const session = await supabase.auth.getSession()
@@ -415,8 +565,11 @@ export async function createTopic(input: {
       notes: input.notes,
       category: input.category,
       status: input.status,
+      kind: input.kind || 'insight',
       scheduled_month: scheduledMonthValue(input.monthKey),
       thesis_id: input.thesisId || null,
+      analysis: input.analysis || emptyTopicAnalysis,
+      outputs: input.outputs || [],
       created_by: userId,
       updated_by: userId,
     })
@@ -433,8 +586,11 @@ export async function updateTopicItem(
     notes?: string
     category?: NewsCategory
     status?: TopicStatus
+    kind?: TopicKind
     scheduled_month?: string | null
     thesis_id?: string | null
+    analysis?: TopicAnalysis
+    outputs?: TopicOutput[]
   },
   expectedVersion?: number,
 ) {
@@ -602,6 +758,7 @@ export function subscribeToWorkspace(
     'topic_news',
     'editorial_readouts',
     'editorial_job_runs',
+    'news_votes',
   ]) {
     channel.on(
       'postgres_changes',

@@ -5,17 +5,33 @@ import App, { NewsWhyItMatters } from './App'
 describe('dashboard pilot shell', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
+    window.localStorage.clear()
   })
 
-  it('clearly identifies demo mode and renders both work areas', () => {
+  it('defaults to Daily briefing over the shared note dataset', () => {
     render(<App />)
     expect(screen.getByText(/Demo workspace/)).toBeInTheDocument()
     expect(
-      screen.getByRole('region', { name: 'News dashboard' }),
+      screen.getByRole('region', { name: 'Daily briefing' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Topic dashboard' }),
+    ).toBeNull()
+    expect(screen.getByText('Entry & Interaction')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Vote to discuss' }).length).toBeGreaterThan(0)
+  })
+
+  it('keeps Topics on the Weekly Discussion page', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly Discussion' }))
+    expect(
+      screen.getByRole('region', { name: 'Discussion notes' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('region', { name: 'Topic dashboard' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Add Note' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Insight' })).toBeInTheDocument()
   })
 
   it('exposes a link capture action', () => {
@@ -33,7 +49,7 @@ describe('dashboard pilot shell', () => {
     fireEvent.change(publicationDate, { target: { value: '2026-07-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(await screen.findByText('Published Jul 1')).toBeInTheDocument()
+    expect(await screen.findAllByText('Published Jul 1')).not.toHaveLength(0)
   })
 
   it('restores an unfinished Add link draft after a remount', () => {
