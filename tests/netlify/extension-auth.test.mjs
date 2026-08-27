@@ -45,7 +45,7 @@ function mockBackend({ user, member } = {}) {
       const stateHash = stateEq ? stateEq.replace(/^eq\./, '') : ''
       if (method === 'DELETE') {
         handoffs.delete(stateHash)
-        return new Response('', { status: 204 })
+        return new Response('[]', { status: 200 })
       }
       if (method === 'POST') {
         const row = JSON.parse(options.body)
