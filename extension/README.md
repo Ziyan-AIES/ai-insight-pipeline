@@ -8,17 +8,15 @@ It uses the **same magic-link login and `team_members` list** as the dashboard. 
 
 After updating these files you **must reload the unpacked extension** in `chrome://extensions` (Developer mode → Reload). Existing tabs also need a refresh before the new capture UI appears.
 
-Version **0.2.1** keeps the extension signed in with a 30-minute session refresh alarm. The dashboard handshake stays valid for 24 hours so a slow work-email magic link still connects. Remaining signed in for about two months also depends on the Supabase Auth refresh-token lifetime in the project settings.
+Version **0.2.2** uses a compact **MI** circle on article pages. Hover to Capture (one click) or open Dashboard. Sign-in prompts appear on the dashboard until the handshake succeeds, then they hide.
 
 ## Sign in
 
 1. Load this `extension/` folder as an unpacked Chrome extension.
-2. Open the extension panel on any news page (the **AI** button), or open Options.
-3. Choose **Sign in with work email**. Chrome opens the dashboard at `/?extension_auth=1&state=…`.
-4. Complete the work-email magic link. The dashboard shows **Capture access enabled** and stays on Daily/Weekly (it does not replace the workspace with a blank card).
-5. Return to the article tab. The extension updates to the capture panel automatically. You do not need to look for capture UI on the dashboard itself.
-6. If your account is in `team_members`, contributor names come from the team profile.
-7. If you are signed in but not on that list, the extension shows **Access not enabled** and capture stays blocked.
+2. On a news page, hover the **MI** circle and click Sign in (or use Options).
+3. Complete the work-email magic link. The dashboard may briefly show **Connecting Chrome extension**, then returns to Daily/Weekly with no persistent sign-in banner.
+4. Return to the article tab. Hover **MI** and click Capture. A toast shows **Saved** or the error.
+5. Dashboard opens from the grid icon. Capture UI is not shown on the dashboard after you are signed in.
 
 Default workspace URL: `https://aiinsightpipeline.netlify.app`. When you are signed out and no origin is stored, Options can show a workspace URL field (for a Netlify preview, for example).
 

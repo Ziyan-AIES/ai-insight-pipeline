@@ -12,13 +12,12 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.2.1')
+    expect(manifest.version).toBe('0.2.2')
     expect(manifest.permissions).toContain('alarms')
   })
 
   it('signs in through the dashboard handshake without a name or token', () => {
-    expect(contentSource).toMatch(/Not signed in/)
-    expect(contentSource).toMatch(/Sign in with work email/)
+    expect(contentSource).toMatch(/aria-label="Sign in"/)
     expect(contentSource).toMatch(/setupDashboardHandshake/)
     expect(contentSource).toMatch(/bsw-claim-now/)
     expect(backgroundSource).toMatch(/extension_auth=1&state=/)
@@ -32,14 +31,18 @@ describe('extension session UI', () => {
   })
 
   it('blocks capture when the signed-in account is not authorized', () => {
-    expect(contentSource).toMatch(/Access not enabled/)
-    expect(contentSource).toMatch(/status === 403/)
+    expect(backgroundSource).toMatch(/status === 403/)
+    expect(contentSource).toMatch(/unauthorized/)
   })
 
-  it('saves with a Bearer session and shows Saved', () => {
-    expect(contentSource).toMatch(/authorization: `Bearer \$\{state\.accessToken\}`/)
-    expect(contentSource).toMatch(/Save Signal/)
-    expect(contentSource).toMatch(/Saved ✓/)
+  it('one-click captures through the service worker and shows Saved or an error', () => {
+    expect(contentSource).toMatch(/>MI</)
+    expect(contentSource).toMatch(/data-act="save"/)
+    expect(contentSource).toMatch(/data-act="dashboard"/)
+    expect(contentSource).toMatch(/type: 'bsw-capture'/)
+    expect(contentSource).toMatch(/Saved/)
+    expect(contentSource).toMatch(/Save failed/)
+    expect(backgroundSource).toMatch(/authorization: `Bearer \$\{accessToken\}`/)
     expect(contentSource).not.toMatch(/user:\s*state\.user/)
   })
 })

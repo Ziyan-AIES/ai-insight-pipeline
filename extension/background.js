@@ -48,6 +48,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void getStoredSession().then(sendResponse)
     return true
   }
+  if (message.type === 'bsw-capture') {
+    void captureFromPage(message.payload).then(sendResponse)
+    return true
+  }
   return false
 })
 
@@ -114,6 +118,65 @@ async function claimPendingSession() {
   } catch {
     return { ok: false, pending: true }
   }
+}
+
+async function captureFromPage(payload) {
+  const stored = await getStoredSession()
+  if (!stored.accessToken || !stored.authorized) {
+    return { ok: false, status: 401, error: 'Sign in required' }
+  }
+  const body = {
+    kind: 'save',
+    title: payload?.title || 'Untitled',
+    url: payload?.url || '',
+    source: payload?.source || '',
+    text: payload?.text || '',
+    images: Array.isArray(payload?.images) ? payload.images : [],
+    takeaway: payload?.takeaway || '',
+    category: payload?.category || 'ecosystem',
+  }
+  try {
+    let result = await postCapture(stored.apiBase, stored.accessToken, body)
+    if (result.status === 401) {
+      const refreshed = await refreshSession()
+      if (refreshed.ok && refreshed.access_token) {
+        result = await postCapture(
+          stored.apiBase,
+          refreshed.access_token,
+          body,
+        )
+      }
+    }
+    const parsed = await result.json().catch(() => ({}))
+    if (result.status === 403 || parsed.code === 'not_authorized') {
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.accessToken]: '',
+        [STORAGE_KEYS.refreshToken]: '',
+        [STORAGE_KEYS.identity]: null,
+        [STORAGE_KEYS.authorized]: false,
+        [STORAGE_KEYS.email]: parsed.email || stored.email || '',
+      })
+    }
+    return {
+      ok: result.ok,
+      status: result.status,
+      already_existed: Boolean(parsed.already_existed),
+      error: parsed.error || (result.ok ? '' : `Save failed (${result.status})`),
+    }
+  } catch (error) {
+    return { ok: false, status: 0, error: error.message || 'Save failed' }
+  }
+}
+
+async function postCapture(apiBase, accessToken, body) {
+  return fetch(`${apiBase}/api/capture`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
 }
 
 async function applyClaim(origin, body) {
