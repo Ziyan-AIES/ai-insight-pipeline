@@ -24,6 +24,9 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByText(/Market Intelligence/)).toBeInTheDocument()
     expect(screen.queryByText('AI Daily Review')).toBeNull()
     expect(screen.getAllByRole('button', { name: /View all/ }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Past week' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument()
     expect(screen.queryByPlaceholderText(/What are you noticing/)).toBeNull()
   })
 
@@ -67,6 +70,25 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
     expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
     expect(screen.getByText('+ Drop a signal to create a thread')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
+  })
+
+  it('reassigns a Live Signal category by dragging between modules', () => {
+    render(<App />)
+    const heading = screen.getByRole('link', {
+      name: /Granola brings ambient meeting memory/,
+    })
+    const card = heading.closest('article')
+    const target = screen.getByText('AI Experiences').closest('section')
+    expect(card).toBeTruthy()
+    expect(target).toBeTruthy()
+    fireEvent.dragStart(card!)
+    fireEvent.drop(target!)
+    expect(
+      within(target as HTMLElement).getByRole('link', {
+        name: /Granola brings ambient meeting memory/,
+      }),
+    ).toBeInTheDocument()
   })
 
   it('removes drag chrome from the full Action Threads dashboard', () => {
@@ -77,6 +99,7 @@ describe('dashboard pilot shell', () => {
     )
     expect(screen.queryByText(/Drop a signal/)).toBeNull()
     expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
     expect(
       screen.getByRole('button', { name: '← Intelligence Synthesis' }),
     ).toBeInTheDocument()
