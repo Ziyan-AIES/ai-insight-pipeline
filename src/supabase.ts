@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { emptyTopicAnalysis } from './labels'
+import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
 import type {
   ActivityEvent,
   EditorialReadout,
@@ -14,6 +14,7 @@ import type {
   TopicKind,
   TopicOutput,
   TopicStatus,
+  ThreadStatus,
 } from './types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
@@ -31,6 +32,10 @@ type NewsRow = {
   source: string
   summary: string
   takeaway?: string | null
+  industry_importance?: string | null
+  qira_relevance?: string | null
+  team_synthesis?: string | null
+  discussion_priority_score?: number | null
   source_type?: NoteSourceType | null
   vote_count?: number | null
   discussion_order?: number | null
@@ -159,7 +164,7 @@ export async function loadWorkspace(includeDeleted = false) {
   let newsQuery = supabase
     .from('news_items')
     .select(
-      'id,canonical_url,title,source,summary,takeaway,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
+      'id,canonical_url,title,source,summary,takeaway,industry_importance,qira_relevance,team_synthesis,discussion_priority_score,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
     )
     .order('captured_at', { ascending: false })
   let topicQuery = supabase
@@ -222,6 +227,10 @@ export async function loadWorkspace(includeDeleted = false) {
         source: row.source,
         summary: row.summary,
         takeaway: noteTakeaway(row.takeaway, metadata),
+        industryImportance: String(row.industry_importance || ''),
+        qiraRelevance: String(row.qira_relevance || ''),
+        teamSynthesis: String(row.team_synthesis || ''),
+        discussionPriorityScore: Number(row.discussion_priority_score || 0),
         category: row.category,
         sourceType: row.source_type === 'manual_note' ? 'manual_note' : 'captured_news',
         voteCount: row.vote_count || 0,
@@ -282,6 +291,9 @@ export async function loadWorkspace(includeDeleted = false) {
       monthLabel: topicMonthLabel(monthKey),
       category: row.category,
       status: row.status,
+      threadStatus:
+        (row.thread_status as ThreadStatus) ||
+        threadStatusFromLegacy(row.status),
       kind: (row.kind as TopicKind) || 'insight',
       notes: row.notes,
       analysis: parseTopicAnalysis(row.analysis),
@@ -550,6 +562,7 @@ export async function createTopic(input: {
   category: NewsCategory
   status: TopicStatus
   kind?: TopicKind
+  threadStatus?: ThreadStatus
   monthKey: string
   thesisId?: string
   analysis?: TopicAnalysis
@@ -566,6 +579,7 @@ export async function createTopic(input: {
       category: input.category,
       status: input.status,
       kind: input.kind || 'insight',
+      thread_status: input.threadStatus || 'open',
       scheduled_month: scheduledMonthValue(input.monthKey),
       thesis_id: input.thesisId || null,
       analysis: input.analysis || emptyTopicAnalysis,
@@ -587,6 +601,7 @@ export async function updateTopicItem(
     category?: NewsCategory
     status?: TopicStatus
     kind?: TopicKind
+    thread_status?: ThreadStatus
     scheduled_month?: string | null
     thesis_id?: string | null
     analysis?: TopicAnalysis
@@ -714,6 +729,24 @@ export async function purgeRecycleBin(
   for (const item of ordered) {
     await purgeContent(item.table, item.id)
   }
+}
+
+export async function persistTeamIdea(input: {
+  content: string
+  newsId?: string
+  inputType?: 'text' | 'voice'
+}) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id
+  if (!userId) throw new Error('Sign in to share an idea')
+  const { error } = await supabase.from('news_ideas').insert({
+    news_id: input.newsId || null,
+    user_id: userId,
+    content: input.content.trim(),
+    input_type: input.inputType || 'text',
+  })
+  if (error) throw error
 }
 
 export async function unlinkTopicNews(topicId: string, newsId: string) {
