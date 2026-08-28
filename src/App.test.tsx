@@ -6,6 +6,7 @@ describe('dashboard pilot shell', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
     window.localStorage.clear()
+    window.history.replaceState(null, '', '/')
   })
 
   it('defaults to Live Signals with a 2x3 category layout', () => {
@@ -43,7 +44,8 @@ describe('dashboard pilot shell', () => {
 
   it('keeps Live Signal overview to three cards and a stationary View all footer', () => {
     render(<App />)
-    const panel = screen.getByText('Entry & Interaction').closest('section')
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     const scroll = panel!.querySelector('.signal-scroll')
     expect(scroll).toBeTruthy()
@@ -75,7 +77,8 @@ describe('dashboard pilot shell', () => {
 
   it('opens a category drawer from View all', () => {
     render(<App />)
-    const panel = screen.getByText('Entry & Interaction').closest('section')
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     fireEvent.click(within(panel as HTMLElement).getByRole('button', { name: /View all/ }))
     expect(
