@@ -3185,3 +3185,186 @@ label input:disabled {
   background: #c5bfb4;
   border-radius: 99px;
 }
+
+/* Round 5: scroll panes, never shrink cards to fit the viewport */
+.workspace-main {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard,
+.dashboard.signals-page,
+.banner-hidden .dashboard {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+.page-toolbar {
+  flex: 0 0 auto;
+  margin: 0 0 22px;
+}
+
+.signals-page,
+.synthesis-page,
+.page-threads .dashboard {
+  overflow: hidden;
+}
+
+.signals-page .news-pane,
+.synthesis-page .news-pane,
+.synthesis-page .topic-pane,
+.page-threads .topic-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane-heading,
+.topic-scope-toggle,
+.thread-toolbar,
+.drop-create {
+  flex: 0 0 auto;
+}
+
+.signals-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: 1fr 1fr;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.category-panel {
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+.category-panel header,
+.view-all-link {
+  flex: 0 0 auto;
+}
+
+.category-panel .news-list,
+.category-panel .news-list.signal-scroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  grid-template-rows: none;
+  gap: 10px;
+  padding: 0 2px 0 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #b8b2a8 transparent;
+}
+
+.live-card,
+.candidate-card,
+.topic-card {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  align-self: stretch;
+  overflow: visible;
+}
+
+.live-card {
+  height: auto;
+  min-height: 168px;
+  overflow: visible;
+}
+
+.live-card .news-meta,
+.live-card h2,
+.live-card .ai-takeaway,
+.live-card .card-footer {
+  flex-shrink: 0;
+}
+
+.live-card h2 {
+  min-height: calc(1.35em * 2);
+  max-height: calc(1.35em * 2);
+}
+
+.live-card .ai-takeaway {
+  min-height: calc(12px + 1.4em * 2);
+}
+
+.synthesis-page .discussion-list,
+.synthesis-page .topic-list {
+  display: flex;
+  flex-direction: column;
+  align-content: start;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #b8b2a8 transparent;
+}
+
+.page-threads .topic-list.kind-pipeline {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.candidate-card {
+  height: auto;
+  min-height: 176px;
+  overflow: visible;
+}
+
+.candidate-card h2 {
+  min-height: calc(1.3em * 2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.candidate-card .ai-takeaway p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.signal-scroll::-webkit-scrollbar,
+.discussion-list::-webkit-scrollbar,
+.topic-list::-webkit-scrollbar,
+.drawer-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.signal-scroll::-webkit-scrollbar-track,
+.discussion-list::-webkit-scrollbar-track,
+.topic-list::-webkit-scrollbar-track,
+.drawer-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.signal-scroll::-webkit-scrollbar-thumb,
+.discussion-list::-webkit-scrollbar-thumb,
+.topic-list::-webkit-scrollbar-thumb,
+.drawer-list::-webkit-scrollbar-thumb {
+  background: #b8b2a8;
+  border-radius: 6px;
+}
+
+@media (max-width: 1180px) {
+  .signals-grid {
+    grid-template-rows: none;
+  }
+}

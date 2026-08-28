@@ -6,6 +6,7 @@ describe('dashboard pilot shell', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
     window.localStorage.clear()
+    window.history.replaceState(null, '', '/')
   })
 
   it('defaults to Live Signals with a 2x3 category layout', () => {
@@ -41,9 +42,43 @@ describe('dashboard pilot shell', () => {
     ).toBeNull()
   })
 
+  it('keeps Live Signal overview to three cards and a stationary View all footer', () => {
+    render(<App />)
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const panel = within(live).getByText('Entry & Interaction').closest('section')
+    expect(panel).toBeTruthy()
+    const scroll = panel!.querySelector('.signal-scroll')
+    expect(scroll).toBeTruthy()
+    expect(scroll!.querySelectorAll('article.live-card').length).toBeLessThanOrEqual(3)
+    expect(scroll!.querySelector('.view-all-link')).toBeNull()
+    expect(
+      within(panel as HTMLElement).getByRole('button', { name: /View all/ }),
+    ).not.toBe(scroll)
+  })
+
+  it('scrolls Discussion Candidates instead of compressing cards', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    const pane = screen.getByRole('region', { name: 'Discussion Candidates' })
+    const list = pane.querySelector('.discussion-list')
+    const threads = screen
+      .getByRole('region', { name: 'Action Threads' })
+      .querySelector('.topic-list')
+    expect(list).toBeTruthy()
+    expect(threads).toBeTruthy()
+    expect(list!.className).toContain('discussion-list')
+    expect(list!.querySelectorAll('article.candidate-card').length).toBeGreaterThan(0)
+    expect(
+      Array.from(list!.querySelectorAll('article.candidate-card')).every((card) =>
+        card.classList.contains('candidate-card'),
+      ),
+    ).toBe(true)
+  })
+
   it('opens a category drawer from View all', () => {
     render(<App />)
-    const panel = screen.getByText('Entry & Interaction').closest('section')
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     fireEvent.click(within(panel as HTMLElement).getByRole('button', { name: /View all/ }))
     expect(

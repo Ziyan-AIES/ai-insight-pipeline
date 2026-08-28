@@ -2066,7 +2066,6 @@ function App() {
                   (item) => !item.deletedAt && item.category === category,
                 )
                 const preview = items.slice(0, 3)
-                const emptySlots = Math.max(0, 3 - preview.length)
                 return (
                   <section
                     className={`category-panel cat-${category} ${
@@ -2095,19 +2094,13 @@ function App() {
                       </h2>
                       <span className="count-badge">{items.length}</span>
                     </header>
-                    <div className="news-list">
+                    <div className="news-list signal-scroll">
                       {preview.map((item) =>
                         renderNoteCard(item, {
                           variant: 'live',
                           dropCategory: category,
                         }),
                       )}
-                      {Array.from({ length: emptySlots }, (_, index) => (
-                        <div
-                          className="live-card live-card-slot"
-                          key={`${category}-slot-${index}`}
-                        />
-                      ))}
                     </div>
                     {items.length > 0 ? (
                       <button
