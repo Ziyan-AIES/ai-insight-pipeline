@@ -52,7 +52,6 @@ import type {
   Topic,
   TopicKind,
   ThreadStatus,
-  EditorialReadout,
   TeamMemberSummary,
   ActivityEvent,
   WorkspacePage,
@@ -69,13 +68,12 @@ type AddLinkDraft = {
   targetTopicId: string
 }
 const addLinkDraftKey = 'signal-intelligence:add-link-draft'
-const workspacePageKey = 'signal-intelligence:workspace-page'
 
-function loadWorkspacePage(): WorkspacePage {
+function workspaceFromLocation(): WorkspacePage {
   try {
-    const stored = window.localStorage.getItem(workspacePageKey)
-    if (stored === 'synthesis' || stored === 'weekly') return 'synthesis'
-    if (stored === 'threads') return 'threads'
+    const page = new URLSearchParams(window.location.search).get('workspace')
+    if (page === 'synthesis' || page === 'weekly') return 'synthesis'
+    if (page === 'threads') return 'threads'
     return 'signals'
   } catch {
     return 'signals'
@@ -294,16 +292,15 @@ function App() {
   const [news, setNews] = useState(cloudConfigured ? [] : demoNews)
   const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
   const [theses, setTheses] = useState(cloudConfigured ? [] : demoTheses)
-  const [readout, setReadout] = useState<EditorialReadout | null>(null)
   const [activity, setActivity] = useState<ActivityEvent[]>([])
   const [syncState, setSyncState] = useState<'connecting' | 'synced' | 'error'>(
     cloudConfigured ? 'connecting' : 'synced',
   )
   const [focus, setFocus] = useState<FocusMode>(() =>
-    loadWorkspacePage() === 'signals' ? 'news' : 'split',
+    workspaceFromLocation() === 'signals' ? 'news' : 'split',
   )
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
-    loadWorkspacePage,
+    workspaceFromLocation,
   )
   const [period] = useState('all')
   const [newsScope] = useState<NewsScope>('all')
@@ -314,8 +311,10 @@ function App() {
   const [threadTo, setThreadTo] = useState('')
   const [threadCreatedPreset, setThreadCreatedPreset] = useState('any')
   const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
-  const [addSignalTopicId, setAddSignalTopicId] = useState('')
-  const [addSignalQuery, setAddSignalQuery] = useState('')
+  const [categoryDrawer, setCategoryDrawer] = useState<NewsCategory | null>(
+    null,
+  )
+  const [openNewsMenuId, setOpenNewsMenuId] = useState('')
   const [ideaText, setIdeaText] = useState('')
   const [ideaNewsId, setIdeaNewsId] = useState('')
   const [ideaListening, setIdeaListening] = useState(false)
@@ -376,7 +375,6 @@ function App() {
       setNews(workspace.news)
       setTopics(workspace.topics)
       setTheses(workspace.theses)
-      setReadout(workspace.readout)
       setSyncState('synced')
     } catch (error: unknown) {
       setSyncState('error')
@@ -445,16 +443,26 @@ function App() {
   }, [notice])
 
   useEffect(() => {
+    if (!openNewsMenuId) return
+    const close = () => setOpenNewsMenuId('')
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [openNewsMenuId])
+
+  useEffect(() => {
+    if (workspacePage === 'signals') setFocus('news')
+    else setFocus('split')
     try {
-      window.localStorage.setItem(workspacePageKey, workspacePage)
+      const url = new URL(window.location.href)
+      if (workspacePage === 'signals') url.searchParams.delete('workspace')
+      else url.searchParams.set('workspace', workspacePage)
+      const next = `${url.pathname}${url.search}${url.hash}`
+      if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== next) {
+        window.history.replaceState(null, '', next)
+      }
     } catch {
-      // Preference persistence is best-effort.
+      // Deep-link sync is best-effort.
     }
-    if (workspacePage === 'signals') {
-      setFocus('news')
-      return
-    }
-    setFocus('split')
   }, [workspacePage])
 
   useEffect(() => {
@@ -1582,17 +1590,51 @@ function App() {
                 Restore
               </button>
             ) : (
-              <button
-                type="button"
-                className="text-action"
-                onClick={() => setNewsDraft({ ...item })}
-              >
-                Edit
-              </button>
+              <div className="overflow-menu">
+                <button
+                  type="button"
+                  className="icon-ellipsis"
+                  aria-label="Signal actions"
+                  aria-expanded={openNewsMenuId === item.id}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setOpenNewsMenuId((current) =>
+                      current === item.id ? '' : item.id,
+                    )
+                  }}
+                >
+                  •••
+                </button>
+                {openNewsMenuId === item.id ? (
+                  <div className="menu-popover" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setOpenNewsMenuId('')
+                        setNewsDraft({ ...item })
+                      }}
+                    >
+                      Edit signal
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="danger-action"
+                      onClick={() => {
+                        setOpenNewsMenuId('')
+                        void removeNews(item.id)
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             )}
           </div>
         </div>
-        <h2>
+        <h2 title={item.title}>
           {item.url && !isManual ? (
             <a href={item.url} target="_blank" rel="noreferrer">
               {item.title}
@@ -1601,10 +1643,13 @@ function App() {
             item.title
           )}
         </h2>
-        {takeawayText ? (
-          <div className="ai-takeaway">
+        {variant === 'live' || takeawayText ? (
+          <div
+            className={`ai-takeaway ${takeawayText ? '' : 'pending'}`}
+            title={takeawayText || undefined}
+          >
             <span className="ai-badge">AI</span>
-            <p>{takeawayText}</p>
+            <p>{takeawayText || 'Review pending'}</p>
           </div>
         ) : null}
         {variant === 'candidate' && (
@@ -1719,20 +1764,6 @@ function App() {
             )
           )}
         </div>
-        <div className="card-footer">
-          <button
-            type="button"
-            className="text-action"
-            onClick={(event) => {
-              event.stopPropagation()
-              setAddSignalTopicId(topic.id)
-              setAddSignalQuery('')
-            }}
-            hidden={!canEdit}
-          >
-            + Add signal
-          </button>
-        </div>
       </article>
     )
   }
@@ -1744,13 +1775,11 @@ function App() {
       }`}
     >
       <aside className="qira-sidebar">
-        <div className="brand">
-          <span className="brand-mark">QIRA</span>
-          <div>
-            <strong>AI Signals</strong>
-            <span>What changed → what matters</span>
-          </div>
-        </div>
+        <p className="brand-title">
+          Qira Strategic
+          <br />
+          Market Intelligence
+        </p>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
             className={workspacePage === 'signals' ? 'active' : ''}
@@ -1796,7 +1825,7 @@ function App() {
                 type="button"
                 onClick={() => setShowRecycleBin(true)}
               >
-                Recycle bin
+                Recycle Bin
               </button>
             </>
           )}
@@ -1873,35 +1902,12 @@ function App() {
                 <h1>Live Signals</h1>
               </div>
             </div>
-            {readout ? (
-              <article className="daily-review-card">
-                <header>
-                  <span className="daily-review-kicker">✦ AI Daily Review</span>
-                  <time dateTime={readout.generatedAt}>
-                    {formatShortDate(readout.generatedAt)}
-                  </time>
-                </header>
-                <p>{firstSentences(readout.lede, 2)}</p>
-                {readout.bullets.some((bullet) => bullet.trim().length <= 28) ? (
-                  <div className="daily-review-chips">
-                    {readout.bullets
-                      .filter((bullet) => bullet.trim().length <= 28)
-                      .slice(0, 4)
-                      .map((bullet) => (
-                        <span className="chip" key={bullet}>
-                          {bullet}
-                        </span>
-                      ))}
-                  </div>
-                ) : null}
-              </article>
-            ) : null}
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
                 )
-                const preview = items.slice(0, 4)
+                const preview = items.slice(0, 2)
                 return (
                   <section
                     className={`category-panel cat-${category}`}
@@ -1923,6 +1929,15 @@ function App() {
                           <div className="month-empty">No signals yet.</div>
                         )}
                     </div>
+                    {items.length > 0 ? (
+                      <button
+                        type="button"
+                        className="view-all-link"
+                        onClick={() => setCategoryDrawer(category)}
+                      >
+                        View all {items.length} →
+                      </button>
+                    ) : null}
                   </section>
                 )
               })}
@@ -1978,11 +1993,11 @@ function App() {
                   )}
                   {workspacePage === 'threads' && (
                     <button
-                      className="text-action"
+                      className="text-action breadcrumb-link"
                       type="button"
                       onClick={() => setWorkspacePage('synthesis')}
                     >
-                      Back
+                      ← Intelligence Synthesis
                     </button>
                   )}
                   <button
@@ -2059,6 +2074,7 @@ function App() {
                   </label>
                 </div>
               )}
+              {workspacePage === 'synthesis' && (
               <div
                 className={`drop-create ${draggedNewsId ? 'hot' : ''}`}
                 onDragOver={(event) => {
@@ -2077,6 +2093,7 @@ function App() {
               >
                 + Drop a signal to create a thread
               </div>
+              )}
               <div className="topic-list kind-pipeline">
                 {visibleTopics.map((topic) => renderTopicCard(topic))}
                 {visibleTopics.length === 0 && (
@@ -2092,67 +2109,54 @@ function App() {
       </div>
 
 
-      {addSignalTopicId && (
-        <div className="modal-backdrop" role="presentation">
-          <section
-            className="link-modal"
+      {categoryDrawer && (
+        <>
+          <button
+            type="button"
+            className="drawer-backdrop"
+            aria-label="Close category"
+            onClick={() => setCategoryDrawer(null)}
+          />
+          <aside
+            className={`category-drawer cat-${categoryDrawer}`}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="add-signal-title"
+            aria-labelledby="category-drawer-title"
           >
-            <div className="modal-heading">
+            <header>
               <div>
-                <span className="eyebrow">Action Thread</span>
-                <h2 id="add-signal-title">Add Signal</h2>
+                <h2 id="category-drawer-title">
+                  {categoryLabels[categoryDrawer]}
+                </h2>
+                <p>
+                  {
+                    visibleNews.filter(
+                      (item) =>
+                        !item.deletedAt && item.category === categoryDrawer,
+                    ).length
+                  }{' '}
+                  signals
+                </p>
               </div>
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => setAddSignalTopicId('')}
+                onClick={() => setCategoryDrawer(null)}
                 aria-label="Close"
               >
                 ×
               </button>
+            </header>
+            <div className="drawer-list">
+              {visibleNews
+                .filter(
+                  (item) =>
+                    !item.deletedAt && item.category === categoryDrawer,
+                )
+                .map((item) => renderNoteCard(item, { variant: 'live' }))}
             </div>
-            <label>
-              Search existing signals
-              <input
-                value={addSignalQuery}
-                onChange={(event) => setAddSignalQuery(event.target.value)}
-                placeholder="Headline or source"
-                autoFocus
-              />
-            </label>
-            <div className="news-list">
-              {news
-                .filter((item) => !item.deletedAt)
-                .filter((item) => {
-                  const needle = addSignalQuery.trim().toLowerCase()
-                  return (
-                    !needle ||
-                    `${item.title} ${item.source}`.toLowerCase().includes(needle)
-                  )
-                })
-                .slice(0, 12)
-                .map((item) => (
-                  <button
-                    type="button"
-                    className="signal-pick"
-                    key={item.id}
-                    onClick={() => {
-                      void moveNewsToTopic(item.id, addSignalTopicId, '')
-                      setAddSignalTopicId('')
-                    }}
-                  >
-                    {item.title}
-                    <small>
-                      {categoryLabels[item.category]} · {item.source}
-                    </small>
-                  </button>
-                ))}
-            </div>
-          </section>
-        </div>
+          </aside>
+        </>
       )}
 
       {newsDraft && (
@@ -2585,18 +2589,6 @@ function App() {
                     )}
                   {topicDraft.supportingNews.length === 0 ? (
                     <p className="linked-empty">No linked signals yet.</p>
-                  ) : null}
-                  {!creatingTopic && topicDraft.id ? (
-                    <button
-                      type="button"
-                      className="text-action"
-                      onClick={() => {
-                        setAddSignalTopicId(topicDraft.id)
-                        setAddSignalQuery('')
-                      }}
-                    >
-                      + Add signal
-                    </button>
                   ) : null}
                 </div>
               </section>

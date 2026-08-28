@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App, { NewsWhyItMatters } from './App'
 
@@ -20,7 +20,32 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByText('Entry & Interaction')).toBeInTheDocument()
     expect(screen.getByText('Industry & Market')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Discuss/ }).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Qira Strategic/)).toBeInTheDocument()
+    expect(screen.getByText(/Market Intelligence/)).toBeInTheDocument()
+    expect(screen.queryByText('AI Daily Review')).toBeNull()
+    expect(screen.getAllByRole('button', { name: /View all/ }).length).toBeGreaterThan(0)
     expect(screen.queryByPlaceholderText(/What are you noticing/)).toBeNull()
+  })
+
+  it('opens Live Signals at the root even if another workspace was stored', () => {
+    window.localStorage.setItem('signal-intelligence:workspace-page', 'synthesis')
+    render(<App />)
+    expect(
+      screen.getByRole('region', { name: 'Live Signals' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Discussion Candidates' }),
+    ).toBeNull()
+  })
+
+  it('opens a category drawer from View all', () => {
+    render(<App />)
+    const panel = screen.getByText('Entry & Interaction').closest('section')
+    expect(panel).toBeTruthy()
+    fireEvent.click(within(panel as HTMLElement).getByRole('button', { name: /View all/ }))
+    expect(
+      screen.getByRole('dialog', { name: 'Entry & Interaction' }),
+    ).toBeInTheDocument()
   })
 
   it('keeps Action Threads beside Discussion Candidates', () => {
@@ -40,7 +65,21 @@ describe('dashboard pilot shell', () => {
       ).length,
     ).toBeGreaterThan(1)
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'View All' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
+    expect(screen.getByText('+ Drop a signal to create a thread')).toBeInTheDocument()
+  })
+
+  it('removes drag chrome from the full Action Threads dashboard', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+    )
+    expect(screen.queryByText(/Drop a signal/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: '← Intelligence Synthesis' }),
+    ).toBeInTheDocument()
   })
 
   it('redesigns the Action Thread editor into three sections', () => {
@@ -79,10 +118,9 @@ describe('dashboard pilot shell', () => {
     const card = heading.closest('article')
     expect(card).toBeTruthy()
     fireEvent.click(
-      screen.getAllByRole('button', { name: 'Edit' }).find((button) =>
-        card?.contains(button),
-      )!,
+      within(card as HTMLElement).getByRole('button', { name: 'Signal actions' }),
     )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit signal' }))
 
     const publicationDate = screen.getByLabelText(/Publication date/)
     fireEvent.change(publicationDate, { target: { value: '2026-07-01' } })
