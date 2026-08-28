@@ -61,9 +61,9 @@ type NewsRow = {
 }
 
 export function topicMonthLabel(monthKey: string) {
-  if (!monthKey) return 'Topic pool'
+  if (!monthKey) return 'Unscheduled'
   const [year, month] = monthKey.split('-').map(Number)
-  if (!year || !month) return 'Topic pool'
+  if (!year || !month) return 'Unscheduled'
   return new Intl.DateTimeFormat('en', {
     month: 'long',
     year: 'numeric',

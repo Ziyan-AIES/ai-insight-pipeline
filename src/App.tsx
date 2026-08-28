@@ -66,7 +66,7 @@ import type {
 type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
-type ThreadGroupMode = 'category' | 'recent'
+type ThreadGroupMode = 'timeline' | 'category' | 'recent'
 type AddLinkDraft = {
   open: boolean
   url: string
@@ -324,7 +324,7 @@ function App() {
   const [threadTo, setThreadTo] = useState('')
   const [threadCreatedPreset, setThreadCreatedPreset] = useState('any')
   const [threadGroupMode, setThreadGroupMode] =
-    useState<ThreadGroupMode>('category')
+    useState<ThreadGroupMode>('timeline')
   const [signalViewBaseline, setSignalViewBaseline] = useState('')
   const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
   const [categoryDrawer, setCategoryDrawer] = useState<NewsCategory | null>(
@@ -670,6 +670,36 @@ function App() {
         }),
     [threadFrom, threadStatusFilter, threadTo, topicKindFilter, topics],
   )
+
+  const timelineTopicGroups = useMemo(() => {
+    const byMonth = new Map<string, Topic[]>()
+    const unscheduled: Topic[] = []
+    const currentMonthKey = new Date().toISOString().slice(0, 7)
+    visibleTopics.forEach((topic) => {
+      if (!topic.monthKey) {
+        unscheduled.push(topic)
+        return
+      }
+      const group = byMonth.get(topic.monthKey) || []
+      group.push(topic)
+      byMonth.set(topic.monthKey, group)
+    })
+    return {
+      months: Array.from(byMonth.entries())
+        .sort(([a], [b]) => {
+          const aCurrentOrFuture = a >= currentMonthKey
+          const bCurrentOrFuture = b >= currentMonthKey
+          if (aCurrentOrFuture !== bCurrentOrFuture) {
+            return aCurrentOrFuture ? -1 : 1
+          }
+          return aCurrentOrFuture
+            ? a.localeCompare(b)
+            : b.localeCompare(a)
+        })
+        .map(([monthKey, monthTopics]) => ({ monthKey, topics: monthTopics })),
+      unscheduled,
+    }
+  }, [visibleTopics])
 
   const removedItems = useMemo(
     () => ({
@@ -1280,6 +1310,56 @@ function App() {
         current.map((candidate) =>
           candidate.id === topicId
             ? { ...candidate, category: topic.category }
+            : candidate,
+        ),
+      )
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not move this Action Thread',
+      )
+    }
+  }
+
+  async function reassignTopicMonth(topicId: string, monthKey: string) {
+    const topic = topics.find((candidate) => candidate.id === topicId)
+    if (!topic || topic.deletedAt || topic.monthKey === monthKey) return
+    const nextMonthLabel = monthName(monthKey)
+    setTopics((current) =>
+      current.map((candidate) =>
+        candidate.id === topicId
+          ? { ...candidate, monthKey, monthLabel: nextMonthLabel }
+          : candidate,
+      ),
+    )
+    if (!cloudConfigured) return
+    try {
+      const version = await updateTopicItem(
+        topicId,
+        { scheduled_month: monthKey ? `${monthKey}-01` : null },
+        topic.version,
+      )
+      setTopics((current) =>
+        current.map((candidate) =>
+          candidate.id === topicId
+            ? {
+                ...candidate,
+                monthKey,
+                monthLabel: nextMonthLabel,
+                version: version ?? candidate.version,
+              }
+            : candidate,
+        ),
+      )
+    } catch (error) {
+      setTopics((current) =>
+        current.map((candidate) =>
+          candidate.id === topicId
+            ? {
+                ...candidate,
+                monthKey: topic.monthKey,
+                monthLabel: topic.monthLabel,
+              }
             : candidate,
         ),
       )
@@ -1936,7 +2016,7 @@ function App() {
             )}
           </span>
           <span className="thread-timeline">
-            Timeline · {formatThreadMonth(topic.monthKey)}
+            {formatThreadMonth(topic.monthKey)}
           </span>
         </div>
         {framing ? <p className="thread-framing">{framing}</p> : null}
@@ -2206,7 +2286,7 @@ function App() {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
                 )
-                const preview = items.slice(0, 1)
+                const preview = items.slice(0, 3)
                 const newCount = items.filter(isNewSignal).length
                 return (
                   <section
@@ -2410,6 +2490,14 @@ function App() {
                     >
                       <button
                         type="button"
+                        className={threadGroupMode === 'timeline' ? 'active' : ''}
+                        aria-pressed={threadGroupMode === 'timeline'}
+                        onClick={() => setThreadGroupMode('timeline')}
+                      >
+                        By month
+                      </button>
+                      <button
+                        type="button"
                         className={threadGroupMode === 'category' ? 'active' : ''}
                         aria-pressed={threadGroupMode === 'category'}
                         onClick={() => setThreadGroupMode('category')}
@@ -2448,7 +2536,107 @@ function App() {
                 + Drop a signal to create a thread
               </div>
               )}
-              {workspacePage === 'threads' && threadGroupMode === 'category' ? (
+              {workspacePage === 'threads' && threadGroupMode === 'timeline' ? (
+                <div
+                  className="thread-timeline-board"
+                  aria-label="Action Threads grouped by work month"
+                >
+                  <section className="timeline-scheduled-column">
+                    <header className="timeline-column-heading">
+                      <div>
+                        <h2>Work by month</h2>
+                        <p>
+                          Active threads use a focus month; closed threads use
+                          their completion month. It is not a deadline.
+                        </p>
+                      </div>
+                      <span className="count-badge">
+                        {visibleTopics.length - timelineTopicGroups.unscheduled.length}
+                      </span>
+                    </header>
+                    <div className="timeline-month-stack">
+                      {timelineTopicGroups.months.map(({ monthKey, topics: monthTopics }) => (
+                        <section
+                          className={`timeline-month-lane ${
+                            draggedTopicId ? 'accepting-topic' : ''
+                          }`}
+                          key={monthKey}
+                          onDragOver={(event) => {
+                            if (!draggedTopicId) return
+                            event.preventDefault()
+                            event.dataTransfer.dropEffect = 'move'
+                          }}
+                          onDrop={(event) => {
+                            const topicId =
+                              event.dataTransfer?.getData(
+                                'application/x-topic-id',
+                              ) || draggedTopicId
+                            if (!topicId) return
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void reassignTopicMonth(topicId, monthKey)
+                            setDraggedTopicId('')
+                          }}
+                        >
+                          <header>
+                            <h3>{formatThreadMonth(monthKey)}</h3>
+                            <span>{monthTopics.length}</span>
+                          </header>
+                          <div className="timeline-month-grid">
+                            {monthTopics.map((topic) => renderTopicCard(topic))}
+                          </div>
+                        </section>
+                      ))}
+                      {timelineTopicGroups.months.length === 0 ? (
+                        <div className="timeline-empty">
+                          Assign a work month to move a thread out of the backlog.
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                  <section
+                    className={`timeline-unscheduled-column ${
+                      draggedTopicId ? 'accepting-topic' : ''
+                    }`}
+                    onDragOver={(event) => {
+                      if (!draggedTopicId) return
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                    }}
+                    onDrop={(event) => {
+                      const topicId =
+                        event.dataTransfer?.getData(
+                          'application/x-topic-id',
+                        ) || draggedTopicId
+                      if (!topicId) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      void reassignTopicMonth(topicId, '')
+                      setDraggedTopicId('')
+                    }}
+                  >
+                    <header className="timeline-column-heading">
+                      <div>
+                        <h2>Unscheduled</h2>
+                        <p>Backlog threads without a chosen focus month.</p>
+                      </div>
+                      <span className="count-badge">
+                        {timelineTopicGroups.unscheduled.length}
+                      </span>
+                    </header>
+                    <div className="timeline-unscheduled-list">
+                      {timelineTopicGroups.unscheduled.map((topic) =>
+                        renderTopicCard(topic),
+                      )}
+                      {timelineTopicGroups.unscheduled.length === 0 ? (
+                        <div className="timeline-empty">
+                          Drop a thread here to remove its month.
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                </div>
+              ) : workspacePage === 'threads' && threadGroupMode === 'category' ? (
                 <div
                   className="thread-groups"
                   aria-label="Action Threads grouped by category"
@@ -2989,9 +3177,15 @@ function App() {
                     </select>
                   </label>
                   <label>
-                    Timeline month
+                    {topicDraft.threadStatus === 'closed'
+                      ? 'Completed month'
+                      : 'Work month'}
                     <input
-                      aria-label="Timeline month"
+                      aria-label={
+                        topicDraft.threadStatus === 'closed'
+                          ? 'Completed month'
+                          : 'Work month'
+                      }
                       type="month"
                       value={topicDraft.monthKey}
                       onChange={(event) =>
@@ -3002,6 +3196,11 @@ function App() {
                         })
                       }
                     />
+                    <small className="field-hint">
+                      {topicDraft.threadStatus === 'closed'
+                        ? 'When this thread was completed.'
+                        : 'When the team expects to focus on it—not a deadline.'}
+                    </small>
                   </label>
                 </div>
               </section>

@@ -42,14 +42,14 @@ describe('dashboard pilot shell', () => {
     ).toBeNull()
   })
 
-  it('keeps the Live Signal overview to one focused card and a stationary View all footer', () => {
+  it('shows up to three Live Signals per category with a stationary View all footer', () => {
     render(<App />)
     const live = screen.getByRole('region', { name: 'Live Signals' })
     const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     const scroll = panel!.querySelector('.signal-scroll')
     expect(scroll).toBeTruthy()
-    expect(scroll!.querySelectorAll('article.live-card').length).toBeLessThanOrEqual(1)
+    expect(scroll!.querySelectorAll('article.live-card').length).toBeLessThanOrEqual(3)
     expect(scroll!.querySelector('.view-all-link')).toBeNull()
     expect(
       within(panel as HTMLElement).getByRole('button', { name: /View all/ }),
@@ -160,7 +160,7 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows direct status filters and groups full Action Threads by category', () => {
+  it('defaults full Action Threads to a clear month and backlog board', () => {
     render(<App />)
     fireEvent.click(
       screen.getByRole('button', { name: 'Intelligence Synthesis' }),
@@ -187,6 +187,19 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
 
     expect(
+      screen.getByLabelText('Action Threads grouped by work month'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Work by month')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Unscheduled' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Oct 2026' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Timeline ·/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'By category' }))
+    expect(
       screen.getByLabelText('Action Threads grouped by category'),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Most recent' }))
@@ -201,6 +214,7 @@ describe('dashboard pilot shell', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
     )
+    fireEvent.click(screen.getByRole('button', { name: 'By category' }))
 
     const card = screen.getByText('Harness engineering').closest('article')
     const target = screen
@@ -215,6 +229,38 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
+  it('moves Action Threads between a month and the Unscheduled backlog', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+    )
+
+    const unscheduledCard = screen
+      .getByText('On-device agent privacy tradeoffs')
+      .closest('article')
+    const october = screen.getByRole('heading', { name: 'Oct 2026' }).closest('section')
+    expect(unscheduledCard).toBeTruthy()
+    expect(october).toBeTruthy()
+    fireEvent.dragStart(unscheduledCard!)
+    fireEvent.drop(october!)
+    expect(
+      await within(october as HTMLElement).findByText(
+        'On-device agent privacy tradeoffs',
+      ),
+    ).toBeInTheDocument()
+
+    const scheduledCard = screen.getByText('Harness engineering').closest('article')
+    const backlog = screen.getByRole('heading', { name: 'Unscheduled' }).closest('section')
+    expect(scheduledCard).toBeTruthy()
+    expect(backlog).toBeTruthy()
+    fireEvent.dragStart(scheduledCard!)
+    fireEvent.drop(backlog!)
+    expect(
+      await within(backlog as HTMLElement).findByText('Harness engineering'),
+    ).toBeInTheDocument()
+  })
+
   it('redesigns the Action Thread editor into three sections', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
@@ -225,7 +271,11 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByText('Thread basics')).toBeInTheDocument()
     expect(screen.getByText('Linked signals')).toBeInTheDocument()
     expect(screen.getByText('Intelligence framing')).toBeInTheDocument()
-    expect(screen.getByLabelText('Timeline month')).toBeInTheDocument()
+    expect(screen.getByLabelText('Work month')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Status'), {
+      target: { value: 'closed' },
+    })
+    expect(screen.getByLabelText('Completed month')).toBeInTheDocument()
     expect(screen.queryByLabelText('Category')).toBeNull()
     expect(screen.queryByLabelText('Description')).toBeNull()
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()

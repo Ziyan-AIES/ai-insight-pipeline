@@ -204,7 +204,7 @@ export const demoTopics: Topic[] = [
     id: 'topic-pool-idea',
     title: 'On-device agent privacy tradeoffs',
     monthKey: '',
-    monthLabel: 'Topic pool',
+    monthLabel: 'Unscheduled',
     category: 'ecosystem',
     status: 'idea',
     threadStatus: 'parked',
