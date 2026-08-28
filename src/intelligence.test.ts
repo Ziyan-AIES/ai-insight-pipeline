@@ -19,6 +19,9 @@ describe('dashboard time range', () => {
 
   it('uses rolling windows and calendar months', () => {
     expect(
+      isInDashboardTimeRange('2020-01-01T00:00:00Z', 'all', { year: 2026, month: 7 }, now),
+    ).toBe(true)
+    expect(
       isInDashboardTimeRange('2026-08-22T00:00:00Z', 'week', { year: 2026, month: 7 }, now),
     ).toBe(true)
     expect(

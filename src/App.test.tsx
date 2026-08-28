@@ -31,6 +31,7 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByText('AI Daily Review')).toBeNull()
     expect(screen.getAllByRole('button', { name: /View all/ }).length).toBeGreaterThan(0)
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Past week' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /20\d{2}/ })).toBeInTheDocument()
     expect(screen.queryByPlaceholderText(/What are you noticing/)).toBeNull()
@@ -122,6 +123,31 @@ describe('dashboard pilot shell', () => {
     expect(july.className).toMatch(/month-heat-[1-4]/)
     fireEvent.click(july)
     expect(screen.getByRole('button', { name: /^Jul / })).toBeInTheDocument()
+  })
+
+  it('lets All show historical signals in the page and View all drawer', () => {
+    render(<App />)
+    expect(
+      screen.queryByRole('link', { name: /DataFlow-Harness turns agent reliability/ }),
+    ).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const panel = within(live)
+      .getByText('AI Capability & Technology')
+      .closest('section')
+    expect(panel).toBeTruthy()
+    fireEvent.click(
+      within(panel as HTMLElement).getByRole('button', { name: /View all/ }),
+    )
+
+    expect(
+      within(
+        screen.getByRole('dialog', { name: 'AI Capability & Technology' }),
+      ).getByRole('link', {
+        name: /DataFlow-Harness turns agent reliability/,
+      }),
+    ).toBeInTheDocument()
   })
 
   it('marks signals added since this viewer last opened Live Signals', () => {

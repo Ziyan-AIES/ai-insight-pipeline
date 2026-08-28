@@ -2041,6 +2041,17 @@ function App() {
         <div className="time-filter" role="group" aria-label="Time range">
           <button
             type="button"
+            className={timeMode === 'all' ? 'active' : ''}
+            aria-pressed={timeMode === 'all'}
+            onClick={() => {
+              setTimeMode('all')
+              setMonthPickerOpen(false)
+            }}
+          >
+            All
+          </button>
+          <button
+            type="button"
             className={timeMode === 'week' ? 'active' : ''}
             aria-pressed={timeMode === 'week'}
             onClick={() => {

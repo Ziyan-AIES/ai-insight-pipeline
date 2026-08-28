@@ -36,7 +36,7 @@ export function signalTime(item: {
   return item.publishedAt || item.capturedAt
 }
 
-export type DashboardTimeMode = 'week' | 'fortnight' | 'month'
+export type DashboardTimeMode = 'all' | 'week' | 'fortnight' | 'month'
 
 export function isInDashboardTimeRange(
   iso: string,
@@ -44,6 +44,7 @@ export function isInDashboardTimeRange(
   month: { year: number; month: number },
   now = Date.now(),
 ) {
+  if (mode === 'all') return true
   const then = Date.parse(iso)
   if (!Number.isFinite(then)) return true
   if (mode === 'week') return then >= now - 7 * 86400000
