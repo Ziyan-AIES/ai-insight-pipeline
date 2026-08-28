@@ -18,6 +18,17 @@ export function anonymousTeamSynthesis(item: NewsItem) {
   return ''
 }
 
+export function firstSentences(text: string | undefined, max = 2) {
+  const value = (text || '').replace(/\s+/g, ' ').trim()
+  if (!value) return ''
+  const parts = value.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [value]
+  return parts
+    .slice(0, max)
+    .map((part) => part.trim())
+    .join(' ')
+    .trim()
+}
+
 export function formatRelativeAge(value: string) {
   const then = Date.parse(value)
   if (!Number.isFinite(then)) return ''

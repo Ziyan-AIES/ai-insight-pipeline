@@ -11,7 +11,6 @@ import {
   deleteThesisItem,
   deleteTopicItem,
   loadActivityEvents,
-  loadEditorialHealth,
   loadTeamMembers,
   loadWorkspace,
   persistDiscussionOrder,
@@ -39,9 +38,12 @@ import {
   threadStatusFromLegacy,
   threadStatusLabels,
   topicKindLabels,
-  topicOutputKinds,
 } from './labels'
-import { discussionPriorityScore, formatRelativeAge } from './intelligence'
+import {
+  discussionPriorityScore,
+  firstSentences,
+  formatRelativeAge,
+} from './intelligence'
 import type {
   FocusMode,
   NewsCategory,
@@ -51,7 +53,6 @@ import type {
   TopicKind,
   ThreadStatus,
   EditorialReadout,
-  EditorialHealth,
   TeamMemberSummary,
   ActivityEvent,
   WorkspacePage,
@@ -294,8 +295,6 @@ function App() {
   const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
   const [theses, setTheses] = useState(cloudConfigured ? [] : demoTheses)
   const [readout, setReadout] = useState<EditorialReadout | null>(null)
-  const [editorialHealth, setEditorialHealth] =
-    useState<EditorialHealth | null>(null)
   const [activity, setActivity] = useState<ActivityEvent[]>([])
   const [syncState, setSyncState] = useState<'connecting' | 'synced' | 'error'>(
     cloudConfigured ? 'connecting' : 'synced',
@@ -313,6 +312,7 @@ function App() {
     useState<ThreadStatusFilter>('all')
   const [threadFrom, setThreadFrom] = useState('')
   const [threadTo, setThreadTo] = useState('')
+  const [threadCreatedPreset, setThreadCreatedPreset] = useState('any')
   const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
   const [addSignalTopicId, setAddSignalTopicId] = useState('')
   const [addSignalQuery, setAddSignalQuery] = useState('')
@@ -377,9 +377,6 @@ function App() {
       setTopics(workspace.topics)
       setTheses(workspace.theses)
       setReadout(workspace.readout)
-      if (canEdit) {
-        setEditorialHealth(await loadEditorialHealth().catch(() => null))
-      }
       setSyncState('synced')
     } catch (error: unknown) {
       setSyncState('error')
@@ -391,7 +388,7 @@ function App() {
         )
       }
     }
-  }, [canAdmin, canEdit])
+  }, [canAdmin])
 
   useEffect(() => {
     void reloadWorkspace()
@@ -1395,38 +1392,6 @@ function App() {
     setNotice('Topic deleted')
   }
 
-  async function unlinkNews(topicId: string, newsId: string) {
-    try {
-      await unlinkTopicNews(topicId, newsId)
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not unlink news')
-      return
-    }
-    setTopics((current) =>
-      current.map((topic) =>
-        topic.id === topicId
-          ? {
-              ...topic,
-              supportingNews: topic.supportingNews.filter((id) => id !== newsId),
-            }
-          : topic,
-      ),
-    )
-    setNews((current) =>
-      current.map((item) =>
-        item.id === newsId
-          ? {
-              ...item,
-              topicLinks: item.topicLinks.filter(
-                (link) => link.topicId !== topicId,
-              ),
-            }
-          : item,
-      ),
-    )
-    setNotice('News returned to the News stream')
-  }
-
   async function addLink() {
     let url = linkUrl.trim()
     if (!url) return
@@ -1509,6 +1474,36 @@ function App() {
     closeAddLink()
   }
 
+  function renderLinkedSignalRow(
+    item: NewsItem,
+    topicId: string,
+    options: { stopCardClick?: boolean } = {},
+  ) {
+    return (
+      <div className="linked-signal-row" key={item.id}>
+        <div>
+          <span>{item.title}</span>
+          <small>
+            {categoryLabels[item.category]} · {formatShortDate(newsDate(item))}
+          </small>
+        </div>
+        <button
+          type="button"
+          className="unlink-button"
+          title="Remove signal from thread"
+          aria-label="Remove signal from thread"
+          onClick={(event) => {
+            if (options.stopCardClick) event.stopPropagation()
+            void unlinkSignal(topicId, item.id)
+          }}
+          hidden={!canEdit}
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
+
   function renderNoteCard(
     item: NewsItem,
     options: {
@@ -1521,6 +1516,10 @@ function App() {
     const isManual = item.sourceType === 'manual_note'
     const variant = options.variant || 'live'
     const teamView = item.teamSynthesis.trim()
+    const whyItMatters = firstSentences(item.industryImportance, 1)
+    const qiraImplication = firstSentences(item.qiraRelevance, 1)
+    const takeawayText =
+      variant === 'candidate' ? firstSentences(takeaway, 2) : takeaway
     return (
       <article
         className={`news-card ${variant}-card ${draggedNewsId === item.id ? 'dragging' : ''}`}
@@ -1563,24 +1562,31 @@ function App() {
       >
         <div className="news-meta">
           {variant === 'candidate' ? (
-            <span className={`category category-${item.category}`}>
+            <span className={`chip category category-${item.category}`}>
               {categoryLabels[item.category]}
             </span>
           ) : null}
-          <span>{isManual ? 'Team note' : item.source}</span>
-          <span>
+          <span className="meta-source">
+            {isManual ? 'Team note' : item.source}
+          </span>
+          <span className="meta-time">
             {formatRelativeAge(item.updatedAt || newsDate(item))}
           </span>
           <div className="card-actions">
             {item.deletedAt ? (
               <button
                 type="button"
+                className="text-action"
                 onClick={() => void restoreItem('news_items', item.id)}
               >
                 Restore
               </button>
             ) : (
-              <button type="button" onClick={() => setNewsDraft({ ...item })}>
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => setNewsDraft({ ...item })}
+              >
                 Edit
               </button>
             )}
@@ -1595,25 +1601,30 @@ function App() {
             item.title
           )}
         </h2>
-        {takeaway ? <p className="signal-takeaway">{takeaway}</p> : null}
+        {takeawayText ? (
+          <div className="ai-takeaway">
+            <span className="ai-badge">AI</span>
+            <p>{takeawayText}</p>
+          </div>
+        ) : null}
         {variant === 'candidate' && (
           <>
-            {item.industryImportance ? (
-              <div className="why-it-matters">
-                <strong>Industry importance</strong>
-                <p>{item.industryImportance}</p>
+            {whyItMatters ? (
+              <div className="intel-block">
+                <strong>Why it matters</strong>
+                <p>{whyItMatters}</p>
               </div>
             ) : null}
-            {item.qiraRelevance ? (
-              <div className="why-it-matters">
-                <strong>Why it matters to QIRA</strong>
-                <p>{item.qiraRelevance}</p>
+            {qiraImplication ? (
+              <div className="intel-block">
+                <strong>QIRA implication</strong>
+                <p>{qiraImplication}</p>
               </div>
             ) : null}
             {teamView ? (
-              <div className="why-it-matters">
-                <strong>Team synthesis</strong>
-                <p>{teamView}</p>
+              <div className="intel-block">
+                <strong>Team input</strong>
+                <p>{firstSentences(teamView, 1)}</p>
               </div>
             ) : null}
           </>
@@ -1622,19 +1633,20 @@ function App() {
           <button
             className={`vote-button ${item.votedByMe ? 'voted' : ''}`}
             type="button"
+            title="Vote to discuss"
             onClick={() => void voteToDiscuss(item)}
           >
-            ↑ {item.voteCount || 0} Vote to Discuss
+            ↑ {item.voteCount || 0} Discuss
           </button>
           <button
-            className="secondary-button idea-button"
+            className="text-action idea-button"
             type="button"
             onClick={() => {
               setIdeaNewsId(item.id)
-              setNotice('Idea will be linked to this signal. Synthesis stays anonymous.')
+              setIdeaText('')
             }}
           >
-            + Add Idea
+            + Add idea
           </button>
         </div>
       </article>
@@ -1646,12 +1658,21 @@ function App() {
       .map((id) => news.find((item) => item.id === id && !item.deletedAt))
       .filter((item): item is NewsItem => Boolean(item))
     const status = topic.threadStatus || threadStatusFromLegacy(topic.status)
+    const framing = firstSentences(
+      topic.analysis.currentView || topic.analysis.keyQuestion || topic.notes,
+      1,
+    )
     return (
       <article
         className={`topic-card kind-${topic.kind} ${
           draggedNewsId ? 'accepting-news' : ''
         }`}
         key={topic.id}
+        onClick={() => {
+          if (!canEdit) return
+          setCreatingTopic(false)
+          setTopicDraft({ ...topic })
+        }}
         onDragOver={(event) => {
           if (!draggedNewsId) return
           event.preventDefault()
@@ -1674,47 +1695,34 @@ function App() {
         }}
       >
         <div className="topic-card-head">
-          <span className={`topic-kind kind-${topic.kind}`}>
+          <span className={`chip topic-kind kind-${topic.kind}`}>
             {topicKindLabels[topic.kind] || topic.kind}
           </span>
-          <span className={`thread-status status-${status}`}>
+          <span className={`chip thread-status status-${status}`}>
             {threadStatusLabels[status]}
           </span>
         </div>
         <h3>{topic.title}</h3>
-        <small>Created {formatShortDate(topic.createdAt || topic.updatedAt || new Date().toISOString())}</small>
-        {topic.notes ? <p>{topic.notes}</p> : null}
+        <p className="thread-created">
+          Created {formatShortDate(topic.createdAt || topic.updatedAt || new Date().toISOString())}
+        </p>
+        {framing ? <p className="thread-framing">{framing}</p> : null}
         <div className="linked-signals">
-          <strong>Linked signals</strong>
+          <strong>
+            {linked.length} linked signal{linked.length === 1 ? '' : 's'}
+          </strong>
           {linked.length === 0 ? (
             <p className="linked-empty">No linked signals yet.</p>
           ) : (
-            linked.map((item) => (
-              <div className="linked-signal-row" key={item.id}>
-                <div>
-                  <span>{item.title}</span>
-                  <small>
-                    {categoryLabels[item.category]} · {formatShortDate(newsDate(item))}
-                  </small>
-                </div>
-                <button
-                  type="button"
-                  className="unlink-button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    void unlinkSignal(topic.id, item.id)
-                  }}
-                  hidden={!canEdit}
-                >
-                  Remove
-                </button>
-              </div>
-            ))
+            linked.map((item) =>
+              renderLinkedSignalRow(item, topic.id, { stopCardClick: true }),
+            )
           )}
         </div>
         <div className="card-footer">
           <button
             type="button"
+            className="text-action"
             onClick={(event) => {
               event.stopPropagation()
               setAddSignalTopicId(topic.id)
@@ -1722,18 +1730,7 @@ function App() {
             }}
             hidden={!canEdit}
           >
-            + Add Signal
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              setCreatingTopic(false)
-              setTopicDraft({ ...topic })
-            }}
-            hidden={!canEdit}
-          >
-            Open
+            + Add signal
           </button>
         </div>
       </article>
@@ -1823,11 +1820,23 @@ function App() {
       <div className="workspace-main">
         <header className="utility-bar">
           <label className="search-field">
-            <span>Search News</span>
+            <span>Search news</span>
+            <svg
+              className="search-icon"
+              viewBox="0 0 20 20"
+              width="16"
+              height="16"
+              aria-hidden="true"
+            >
+              <path
+                fill="currentColor"
+                d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.06 1.06-3.65-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
+              />
+            </svg>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Headline, source, takeaway, category, Action Thread"
+              placeholder="Search news, sources, or takeaways..."
             />
           </label>
           <div className="account-actions">
@@ -1860,36 +1869,54 @@ function App() {
           <section className="news-pane" aria-label="Live Signals">
             <div className="pane-heading">
               <div>
-                <span className="eyebrow">What is happening now?</span>
+                <span className="eyebrow">What is happening now</span>
                 <h1>Live Signals</h1>
               </div>
             </div>
             {readout ? (
-              <div className="daily-review">
-                <strong>AI Daily Review</strong>
-                <p>{readout.lede}</p>
-                {editorialHealth ? (
-                  <small>Editorial: {editorialHealth.status}</small>
+              <article className="daily-review-card">
+                <header>
+                  <span className="daily-review-kicker">✦ AI Daily Review</span>
+                  <time dateTime={readout.generatedAt}>
+                    {formatShortDate(readout.generatedAt)}
+                  </time>
+                </header>
+                <p>{firstSentences(readout.lede, 2)}</p>
+                {readout.bullets.some((bullet) => bullet.trim().length <= 28) ? (
+                  <div className="daily-review-chips">
+                    {readout.bullets
+                      .filter((bullet) => bullet.trim().length <= 28)
+                      .slice(0, 4)
+                      .map((bullet) => (
+                        <span className="chip" key={bullet}>
+                          {bullet}
+                        </span>
+                      ))}
+                  </div>
                 ) : null}
-              </div>
+              </article>
             ) : null}
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
                 )
+                const preview = items.slice(0, 4)
                 return (
-                  <section className="category-panel" key={category}>
+                  <section
+                    className={`category-panel cat-${category}`}
+                    key={category}
+                  >
                     <header>
                       <h2>
+                        <span className="cat-dot" aria-hidden="true" />
                         {categoryLabels[category]}
-                        <span>{items.length}</span>
                       </h2>
-                      <span>View All &gt;</span>
+                      <span className="count-badge">{items.length}</span>
                     </header>
                     <div className="news-list">
-                      {items.length > 0
-                        ? items.map((item) =>
+                      {preview.length > 0
+                        ? preview.map((item) =>
                             renderNoteCard(item, { variant: 'live' }),
                           )
                         : (
@@ -1900,34 +1927,6 @@ function App() {
                 )
               })}
             </div>
-            <form
-              className="idea-composer"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void submitIdea()
-              }}
-            >
-              <input
-                value={ideaText}
-                onChange={(event) => setIdeaText(event.target.value)}
-                placeholder={
-                  ideaNewsId
-                    ? 'Share an idea for this signal. AI Daily Review stays anonymous.'
-                    : 'What are you noticing? Share an idea for AI Daily Review…'
-                }
-                aria-label="Team idea"
-              />
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={startVoiceIdea}
-              >
-                {ideaListening ? 'Listening…' : 'Voice'}
-              </button>
-              <button className="primary-button" type="submit">
-                Submit
-              </button>
-            </form>
           </section>
         )}
 
@@ -1940,7 +1939,7 @@ function App() {
               >
                 <div className="pane-heading">
                   <div>
-                    <span className="eyebrow">What actually matters?</span>
+                    <span className="eyebrow">What actually matters</span>
                     <h1>Discussion Candidates</h1>
                   </div>
                 </div>
@@ -1968,16 +1967,18 @@ function App() {
                 <div className="heading-actions">
                   {workspacePage === 'synthesis' && (
                     <button
-                      className="secondary-button"
+                      className="icon-button expand-threads"
                       type="button"
+                      title="Open Action Threads dashboard"
+                      aria-label="Open Action Threads dashboard"
                       onClick={() => setWorkspacePage('threads')}
                     >
-                      View All
+                      ↗
                     </button>
                   )}
                   {workspacePage === 'threads' && (
                     <button
-                      className="secondary-button"
+                      className="text-action"
                       type="button"
                       onClick={() => setWorkspacePage('synthesis')}
                     >
@@ -1987,10 +1988,11 @@ function App() {
                   <button
                     className="secondary-button"
                     type="button"
+                    title="Create Action Thread"
                     onClick={() => openCreateThread()}
                     hidden={!canEdit}
                   >
-                    + New Action Thread
+                    + New
                   </button>
                 </div>
               </div>
@@ -2009,38 +2011,51 @@ function App() {
                 )}
               </div>
               {workspacePage === 'threads' && (
-                <div className="thread-filters">
-                  <select
-                    aria-label="Status"
-                    value={threadStatusFilter}
-                    onChange={(event) =>
-                      setThreadStatusFilter(
-                        event.target.value as ThreadStatusFilter,
-                      )
-                    }
-                  >
-                    <option value="all">All statuses</option>
-                    {Object.entries(threadStatusLabels).map(([value, label]) => (
-                      <option value={value} key={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <label>
-                    Created from
-                    <input
-                      type="date"
-                      value={threadFrom}
-                      onChange={(event) => setThreadFrom(event.target.value)}
-                    />
+                <div className="thread-toolbar">
+                  <label className="toolbar-field">
+                    <span>Status</span>
+                    <select
+                      aria-label="Status"
+                      value={threadStatusFilter}
+                      onChange={(event) =>
+                        setThreadStatusFilter(
+                          event.target.value as ThreadStatusFilter,
+                        )
+                      }
+                    >
+                      <option value="all">All statuses</option>
+                      {Object.entries(threadStatusLabels).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                  <label>
-                    Created to
-                    <input
-                      type="date"
-                      value={threadTo}
-                      onChange={(event) => setThreadTo(event.target.value)}
-                    />
+                  <label className="toolbar-field">
+                    <span>Created</span>
+                    <select
+                      aria-label="Created"
+                      value={threadCreatedPreset}
+                      onChange={(event) => {
+                        const preset = event.target.value
+                        setThreadCreatedPreset(preset)
+                        if (preset === 'any') {
+                          setThreadFrom('')
+                          setThreadTo('')
+                          return
+                        }
+                        const days = Number(preset)
+                        const from = new Date()
+                        from.setUTCDate(from.getUTCDate() - days)
+                        setThreadFrom(from.toISOString().slice(0, 10))
+                        setThreadTo('')
+                      }}
+                    >
+                      <option value="any">Any time</option>
+                      <option value="7">Last 7 days</option>
+                      <option value="30">Last 30 days</option>
+                      <option value="90">Last 90 days</option>
+                    </select>
                   </label>
                 </div>
               )}
@@ -2060,7 +2075,7 @@ function App() {
                   setDraggedNewsId('')
                 }}
               >
-                Drop signal here to create a new Action Thread
+                + Drop a signal to create a thread
               </div>
               <div className="topic-list kind-pipeline">
                 {visibleTopics.map((topic) => renderTopicCard(topic))}
@@ -2411,10 +2426,70 @@ function App() {
         </div>
       )}
 
+      {ideaNewsId && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            setIdeaNewsId('')
+            setIdeaText('')
+          }}
+        >
+          <form
+            className="idea-popover"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-idea-title"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault()
+              void submitIdea(ideaNewsId)
+            }}
+          >
+            <div className="modal-heading">
+              <h2 id="add-idea-title">Add an idea</h2>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => {
+                  setIdeaNewsId('')
+                  setIdeaText('')
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              <span className="sr-only">Idea</span>
+              <textarea
+                rows={4}
+                value={ideaText}
+                onChange={(event) => setIdeaText(event.target.value)}
+                placeholder="What should AI Daily Review notice about this signal?"
+                autoFocus
+              />
+            </label>
+            <div className="modal-actions split-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={startVoiceIdea}
+              >
+                {ideaListening ? 'Listening…' : '🎙 Voice'}
+              </button>
+              <button className="primary-button" type="submit">
+                Submit
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {topicDraft && (
         <div className="modal-backdrop" role="presentation">
           <section
-            className="link-modal editor-modal"
+            className="link-modal editor-modal thread-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-topic-title"
@@ -2438,251 +2513,150 @@ function App() {
                 ×
               </button>
             </div>
-            <label>
-              Thread title
-              <input
-                value={topicDraft.title}
-                onChange={(event) =>
-                  setTopicDraft({ ...topicDraft, title: event.target.value })
-                }
-                autoFocus
-              />
-            </label>
-            <div className="form-grid">
-              <label>
-                Destination
-                <select
-                  value={topicDraft.kind}
-                  onChange={(event) =>
-                    setTopicDraft({
-                      ...topicDraft,
-                      kind: event.target.value as TopicKind,
-                    })
-                  }
-                >
-                  {Object.entries(topicKindLabels).map(([value, label]) => (
-                    <option value={value} key={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Status
-                <select
-                  value={
-                    topicDraft.threadStatus ||
-                    threadStatusFromLegacy(topicDraft.status)
-                  }
-                  onChange={(event) => {
-                    const threadStatus = event.target.value as ThreadStatus
-                    setTopicDraft({
-                      ...topicDraft,
-                      threadStatus,
-                      status: legacyStatusFromThread(threadStatus),
-                    })
-                  }}
-                >
-                  {Object.entries(threadStatusLabels).map(([value, label]) => (
-                    <option value={value} key={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Category
-                <select
-                  value={topicDraft.category}
-                  onChange={(event) =>
-                    setTopicDraft({
-                      ...topicDraft,
-                      category: event.target.value as NewsCategory,
-                    })
-                  }
-                >
-                  {Object.entries(categoryLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label>
-              Description
-              <textarea
-                rows={4}
-                value={topicDraft.notes}
-                onChange={(event) =>
-                  setTopicDraft({ ...topicDraft, notes: event.target.value })
-                }
-              />
-            </label>
-            {!creatingTopic && (
-              <div className="related-notes">
-                <strong>Related notes</strong>
-                {topicDraft.supportingNews.map((newsId) => {
-                  const supportingItem = news.find((item) => item.id === newsId)
-                  if (!supportingItem || supportingItem.deletedAt) return null
-                  return (
-                    <div className="support-row" key={newsId}>
-                      {supportingItem.url &&
-                      supportingItem.sourceType !== 'manual_note' ? (
-                        <a
-                          href={supportingItem.url}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {supportingItem.title}
-                        </a>
-                      ) : (
-                        <span>{supportingItem.title}</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void unlinkNews(topicDraft.id, newsId)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )
-                })}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTargetTopicId(topicDraft.id)
-                    setShowAddLink(true)
-                  }}
-                >
-                  + Add another note
-                </button>
-              </div>
-            )}
-            <div className="analysis-grid">
-              {(
-                [
-                  ['keyQuestion', 'Key question'],
-                  ['observed', 'What we observed'],
-                  ['currentView', 'Current view'],
-                  ['implications', 'Implications'],
-                  ['watch', 'What to watch'],
-                ] as const
-              ).map(([field, label]) => (
-                <label key={field}>
-                  {label}
+            <div className="modal-body">
+              <section className="modal-section">
+                <h3>Thread basics</h3>
+                <label>
+                  Thread title
+                  <input
+                    value={topicDraft.title}
+                    onChange={(event) =>
+                      setTopicDraft({ ...topicDraft, title: event.target.value })
+                    }
+                    placeholder="What decision or direction does this thread hold?"
+                    autoFocus
+                  />
+                </label>
+                <div className="form-grid two-col">
+                  <label>
+                    Destination
+                    <select
+                      value={topicDraft.kind}
+                      onChange={(event) =>
+                        setTopicDraft({
+                          ...topicDraft,
+                          kind: event.target.value as TopicKind,
+                        })
+                      }
+                    >
+                      {Object.entries(topicKindLabels).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select
+                      value={
+                        topicDraft.threadStatus ||
+                        threadStatusFromLegacy(topicDraft.status)
+                      }
+                      onChange={(event) => {
+                        const threadStatus = event.target.value as ThreadStatus
+                        setTopicDraft({
+                          ...topicDraft,
+                          threadStatus,
+                          status: legacyStatusFromThread(threadStatus),
+                        })
+                      }}
+                    >
+                      {Object.entries(threadStatusLabels).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </section>
+              <section className="modal-section">
+                <h3>Linked signals</h3>
+                <div className="linked-signals modal-linked">
+                  {topicDraft.supportingNews
+                    .map((newsId) => news.find((item) => item.id === newsId))
+                    .filter(
+                      (item): item is NewsItem =>
+                        item != null && !item.deletedAt,
+                    )
+                    .map((item) =>
+                      renderLinkedSignalRow(item, topicDraft.id),
+                    )}
+                  {topicDraft.supportingNews.length === 0 ? (
+                    <p className="linked-empty">No linked signals yet.</p>
+                  ) : null}
+                  {!creatingTopic && topicDraft.id ? (
+                    <button
+                      type="button"
+                      className="text-action"
+                      onClick={() => {
+                        setAddSignalTopicId(topicDraft.id)
+                        setAddSignalQuery('')
+                      }}
+                    >
+                      + Add signal
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+              <section className="modal-section">
+                <h3>Intelligence framing</h3>
+                <label>
+                  Key question
                   <textarea
-                    rows={2}
-                    value={topicDraft.analysis[field]}
+                    rows={3}
+                    value={topicDraft.analysis.keyQuestion}
                     onChange={(event) =>
                       setTopicDraft({
                         ...topicDraft,
                         analysis: {
                           ...topicDraft.analysis,
-                          [field]: event.target.value,
+                          keyQuestion: event.target.value,
                         },
                       })
                     }
+                    placeholder="What strategic question are we trying to answer?"
                   />
                 </label>
-              ))}
+                <label>
+                  What we observed
+                  <textarea
+                    rows={3}
+                    value={topicDraft.analysis.observed}
+                    onChange={(event) =>
+                      setTopicDraft({
+                        ...topicDraft,
+                        analysis: {
+                          ...topicDraft.analysis,
+                          observed: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder="What does the linked evidence currently point to?"
+                  />
+                </label>
+                <label>
+                  Current POV / implication
+                  <textarea
+                    rows={3}
+                    value={topicDraft.analysis.currentView}
+                    onChange={(event) =>
+                      setTopicDraft({
+                        ...topicDraft,
+                        analysis: {
+                          ...topicDraft.analysis,
+                          currentView: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder="What is the team’s current judgment or direction?"
+                  />
+                </label>
+              </section>
+              {!creatingTopic && <ActivityHistory events={activity} />}
             </div>
-            <div className="outputs-editor">
-              <strong>Outputs</strong>
-              {topicDraft.outputs.map((output, index) => (
-                <div className="output-row" key={output.id}>
-                  <select
-                    value={output.kind}
-                    onChange={(event) => {
-                      const outputs = [...topicDraft.outputs]
-                      outputs[index] = {
-                        ...output,
-                        kind: event.target.value,
-                      }
-                      setTopicDraft({ ...topicDraft, outputs })
-                    }}
-                    aria-label="Output type"
-                  >
-                    {topicOutputKinds.map((kind) => (
-                      <option key={kind.value} value={kind.value}>
-                        {kind.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={output.title}
-                    placeholder="Title"
-                    onChange={(event) => {
-                      const outputs = [...topicDraft.outputs]
-                      outputs[index] = {
-                        ...output,
-                        title: event.target.value,
-                      }
-                      setTopicDraft({ ...topicDraft, outputs })
-                    }}
-                  />
-                  <input
-                    value={output.dateLabel}
-                    placeholder="Date / month"
-                    onChange={(event) => {
-                      const outputs = [...topicDraft.outputs]
-                      outputs[index] = {
-                        ...output,
-                        dateLabel: event.target.value,
-                      }
-                      setTopicDraft({ ...topicDraft, outputs })
-                    }}
-                  />
-                  <input
-                    value={output.link}
-                    placeholder="Link"
-                    onChange={(event) => {
-                      const outputs = [...topicDraft.outputs]
-                      outputs[index] = {
-                        ...output,
-                        link: event.target.value,
-                      }
-                      setTopicDraft({ ...topicDraft, outputs })
-                    }}
-                  />
-                  <input
-                    value={output.description}
-                    placeholder="Short description"
-                    onChange={(event) => {
-                      const outputs = [...topicDraft.outputs]
-                      outputs[index] = {
-                        ...output,
-                        description: event.target.value,
-                      }
-                      setTopicDraft({ ...topicDraft, outputs })
-                    }}
-                  />
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setTopicDraft({
-                    ...topicDraft,
-                    outputs: [
-                      ...topicDraft.outputs,
-                      {
-                        id: `output-${Date.now()}`,
-                        kind: 'insight_brief',
-                        title: '',
-                        dateLabel: '',
-                        link: '',
-                        description: '',
-                      },
-                    ],
-                  })
-                }
-              >
-                + Add output
-              </button>
-            </div>
-            {!creatingTopic && <ActivityHistory events={activity} />}
-            <div className="modal-actions split-actions">
+            <div className="modal-actions split-actions sticky-footer">
               {!creatingTopic ? (
                 <button
                   className="danger-button"
@@ -2690,7 +2664,7 @@ function App() {
                   onClick={() => void removeTopic(topicDraft.id)}
                   hidden={!canAdmin}
                 >
-                  Remove topic
+                  Delete thread
                 </button>
               ) : (
                 <span />

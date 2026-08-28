@@ -15,6 +15,6 @@ test('intelligence synthesis embeds action threads beside candidates', async ({ 
   await page.getByRole('button', { name: 'Intelligence Synthesis' }).click()
   await expect(page.getByRole('region', { name: 'Discussion Candidates' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Action Threads' })).toBeVisible()
-  await page.getByRole('button', { name: '+ New Action Thread' }).click()
+  await page.getByRole('button', { name: '+ New' }).click()
   await expect(page.getByRole('dialog', { name: 'New Action Thread' })).toBeVisible()
 })

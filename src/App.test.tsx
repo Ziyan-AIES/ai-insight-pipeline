@@ -19,7 +19,8 @@ describe('dashboard pilot shell', () => {
     ).toBeNull()
     expect(screen.getByText('Entry & Interaction')).toBeInTheDocument()
     expect(screen.getByText('Industry & Market')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Vote to Discuss/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /Discuss/ }).length).toBeGreaterThan(0)
+    expect(screen.queryByPlaceholderText(/What are you noticing/)).toBeNull()
   })
 
   it('keeps Action Threads beside Discussion Candidates', () => {
@@ -31,13 +32,36 @@ describe('dashboard pilot shell', () => {
     expect(
       screen.getByRole('region', { name: 'Action Threads' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '+ New Action Thread' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ New' })).toBeInTheDocument()
     expect(screen.getByText('Harness engineering')).toBeInTheDocument()
     expect(
       screen.getAllByText(
         'DataFlow-Harness turns agent reliability into an engineering discipline',
       ).length,
     ).toBeGreaterThan(1)
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'View All' })).toBeNull()
+  })
+
+  it('redesigns the Action Thread editor into three sections', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    fireEvent.click(screen.getByText('Harness engineering'))
+    expect(
+      screen.getByRole('dialog', { name: 'Edit Action Thread' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Thread basics')).toBeInTheDocument()
+    expect(screen.getByText('Linked signals')).toBeInTheDocument()
+    expect(screen.getByText('Intelligence framing')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Category')).toBeNull()
+    expect(screen.queryByLabelText('Description')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
+  })
+
+  it('opens an idea popover bound to a signal', () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: '+ Add idea' })[0])
+    expect(screen.getByRole('dialog', { name: 'Add an idea' })).toBeInTheDocument()
   })
 
   it('exposes a link capture action', () => {
