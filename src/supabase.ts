@@ -524,23 +524,58 @@ export async function updateNewsItem(
   const session = await supabase.auth.getSession()
   const user = session.data.session?.user || null
   const editorName = sessionUserLabel(user)
-  let query = supabase
-    .from('news_items')
-    .update({
-      ...patch,
-      metadata: patch.metadata
-        ? {
-            ...patch.metadata,
-            last_edited_by: editorName,
-          }
-        : undefined,
-    })
-    .eq('id', id)
+  const payload: Record<string, unknown> = { ...patch }
+  if (patch.metadata) {
+    payload.metadata = {
+      ...patch.metadata,
+      last_edited_by: editorName,
+    }
+  }
+  let query = supabase.from('news_items').update(payload).eq('id', id)
   if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
   const { data, error } = await query.select('version').maybeSingle()
   if (error) throw error
   if (!data) throw new Error('This news item changed elsewhere. Reload and try again.')
   return { editorName, version: data.version as number }
+}
+
+export async function updateNewsCategory(id: string, category: NewsCategory) {
+  if (!supabase) {
+    return {
+      category,
+      version: undefined as number | undefined,
+      updatedAt: new Date().toISOString(),
+    }
+  }
+  const apply = (version?: number) => {
+    let query = supabase
+      .from('news_items')
+      .update({ category })
+      .eq('id', id)
+    if (version !== undefined) query = query.eq('version', version)
+    return query.select('category, version, updated_at').maybeSingle()
+  }
+  let { data, error } = await apply()
+  if (error) throw error
+  if (!data) {
+    const latest = await supabase
+      .from('news_items')
+      .select('version')
+      .eq('id', id)
+      .maybeSingle()
+    if (latest.error) throw latest.error
+    const retry = await apply(latest.data?.version as number | undefined)
+    if (retry.error) throw retry.error
+    if (!retry.data) {
+      throw new Error('Could not update this signal’s category')
+    }
+    data = retry.data
+  }
+  return {
+    category: data.category as NewsCategory,
+    version: data.version as number,
+    updatedAt: data.updated_at as string,
+  }
 }
 
 export async function deleteNewsItem(id: string) {

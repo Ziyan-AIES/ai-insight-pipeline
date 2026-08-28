@@ -24,6 +24,7 @@ export const demoNews: NewsItem[] = [
     capturedBy: 'Ziyan',
     editorialStatus: 'processed',
     voteCount: 2,
+    updatedAt: '2026-08-22T09:00:00Z',
     topicLinks: [
       {
         topicId: 'topic-harness',
@@ -50,6 +51,7 @@ export const demoNews: NewsItem[] = [
     category: 'ai_hardware',
     sourceType: 'captured_news',
     capturedAt: '2026-07-30T11:30:00Z',
+    updatedAt: '2026-08-21T10:00:00Z',
     capturedBy: 'Nicole',
     editorialStatus: 'processed',
     voteCount: 1,
@@ -70,6 +72,7 @@ export const demoNews: NewsItem[] = [
     category: 'ai_software',
     sourceType: 'captured_news',
     capturedAt: '2026-08-03T03:00:00Z',
+    updatedAt: '2026-08-03T03:00:00Z',
     capturedBy: 'Team',
     editorialStatus: 'pending',
     voteCount: 0,

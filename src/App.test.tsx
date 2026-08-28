@@ -26,7 +26,7 @@ describe('dashboard pilot shell', () => {
     expect(screen.getAllByRole('button', { name: /View all/ }).length).toBeGreaterThan(0)
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Past week' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /20\d{2}/ })).toBeInTheDocument()
     expect(screen.queryByPlaceholderText(/What are you noticing/)).toBeNull()
   })
 
@@ -71,6 +71,14 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
     expect(screen.getByText('+ Drop a signal to create a thread')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
+  })
+
+  it('lets Month open a calendar picker and filters by that month', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /▾/ }))
+    expect(screen.getByRole('dialog', { name: 'Select month' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Jul' }))
+    expect(screen.getByRole('button', { name: /^Jul / })).toBeInTheDocument()
   })
 
   it('reassigns a Live Signal category by dragging between modules', () => {
