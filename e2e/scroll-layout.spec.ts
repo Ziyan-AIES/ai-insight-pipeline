@@ -103,3 +103,40 @@ test('shows expanded Live Signal previews and scrollable Discussion Candidates',
     fullPage: false,
   })
 })
+
+test('keeps workspace content visible in non-maximized and mobile windows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 760 })
+  await page.goto('/')
+
+  const mediumSidebar = await page.locator('.qira-sidebar').boundingBox()
+  const mediumMain = await page.locator('.workspace-main').boundingBox()
+  const liveHeading = await page
+    .getByRole('heading', { name: 'Live Signals' })
+    .boundingBox()
+  expect(mediumSidebar?.width ?? 0).toBeLessThanOrEqual(170)
+  expect(mediumMain?.x ?? 0).toBeGreaterThanOrEqual(
+    (mediumSidebar?.x ?? 0) + (mediumSidebar?.width ?? 0) - 1,
+  )
+  expect(liveHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(150)
+
+  await page.getByRole('button', { name: 'Intelligence Synthesis' }).click()
+  await page
+    .getByRole('button', { name: 'Open Action Threads dashboard' })
+    .click()
+  await expect(page.getByRole('heading', { name: 'Action Threads' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'By month' })).toBeVisible()
+
+  await page.setViewportSize({ width: 540, height: 760 })
+  const mobileSidebar = await page.locator('.qira-sidebar').boundingBox()
+  const mobileMain = await page.locator('.workspace-main').boundingBox()
+  const threadHeading = await page
+    .getByRole('heading', { name: 'Action Threads' })
+    .boundingBox()
+  expect(mobileSidebar?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(110)
+  expect(mobileMain?.y ?? 0).toBeGreaterThanOrEqual(
+    (mobileSidebar?.y ?? 0) + (mobileSidebar?.height ?? 0) - 1,
+  )
+  expect(threadHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(230)
+})
