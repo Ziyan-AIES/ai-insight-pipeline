@@ -27,7 +27,7 @@ function eventId(payload, occurredAt) {
 }
 
 export async function handler(event) {
-  const options = handleOptions(event)
+  const options = handleOptions(event, { allowAnyOrigin: true })
   if (options) return options
   const blockedOrigin = requireAllowedOrigin(event, {
     allowTokenAuthenticatedClients: true,

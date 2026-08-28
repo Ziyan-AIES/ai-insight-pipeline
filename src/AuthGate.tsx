@@ -154,6 +154,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [sessionUserId])
 
   useEffect(() => {
+    if (extensionStatus !== 'connected') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('extension_auth') !== '1') return
+    params.delete('extension_auth')
+    params.delete('state')
+    const query = params.toString()
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+    )
+  }, [extensionStatus])
+
+  useEffect(() => {
     if (!handshake.enabled || !handshake.state || !session) return
     let cancelled = false
     setExtensionStatus((current) =>
@@ -254,20 +268,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (handshake.enabled) {
     if (session && identity) {
-      const connected = extensionStatus === 'connected'
+      const showBanner =
+        extensionStatus === 'connecting' || extensionStatus === 'error'
       return (
         <>
-          <div className={`extension-banner ${connected ? 'ready' : ''}`}>
-            <strong>
-              {connected ? 'Capture access enabled' : 'Connecting Chrome extension'}
-            </strong>
-            <span>
-              Signed in as {identity.displayName} ({identity.email}). Return to
-              any article tab — the extension should show capture, and this
-              session is kept signed in.
-            </span>
-            {extensionStatus === 'error' && message ? <small>{message}</small> : null}
-          </div>
+          {showBanner ? (
+            <div className="extension-banner">
+              <strong>
+                {extensionStatus === 'error'
+                  ? 'Extension could not connect'
+                  : 'Connecting Chrome extension'}
+              </strong>
+              <span>
+                {extensionStatus === 'error'
+                  ? message || 'Try Sign in from the extension again.'
+                  : `Signed in as ${identity.displayName}. Connecting capture, then this banner will hide.`}
+              </span>
+            </div>
+          ) : null}
           <AuthContext.Provider value={context}>{children}</AuthContext.Provider>
         </>
       )

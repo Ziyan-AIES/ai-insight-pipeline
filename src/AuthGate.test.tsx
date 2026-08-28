@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -158,19 +158,19 @@ describe('extension handshake', () => {
         <div>Protected workspace</div>
       </AuthGate>,
     )
-    expect(
-      await screen.findByText('Capture access enabled'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Protected workspace')).toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/extension-auth',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          authorization: 'Bearer access-token',
+    expect(await screen.findByText('Protected workspace')).toBeInTheDocument()
+    expect(screen.queryByText('Capture access enabled')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/extension-auth',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            authorization: 'Bearer access-token',
+          }),
         }),
-      }),
-    )
+      )
+    })
     const body = handshakeRequestBody()
     expect(body).toMatchObject({
       action: 'complete',
@@ -253,7 +253,8 @@ describe('extension handshake', () => {
         <div>Protected workspace</div>
       </AuthGate>,
     )
-    expect(await screen.findByText('Capture access enabled')).toBeInTheDocument()
+    expect(await screen.findByText('Protected workspace')).toBeInTheDocument()
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
     const body = handshakeRequestBody()
     expect(body.state).toBe('stored-handshake-state-plain-1')
   })

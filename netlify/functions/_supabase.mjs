@@ -56,14 +56,19 @@ export function response(statusCode, body, extraHeaders = {}, event = null) {
   }
 }
 
-export function handleOptions(event) {
+export function handleOptions(event, options = {}) {
   if (event.httpMethod !== 'OPTIONS') return null
   const origin = header(event, 'origin').replace(/\/$/, '')
   const extensionOrigin = /^chrome-extension:\/\//i.test(origin)
   // Preflight cannot carry custom token headers reliably across all browsers,
   // so allow extension and APP_ORIGIN callers through; real auth happens on
-  // the follow-up GET/POST.
-  if (origin && !allowedOrigins().has(origin) && !extensionOrigin) {
+  // the follow-up GET/POST. Capture may also preflight from a news-page origin.
+  if (
+    origin &&
+    !allowedOrigins().has(origin) &&
+    !extensionOrigin &&
+    !options.allowAnyOrigin
+  ) {
     return response(403, { ok: false, error: 'Origin not allowed' }, {}, event)
   }
   return response(
