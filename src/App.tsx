@@ -26,6 +26,7 @@ import {
   topicMonthLabel,
   unlinkTopicNews,
   updateNewsItem,
+  updateNewsCategory,
   updateTeamMemberRole,
   updateThesisItem,
   updateTopicItem,
@@ -42,7 +43,11 @@ import {
 import {
   discussionPriorityScore,
   firstSentences,
+  formatMonthFilterLabel,
   formatRelativeAge,
+  isInDashboardTimeRange,
+  signalTime,
+  type DashboardTimeMode,
 } from './intelligence'
 import type {
   FocusMode,
@@ -121,16 +126,6 @@ function monthName(key: string) {
 
 function newsDate(item: NewsItem) {
   return item.publishedAt || item.capturedAt
-}
-
-type TimeRange = 'week' | 'fortnight' | 'month'
-
-function inTimeRange(iso: string, range: TimeRange, now = Date.now()) {
-  const then = Date.parse(iso)
-  if (!Number.isFinite(then)) return true
-  if (then > now) return true
-  const days = range === 'week' ? 7 : range === 'fortnight' ? 14 : 31
-  return now - then <= days * 86400000
 }
 
 function noteTakeaway(item: NewsItem) {
@@ -298,7 +293,14 @@ function App() {
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     workspaceFromLocation,
   )
-  const [timeRange, setTimeRange] = useState<TimeRange>('month')
+  const [timeMode, setTimeMode] = useState<DashboardTimeMode>('month')
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getUTCFullYear(), month: now.getUTCMonth() }
+  })
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
+  const [pickerYear, setPickerYear] = useState(() => new Date().getUTCFullYear())
+  const [dropHighlight, setDropHighlight] = useState<NewsCategory | ''>('')
   const [newsScope] = useState<NewsScope>('all')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
@@ -439,6 +441,19 @@ function App() {
   }, [notice])
 
   useEffect(() => {
+    if (!monthPickerOpen) return
+    const close = () => setMonthPickerOpen(false)
+    const timeout = window.setTimeout(
+      () => window.addEventListener('click', close),
+      0,
+    )
+    return () => {
+      window.clearTimeout(timeout)
+      window.removeEventListener('click', close)
+    }
+  }, [monthPickerOpen])
+
+  useEffect(() => {
     if (!openNewsMenuId) return
     const close = () => setOpenNewsMenuId('')
     window.addEventListener('click', close)
@@ -517,9 +532,10 @@ function App() {
     return news
       .filter((item) => {
         const matchesCategory = true
-        const matchesPeriod = inTimeRange(
-          item.updatedAt || newsDate(item),
-          timeRange,
+        const matchesPeriod = isInDashboardTimeRange(
+          signalTime(item),
+          timeMode,
+          selectedMonth,
         )
         const matchesScope =
           (newsScope === 'removed' && Boolean(item.deletedAt)) ||
@@ -537,10 +553,8 @@ function App() {
             .includes(needle)
         return matchesCategory && matchesPeriod && matchesScope && matchesQuery
       })
-      .sort((a, b) =>
-        (b.updatedAt || newsDate(b)).localeCompare(a.updatedAt || newsDate(a)),
-      )
-  }, [news, newsScope, query, timeRange])
+      .sort((a, b) => signalTime(b).localeCompare(signalTime(a)))
+  }, [news, newsScope, query, selectedMonth, timeMode])
 
   const discussionNotes = useMemo(
     () =>
@@ -557,7 +571,7 @@ function App() {
       .sort(
         (a, b) =>
           discussionPriorityScore(b) - discussionPriorityScore(a) ||
-          (b.updatedAt || newsDate(b)).localeCompare(a.updatedAt || newsDate(a)),
+          signalTime(b).localeCompare(signalTime(a)),
       )
   }, [visibleNews])
 
@@ -1135,9 +1149,24 @@ function App() {
         candidate.id === newsId ? { ...candidate, category } : candidate,
       ),
     )
+    setDropHighlight(category)
+    window.setTimeout(() => setDropHighlight(''), 400)
     if (!cloudConfigured) return
     try {
-      await updateNewsItem(newsId, { category }, item.version)
+      const result = await updateNewsCategory(newsId, category)
+      setNews((current) =>
+        current.map((candidate) =>
+          candidate.id === newsId
+            ? {
+                ...candidate,
+                category: result.category,
+                version: result.version ?? candidate.version,
+                updatedAt: result.updatedAt || candidate.updatedAt,
+              }
+            : candidate,
+        ),
+      )
+      void reloadWorkspace(true)
     } catch (error) {
       setNews((current) =>
         current.map((candidate) =>
@@ -1608,7 +1637,7 @@ function App() {
             {isManual ? 'Team note' : item.source}
           </span>
           <span className="meta-time">
-            {formatRelativeAge(item.updatedAt || newsDate(item))}
+            {formatRelativeAge(signalTime(item))}
           </span>
           <div className="card-actions">
             {item.deletedAt ? (
@@ -1798,6 +1827,104 @@ function App() {
     )
   }
 
+  function renderTimeFilter() {
+    const monthLabel = formatMonthFilterLabel(
+      selectedMonth.year,
+      selectedMonth.month,
+    )
+    return (
+      <div className="page-toolbar">
+        <div className="time-filter" role="group" aria-label="Time range">
+          <button
+            type="button"
+            className={timeMode === 'week' ? 'active' : ''}
+            aria-pressed={timeMode === 'week'}
+            onClick={() => {
+              setTimeMode('week')
+              setMonthPickerOpen(false)
+            }}
+          >
+            Past week
+          </button>
+          <button
+            type="button"
+            className={timeMode === 'fortnight' ? 'active' : ''}
+            aria-pressed={timeMode === 'fortnight'}
+            onClick={() => {
+              setTimeMode('fortnight')
+              setMonthPickerOpen(false)
+            }}
+          >
+            Past 2 weeks
+          </button>
+          <button
+            type="button"
+            className={timeMode === 'month' ? 'active' : ''}
+            aria-pressed={timeMode === 'month'}
+            aria-expanded={monthPickerOpen}
+            onClick={(event) => {
+              event.stopPropagation()
+              setPickerYear(selectedMonth.year)
+              setMonthPickerOpen((open) => !open)
+            }}
+          >
+            {timeMode === 'month' ? `${monthLabel} ▾` : 'Month ▾'}
+          </button>
+        </div>
+        {monthPickerOpen ? (
+          <div
+            className="month-picker"
+            role="dialog"
+            aria-label="Select month"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="month-picker-year">
+              <button
+                type="button"
+                onClick={() => setPickerYear((year) => year - 1)}
+                aria-label="Previous year"
+              >
+                ‹
+              </button>
+              <strong>{pickerYear}</strong>
+              <button
+                type="button"
+                onClick={() => setPickerYear((year) => year + 1)}
+                aria-label="Next year"
+              >
+                ›
+              </button>
+            </div>
+            <div className="month-picker-grid">
+              {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map(
+                (label, month) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={
+                      selectedMonth.year === pickerYear &&
+                      selectedMonth.month === month &&
+                      timeMode === 'month'
+                        ? 'active'
+                        : ''
+                    }
+                    onClick={() => {
+                      setSelectedMonth({ year: pickerYear, month })
+                      setTimeMode('month')
+                      setMonthPickerOpen(false)
+                    }}
+                  >
+                    {label}
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div
       className={`app-shell focus-${focus} page-${workspacePage} ${
@@ -1898,27 +2025,6 @@ function App() {
               placeholder="Search news, sources, or takeaways..."
             />
           </label>
-          {(workspacePage === 'signals' || workspacePage === 'synthesis') && (
-            <div className="time-filter" role="group" aria-label="Time range">
-              {(
-                [
-                  ['week', 'Past week'],
-                  ['fortnight', 'Past 2 weeks'],
-                  ['month', 'Month'],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={timeRange === value ? 'active' : ''}
-                  aria-pressed={timeRange === value}
-                  onClick={() => setTimeRange(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="account-actions">
             <button
               className="primary-button"
@@ -1953,6 +2059,7 @@ function App() {
                 <h1>Live Signals</h1>
               </div>
             </div>
+            {renderTimeFilter()}
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -1964,7 +2071,7 @@ function App() {
                   <section
                     className={`category-panel cat-${category} ${
                       draggedNewsId ? 'accepting-signal' : ''
-                    }`}
+                    } ${dropHighlight === category ? 'drop-highlight' : ''}`}
                     key={category}
         onDragOver={(event) => {
           if (!draggedNewsId) return
@@ -2033,6 +2140,7 @@ function App() {
                     <h1>Discussion Candidates</h1>
                   </div>
                 </div>
+                {renderTimeFilter()}
                 <div className="news-list discussion-list">
                   {discussionCandidates.map((item) =>
                     renderNoteCard(item, { variant: 'candidate' }),
