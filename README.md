@@ -1,16 +1,18 @@
 # AI Insight Pipeline
 
-A private team workspace that connects news capture, AI editorial review, monthly analysis planning, and a long-running thesis portfolio.
+> **AI Signals turns external signals into shared intelligence and Action Threads, helping the team move from “what changed” to “what matters” to “what we do with it.”**
+
+A private team workspace that connects news capture, AI editorial review, and Action Threads. It is not a PMO or task tracker.
 
 ## Product flow
 
-1. Capture a link from Daily, Weekly Discussion, or the Browser Signal Watcher extension.
-2. Store it once as a shared Note / Signal (captured news and manual notes use the same table).
-3. Scan Daily by category. Vote items for weekly discussion without copying them.
-4. Open Weekly Discussion to prioritize, edit, and drag notes into Topics on the right.
-5. Develop a Topic as Insight, POC, or Roadmap with related notes, analysis, and outputs.
+1. Capture a link from Live Signals, Intelligence Synthesis, or the AI Signals Chrome extension.
+2. Scan **Live Signals** as a 2×3 category grid of what is happening now.
+3. Vote to Discuss and add anonymous ideas for AI Daily Review.
+4. Open **Intelligence Synthesis** to see Discussion Candidates (2/3) and **Action Threads** (1/3).
+5. Drag a candidate onto an Action Thread to link it. Linked news stays visible one row per signal. Destination is POV / Insight / Strategy / Roadmap / POC. Status is Open / In Progress / Parked / Closed.
 
-The top-level navigation is **Daily | Weekly Discussion**. Topics are not a separate page. Daily is a category briefing. Weekly Discussion keeps the existing 2/3 notes + 1/3 topics split and drag-and-drop onto topic cards.
+The top-level navigation is **Live Signals | Intelligence Synthesis**. Search News and + Add News stay in the global bar.
 
 ## Stack
 

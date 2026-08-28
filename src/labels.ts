@@ -1,4 +1,4 @@
-import type { NewsCategory, TopicKind } from './types'
+import type { NewsCategory, ThreadStatus, TopicKind, TopicStatus } from './types'
 
 export const categoryLabels: Record<NewsCategory, string> = {
   interaction: 'Entry & Interaction',
@@ -9,24 +9,52 @@ export const categoryLabels: Record<NewsCategory, string> = {
   industry_events: 'Industry & Market',
 }
 
+export const liveSignalCategories: NewsCategory[] = [
+  'interaction',
+  'ai_hardware',
+  'ai_software',
+  'ai_capability',
+  'ecosystem',
+  'industry_events',
+]
+
 export const briefingSections: Array<{
   id: string
   title: string
   category?: NewsCategory
-}> = [
-  { id: 'highlights', title: "Today's / This Week's Highlights" },
-  { id: 'interaction', title: 'Entry & Interaction', category: 'interaction' },
-  { id: 'ai_hardware', title: 'AI Devices', category: 'ai_hardware' },
-  { id: 'ai_software', title: 'AI Experiences', category: 'ai_software' },
-  { id: 'ai_capability', title: 'AI Capability & Technology', category: 'ai_capability' },
-  { id: 'ecosystem', title: 'Ecosystem', category: 'ecosystem' },
-  { id: 'industry_events', title: 'Industry & Market', category: 'industry_events' },
-]
+}> = liveSignalCategories.map((category) => ({
+  id: category,
+  title: categoryLabels[category],
+  category,
+}))
 
 export const topicKindLabels: Record<TopicKind, string> = {
+  pov: 'POV',
   insight: 'Insight',
-  poc: 'POC',
+  strategy: 'Strategy',
   roadmap: 'Roadmap',
+  poc: 'POC',
+}
+
+export const threadStatusLabels: Record<ThreadStatus, string> = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  parked: 'Parked',
+  closed: 'Closed',
+}
+
+export function threadStatusFromLegacy(status: TopicStatus): ThreadStatus {
+  if (status === 'completed') return 'closed'
+  if (status === 'archived') return 'parked'
+  if (status === 'researching' || status === 'published') return 'in_progress'
+  return 'open'
+}
+
+export function legacyStatusFromThread(status: ThreadStatus): TopicStatus {
+  if (status === 'closed') return 'completed'
+  if (status === 'parked') return 'archived'
+  if (status === 'in_progress') return 'researching'
+  return 'idea'
 }
 
 export const emptyTopicAnalysis = {

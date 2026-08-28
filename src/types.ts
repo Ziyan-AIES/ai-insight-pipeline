@@ -14,11 +14,13 @@ export type TopicStatus =
   | 'completed'
   | 'archived'
 
-export type TopicKind = 'insight' | 'poc' | 'roadmap'
+export type ThreadStatus = 'open' | 'in_progress' | 'parked' | 'closed'
+
+export type TopicKind = 'pov' | 'insight' | 'strategy' | 'roadmap' | 'poc'
 
 export type NoteSourceType = 'captured_news' | 'manual_note'
 
-export type WorkspacePage = 'daily' | 'weekly'
+export type WorkspacePage = 'signals' | 'synthesis' | 'threads'
 
 export interface TopicAnalysis {
   keyQuestion: string
@@ -44,6 +46,10 @@ export interface NewsItem {
   source: string
   summary: string
   takeaway: string
+  industryImportance: string
+  qiraRelevance: string
+  teamSynthesis: string
+  discussionPriorityScore: number
   category: NewsCategory
   sourceType: NoteSourceType
   capturedAt: string
@@ -77,6 +83,7 @@ export interface Topic {
   monthLabel: string
   category: NewsCategory
   status: TopicStatus
+  threadStatus: ThreadStatus
   kind: TopicKind
   notes: string
   analysis: TopicAnalysis

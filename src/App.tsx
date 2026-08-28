@@ -17,6 +17,7 @@ import {
   persistDiscussionOrder,
   persistManualNote,
   persistNewsLink,
+  persistTeamIdea,
   persistTopicNews,
   restoreContent,
   purgeContent,
@@ -31,12 +32,16 @@ import {
   updateTopicItem,
 } from './supabase'
 import {
-  briefingSections,
   categoryLabels,
   emptyTopicAnalysis,
+  legacyStatusFromThread,
+  liveSignalCategories,
+  threadStatusFromLegacy,
+  threadStatusLabels,
   topicKindLabels,
   topicOutputKinds,
 } from './labels'
+import { discussionPriorityScore, formatRelativeAge } from './intelligence'
 import type {
   FocusMode,
   NewsCategory,
@@ -44,6 +49,7 @@ import type {
   Thesis,
   Topic,
   TopicKind,
+  ThreadStatus,
   EditorialReadout,
   EditorialHealth,
   TeamMemberSummary,
@@ -53,6 +59,7 @@ import type {
 
 type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
 type TopicKindFilter = 'all' | TopicKind
+type ThreadStatusFilter = 'all' | ThreadStatus
 type AddLinkDraft = {
   open: boolean
   url: string
@@ -66,9 +73,11 @@ const workspacePageKey = 'signal-intelligence:workspace-page'
 function loadWorkspacePage(): WorkspacePage {
   try {
     const stored = window.localStorage.getItem(workspacePageKey)
-    return stored === 'weekly' ? 'weekly' : 'daily'
+    if (stored === 'synthesis' || stored === 'weekly') return 'synthesis'
+    if (stored === 'threads') return 'threads'
+    return 'signals'
   } catch {
-    return 'daily'
+    return 'signals'
   }
 }
 
@@ -155,23 +164,6 @@ function formatShortDate(value: string) {
     day: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(value))
-}
-
-function weekLabel(key: string) {
-  const [yearText, weekText] = key.split('-W')
-  const year = Number(yearText)
-  const week = Number(weekText)
-  const jan4 = new Date(Date.UTC(year, 0, 4))
-  const monday = new Date(jan4)
-  monday.setUTCDate(jan4.getUTCDate() - (jan4.getUTCDay() || 7) + 1 + (week - 1) * 7)
-  const sunday = new Date(monday)
-  sunday.setUTCDate(monday.getUTCDate() + 6)
-  const dateFormat = new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
-  return `Week ${week} · ${dateFormat.format(monday)}–${dateFormat.format(sunday)}`
 }
 
 function metadataStrings(
@@ -309,14 +301,24 @@ function App() {
     cloudConfigured ? 'connecting' : 'synced',
   )
   const [focus, setFocus] = useState<FocusMode>(() =>
-    loadWorkspacePage() === 'daily' ? 'news' : 'split',
+    loadWorkspacePage() === 'signals' ? 'news' : 'split',
   )
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     loadWorkspacePage,
   )
-  const [period, setPeriod] = useState('all')
-  const [newsScope, setNewsScope] = useState<NewsScope>('all')
+  const [period] = useState('all')
+  const [newsScope] = useState<NewsScope>('all')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
+  const [threadStatusFilter, setThreadStatusFilter] =
+    useState<ThreadStatusFilter>('all')
+  const [threadFrom, setThreadFrom] = useState('')
+  const [threadTo, setThreadTo] = useState('')
+  const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
+  const [addSignalTopicId, setAddSignalTopicId] = useState('')
+  const [addSignalQuery, setAddSignalQuery] = useState('')
+  const [ideaText, setIdeaText] = useState('')
+  const [ideaNewsId, setIdeaNewsId] = useState('')
+  const [ideaListening, setIdeaListening] = useState(false)
   const [query, setQuery] = useState('')
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
   const [showRecycleBin, setShowRecycleBin] = useState(false)
@@ -332,7 +334,6 @@ function App() {
   )
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedNewsSourceTopicId, setDraggedNewsSourceTopicId] = useState('')
-  const [noteDropIndex, setNoteDropIndex] = useState<number | null>(null)
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteTitle, setNoteTitle] = useState('')
   const [noteBody, setNoteBody] = useState('')
@@ -357,23 +358,6 @@ function App() {
     newsDraft?.id ||
     (topicDraft && !creatingTopic ? topicDraft.id : '') ||
     (thesisDraft && !creatingThesis ? thesisDraft.id : '')
-
-  const buildLabel = useMemo(
-    () => {
-      const buildDate = new Date(
-        import.meta.env.VITE_BUILD_DATE || new Date().toISOString(),
-      )
-      return new Intl.DateTimeFormat('en', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'Asia/Shanghai',
-      }).format(buildDate)
-    },
-    [],
-  )
 
   const closeAddLink = useCallback(() => {
     setShowAddLink(false)
@@ -469,11 +453,11 @@ function App() {
     } catch {
       // Preference persistence is best-effort.
     }
-    if (workspacePage === 'daily') {
+    if (workspacePage === 'signals') {
       setFocus('news')
       return
     }
-    setFocus((current) => (current === 'news' ? 'split' : current))
+    setFocus('split')
   }, [workspacePage])
 
   useEffect(() => {
@@ -549,29 +533,15 @@ function App() {
               (newsScope === 'archived' && Boolean(item.archivedAt))))
         const matchesQuery =
           !needle ||
-          `${item.title} ${item.summary} ${item.source}`
+          `${item.title} ${item.summary} ${item.takeaway} ${item.source} ${item.category} ${item.topicLinks.map((link) => link.topicTitle).join(' ')}`
             .toLowerCase()
             .includes(needle)
         return matchesCategory && matchesPeriod && matchesScope && matchesQuery
       })
-      .sort((a, b) => newsDate(b).localeCompare(newsDate(a)))
+      .sort((a, b) =>
+        (b.updatedAt || newsDate(b)).localeCompare(a.updatedAt || newsDate(a)),
+      )
   }, [news, newsScope, period, query])
-
-  const availableMonths = useMemo(
-    () =>
-      [...new Set(news.map((item) => newsDate(item).slice(0, 7)))].sort(
-        (a, b) => b.localeCompare(a),
-      ),
-    [news],
-  )
-
-  const availableWeeks = useMemo(
-    () =>
-      [...new Set(news.map((item) => isoWeekKey(newsDate(item))))].sort(
-        (a, b) => b.localeCompare(a),
-      ),
-    [news],
-  )
 
   const discussionNotes = useMemo(
     () =>
@@ -581,22 +551,15 @@ function App() {
     [visibleNews],
   )
 
-  const highlightNews = useMemo(() => {
-    const currentWeek = isoWeekKey(new Date().toISOString())
-    const voted = visibleNews.filter(
-      (item) =>
-        !item.deletedAt &&
-        (item.voteCount || 0) > 0 &&
-        isoWeekKey(newsDate(item)) === currentWeek,
-    )
-    if (voted.length > 0) {
-      return [...voted].sort(
+  const discussionCandidates = useMemo(() => {
+    return visibleNews
+      .filter((item) => !item.deletedAt)
+      .slice()
+      .sort(
         (a, b) =>
-          (b.voteCount || 0) - (a.voteCount || 0) ||
-          newsDate(b).localeCompare(newsDate(a)),
+          discussionPriorityScore(b) - discussionPriorityScore(a) ||
+          (b.updatedAt || newsDate(b)).localeCompare(a.updatedAt || newsDate(a)),
       )
-    }
-    return visibleNews.filter((item) => !item.deletedAt).slice(0, 3)
   }, [visibleNews])
 
   const visibleTopics = useMemo(
@@ -607,13 +570,25 @@ function App() {
           (topic) =>
             topicKindFilter === 'all' || topic.kind === topicKindFilter,
         )
+        .filter(
+          (topic) =>
+            threadStatusFilter === 'all' ||
+            (topic.threadStatus || threadStatusFromLegacy(topic.status)) ===
+              threadStatusFilter,
+        )
+        .filter((topic) => {
+          const created = (topic.createdAt || '').slice(0, 10)
+          if (threadFrom && created && created < threadFrom) return false
+          if (threadTo && created && created > threadTo) return false
+          return true
+        })
         .slice()
         .sort((a, b) => {
           const created = (b.createdAt || '').localeCompare(a.createdAt || '')
           if (created) return created
           return a.title.localeCompare(b.title)
         }),
-    [topicKindFilter, topics],
+    [threadFrom, threadStatusFilter, threadTo, topicKindFilter, topics],
   )
 
   const removedItems = useMemo(
@@ -933,6 +908,114 @@ function App() {
     }
   }
 
+  async function submitIdea(linkedNewsId = ideaNewsId) {
+    const content = ideaText.trim()
+    if (!content) return
+    try {
+      if (cloudConfigured) {
+        await persistTeamIdea({
+          content,
+          newsId: linkedNewsId || undefined,
+          inputType: ideaListening ? 'voice' : 'text',
+        })
+      }
+      setIdeaText('')
+      setIdeaNewsId('')
+      setNotice(
+        linkedNewsId
+          ? 'Idea captured for AI Daily Review. Synthesis stays anonymous.'
+          : 'Idea captured for AI Daily Review. Synthesis stays anonymous.',
+      )
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not save idea')
+    }
+  }
+
+  function startVoiceIdea() {
+    const SpeechRecognitionApi = (
+      window as unknown as {
+        SpeechRecognition?: new () => {
+          lang: string
+          start: () => void
+          onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+          onerror: (() => void) | null
+          onend: (() => void) | null
+        }
+        webkitSpeechRecognition?: new () => {
+          lang: string
+          start: () => void
+          onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+          onerror: (() => void) | null
+          onend: (() => void) | null
+        }
+      }
+    ).SpeechRecognition ||
+      (
+        window as unknown as {
+          webkitSpeechRecognition?: new () => {
+            lang: string
+            start: () => void
+            onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+            onerror: (() => void) | null
+            onend: (() => void) | null
+          }
+        }
+      ).webkitSpeechRecognition
+    if (!SpeechRecognitionApi) {
+      setNotice('Voice input is not available in this browser. Type the idea instead.')
+      return
+    }
+    const recognition = new SpeechRecognitionApi()
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      const spoken = Array.from({ length: event.results.length }, (_, index) => {
+        const result = event.results[index]
+        return result?.[0]?.transcript || ''
+      }).join(' ')
+      setIdeaText((current) => `${current} ${spoken}`.trim())
+    }
+    recognition.onerror = () => setIdeaListening(false)
+    recognition.onend = () => setIdeaListening(false)
+    setIdeaListening(true)
+    recognition.start()
+  }
+
+  async function unlinkSignal(topicId: string, newsId: string) {
+    try {
+      if (cloudConfigured) await unlinkTopicNews(topicId, newsId)
+      setTopics((current) =>
+        current.map((topic) =>
+          topic.id === topicId
+            ? {
+                ...topic,
+                supportingNews: topic.supportingNews.filter((id) => id !== newsId),
+              }
+            : topic,
+        ),
+      )
+      setNews((current) =>
+        current.map((item) =>
+          item.id === newsId
+            ? {
+                ...item,
+                topicLinks: item.topicLinks.filter((link) => link.topicId !== topicId),
+              }
+            : item,
+        ),
+      )
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not unlink signal',
+      )
+    }
+  }
+
+  function openCreateThread(newsId = '') {
+    setPendingThreadNewsId(newsId)
+    openNewTopic()
+  }
+
+
   async function reorderDiscussionNotes(fromId: string, targetIndex: number) {
     const current = discussionNotes.filter((item) => item.id !== fromId)
     const moved = discussionNotes.find((item) => item.id === fromId)
@@ -979,6 +1062,10 @@ function App() {
       source: 'Team note',
       summary: noteBody.trim(),
       takeaway: noteTakeawayDraft.trim(),
+      industryImportance: '',
+      qiraRelevance: '',
+      teamSynthesis: '',
+      discussionPriorityScore: 0,
       category: noteCategory,
       sourceType: 'manual_note',
       capturedAt: persisted?.capturedAt || new Date().toISOString(),
@@ -1141,6 +1228,7 @@ function App() {
       monthLabel: monthName(''),
       category: 'ai_capability',
       status: 'idea',
+      threadStatus: 'open',
       kind: 'insight',
       notes: '',
       analysis: { ...emptyTopicAnalysis },
@@ -1161,8 +1249,13 @@ function App() {
             title: topicDraft.title.trim(),
             notes: topicDraft.notes,
             category: topicDraft.category,
-            status: topicDraft.status,
+            status: legacyStatusFromThread(
+              topicDraft.threadStatus || threadStatusFromLegacy(topicDraft.status),
+            ),
             kind: topicDraft.kind,
+            threadStatus:
+              topicDraft.threadStatus ||
+              threadStatusFromLegacy(topicDraft.status),
             monthKey: topicDraft.monthKey,
             thesisId: topicDraft.thesisId,
             analysis: topicDraft.analysis,
@@ -1191,7 +1284,11 @@ function App() {
           ),
         )
       }
-      setNotice('Topic created')
+      setNotice('Action Thread created')
+      if (pendingThreadNewsId) {
+        await moveNewsToTopic(pendingThreadNewsId, id, '')
+        setPendingThreadNewsId('')
+      }
     } else {
       const previous = topics.find((item) => item.id === topicDraft.id)
       let version
@@ -1202,8 +1299,13 @@ function App() {
             title: topicDraft.title.trim(),
             notes: topicDraft.notes,
             category: topicDraft.category,
-            status: topicDraft.status,
+            status: legacyStatusFromThread(
+              topicDraft.threadStatus || threadStatusFromLegacy(topicDraft.status),
+            ),
             kind: topicDraft.kind,
+            thread_status:
+              topicDraft.threadStatus ||
+              threadStatusFromLegacy(topicDraft.status),
             scheduled_month: topicDraft.monthKey
               ? `${topicDraft.monthKey}-01`
               : null,
@@ -1368,6 +1470,10 @@ function App() {
       source: hostname,
       summary: 'Pending AI editorial review.',
       takeaway: '',
+      industryImportance: '',
+      qiraRelevance: '',
+      teamSynthesis: '',
+      discussionPriorityScore: 0,
       category: 'ecosystem',
       sourceType: 'captured_news',
       capturedAt: new Date().toISOString(),
@@ -1405,13 +1511,19 @@ function App() {
 
   function renderNoteCard(
     item: NewsItem,
-    options: { listIndex?: number; allowReorder?: boolean } = {},
+    options: {
+      listIndex?: number
+      allowReorder?: boolean
+      variant?: 'live' | 'candidate'
+    } = {},
   ) {
     const takeaway = noteTakeaway(item)
     const isManual = item.sourceType === 'manual_note'
+    const variant = options.variant || 'live'
+    const teamView = item.teamSynthesis.trim()
     return (
       <article
-        className={`news-card ${draggedNewsId === item.id ? 'dragging' : ''}`}
+        className={`news-card ${variant}-card ${draggedNewsId === item.id ? 'dragging' : ''}`}
         key={item.id}
         draggable
         onDragStart={(event) => {
@@ -1427,13 +1539,11 @@ function App() {
         onDragEnd={() => {
           setDraggedNewsId('')
           setDraggedNewsSourceTopicId('')
-          setNoteDropIndex(null)
         }}
         onDragOver={
           options.allowReorder
             ? (event) => {
                 event.preventDefault()
-                setNoteDropIndex(options.listIndex ?? 0)
               }
             : undefined
         }
@@ -1447,24 +1557,19 @@ function App() {
                 if (newsId && options.listIndex !== undefined) {
                   void reorderDiscussionNotes(newsId, options.listIndex)
                 }
-                setNoteDropIndex(null)
               }
             : undefined
         }
       >
         <div className="news-meta">
-          <span className={`category category-${item.category}`}>
-            {categoryLabels[item.category]}
-          </span>
-          {isManual ? (
-            <span>Manual note</span>
-          ) : (
-            <span>{item.source}</span>
-          )}
-          <span>Shared by {item.capturedBy}</span>
+          {variant === 'candidate' ? (
+            <span className={`category category-${item.category}`}>
+              {categoryLabels[item.category]}
+            </span>
+          ) : null}
+          <span>{isManual ? 'Team note' : item.source}</span>
           <span>
-            {item.publishedAt ? 'Published ' : 'Added '}
-            {formatShortDate(newsDate(item))}
+            {formatRelativeAge(item.updatedAt || newsDate(item))}
           </span>
           <div className="card-actions">
             {item.deletedAt ? (
@@ -1475,22 +1580,9 @@ function App() {
                 Restore
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setNewsDraft({ ...item })}
-                >
-                  Edit
-                </button>
-                <button
-                  className="danger-action"
-                  type="button"
-                  onClick={() => void removeNews(item.id)}
-                  hidden={!canAdmin}
-                >
-                  Remove
-                </button>
-              </>
+              <button type="button" onClick={() => setNewsDraft({ ...item })}>
+                Edit
+              </button>
             )}
           </div>
         </div>
@@ -1503,14 +1595,28 @@ function App() {
             item.title
           )}
         </h2>
-        {item.summary ? <p>{item.summary}</p> : null}
-        {takeaway ? (
-          <div className="why-it-matters">
-            <strong>Takeaway</strong>
-            <p>{takeaway}</p>
-          </div>
-        ) : (
-          <NewsWhyItMatters metadata={item.metadata} />
+        {takeaway ? <p className="signal-takeaway">{takeaway}</p> : null}
+        {variant === 'candidate' && (
+          <>
+            {item.industryImportance ? (
+              <div className="why-it-matters">
+                <strong>Industry importance</strong>
+                <p>{item.industryImportance}</p>
+              </div>
+            ) : null}
+            {item.qiraRelevance ? (
+              <div className="why-it-matters">
+                <strong>Why it matters to QIRA</strong>
+                <p>{item.qiraRelevance}</p>
+              </div>
+            ) : null}
+            {teamView ? (
+              <div className="why-it-matters">
+                <strong>Team synthesis</strong>
+                <p>{teamView}</p>
+              </div>
+            ) : null}
+          </>
         )}
         <div className="card-footer">
           <button
@@ -1518,55 +1624,39 @@ function App() {
             type="button"
             onClick={() => void voteToDiscuss(item)}
           >
-            Vote to discuss
+            ↑ {item.voteCount || 0} Vote to Discuss
           </button>
-          <span className="vote-count">
-            {item.voteCount || 0} vote{(item.voteCount || 0) === 1 ? '' : 's'}
-          </span>
-          <span className={`editorial-status ${item.editorialStatus}`}>
-            {isManual
-              ? 'Team note'
-              : item.editorialStatus === 'processed'
-                ? 'AI reviewed'
-                : 'Pending editorial'}
-          </span>
-          {item.archivedAt && (
-            <span className="archive-status">Read & archived</span>
-          )}
-          <div className="pipeline-tags">
-            {item.topicLinks.map((link) => (
-              <span key={link.topicId}>In {link.topicTitle}</span>
-            ))}
-          </div>
-          {item.lastEditedBy && (
-            <span className="edit-attribution">
-              Edited by {item.lastEditedBy}
-            </span>
-          )}
-          <span className="drag-hint">Drag to topic →</span>
+          <button
+            className="secondary-button idea-button"
+            type="button"
+            onClick={() => {
+              setIdeaNewsId(item.id)
+              setNotice('Idea will be linked to this signal. Synthesis stays anonymous.')
+            }}
+          >
+            + Add Idea
+          </button>
         </div>
       </article>
     )
   }
 
   function renderTopicCard(topic: Topic) {
+    const linked = topic.supportingNews
+      .map((id) => news.find((item) => item.id === id && !item.deletedAt))
+      .filter((item): item is NewsItem => Boolean(item))
+    const status = topic.threadStatus || threadStatusFromLegacy(topic.status)
     return (
       <article
         className={`topic-card kind-${topic.kind} ${
           draggedNewsId ? 'accepting-news' : ''
         }`}
         key={topic.id}
-        onClick={() => {
-          setCreatingTopic(false)
-          setTopicDraft({ ...topic })
-        }}
         onDragOver={(event) => {
           if (!draggedNewsId) return
           event.preventDefault()
           event.stopPropagation()
-          event.dataTransfer.dropEffect = draggedNewsSourceTopicId
-            ? 'move'
-            : 'copy'
+          event.dataTransfer.dropEffect = 'copy'
         }}
         onDrop={(event) => {
           const newsId =
@@ -1585,65 +1675,106 @@ function App() {
       >
         <div className="topic-card-head">
           <span className={`topic-kind kind-${topic.kind}`}>
-            {topicKindLabels[topic.kind]}
+            {topicKindLabels[topic.kind] || topic.kind}
           </span>
-          <div className="card-actions">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation()
-                setCreatingTopic(false)
-                setTopicDraft({ ...topic })
-              }}
-              hidden={!canEdit}
-            >
-              Open
-            </button>
-          </div>
+          <span className={`thread-status status-${status}`}>
+            {threadStatusLabels[status]}
+          </span>
         </div>
         <h3>{topic.title}</h3>
-        <p>{topic.notes}</p>
-        <small>
-          Created {formatShortDate(topic.createdAt || topic.updatedAt || new Date().toISOString())}
-          {' · '}
-          {topic.supportingNews.length} related note
-          {topic.supportingNews.length === 1 ? '' : 's'}
-        </small>
+        <small>Created {formatShortDate(topic.createdAt || topic.updatedAt || new Date().toISOString())}</small>
+        {topic.notes ? <p>{topic.notes}</p> : null}
+        <div className="linked-signals">
+          <strong>Linked signals</strong>
+          {linked.length === 0 ? (
+            <p className="linked-empty">No linked signals yet.</p>
+          ) : (
+            linked.map((item) => (
+              <div className="linked-signal-row" key={item.id}>
+                <div>
+                  <span>{item.title}</span>
+                  <small>
+                    {categoryLabels[item.category]} · {formatShortDate(newsDate(item))}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="unlink-button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void unlinkSignal(topic.id, item.id)
+                  }}
+                  hidden={!canEdit}
+                >
+                  Remove
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="card-footer">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              setAddSignalTopicId(topic.id)
+              setAddSignalQuery('')
+            }}
+            hidden={!canEdit}
+          >
+            + Add Signal
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              setCreatingTopic(false)
+              setTopicDraft({ ...topic })
+            }}
+            hidden={!canEdit}
+          >
+            Open
+          </button>
+        </div>
       </article>
     )
   }
 
   return (
     <div
-      className={`app-shell focus-${focus} ${
+      className={`app-shell focus-${focus} page-${workspacePage} ${
         headerHidden ? 'banner-hidden' : ''
       }`}
     >
-      <header className="topbar" title="Scroll either pane to the top to show this banner">
+      <aside className="qira-sidebar">
         <div className="brand">
-          <span className="brand-mark">SI</span>
+          <span className="brand-mark">QIRA</span>
           <div>
-            <strong>Signal Intelligence</strong>
-            <span>Version {buildLabel} · Beijing time</span>
+            <strong>AI Signals</strong>
+            <span>What changed → what matters</span>
           </div>
         </div>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
-            className={workspacePage === 'daily' ? 'active' : ''}
+            className={workspacePage === 'signals' ? 'active' : ''}
             type="button"
-            onClick={() => setWorkspacePage('daily')}
+            onClick={() => setWorkspacePage('signals')}
           >
-            Daily
+            Live Signals
           </button>
           <button
-            className={workspacePage === 'weekly' ? 'active' : ''}
+            className={
+              workspacePage === 'synthesis' || workspacePage === 'threads'
+                ? 'active'
+                : ''
+            }
             type="button"
-            onClick={() => setWorkspacePage('weekly')}
+            onClick={() => setWorkspacePage('synthesis')}
           >
-            Weekly Discussion
+            Intelligence Synthesis
           </button>
         </nav>
-        <div className="account-actions">
+        <div className="sidebar-user">
           <div className="sync-status">
             <span className={`status-dot ${syncState}`} />
             {cloudConfigured
@@ -1668,11 +1799,7 @@ function App() {
                 type="button"
                 onClick={() => setShowRecycleBin(true)}
               >
-                Recycle bin (
-                {removedItems.news.length +
-                  removedItems.topics.length +
-                  removedItems.theses.length}
-                )
+                Recycle bin
               </button>
             </>
           )}
@@ -1691,7 +1818,28 @@ function App() {
               .toUpperCase()}
           </button>
         </div>
-      </header>
+      </aside>
+
+      <div className="workspace-main">
+        <header className="utility-bar">
+          <label className="search-field">
+            <span>Search News</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Headline, source, takeaway, category, Action Thread"
+            />
+          </label>
+          <div className="account-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => setShowAddLink(true)}
+            >
+              + Add News
+            </button>
+          </div>
+        </header>
 
       {notice && (
         <button
@@ -1703,219 +1851,294 @@ function App() {
         </button>
       )}
 
-      <main className={`dashboard ${workspacePage === 'daily' ? 'daily-page' : 'weekly-page'}`}>
-        <section
-          className="news-pane"
-          aria-label={
-            workspacePage === 'daily'
-              ? 'Daily briefing'
-              : 'Discussion notes'
-          }
-          onScroll={(event) =>
-            setHeaderHidden(event.currentTarget.scrollTop > 16)
-          }
-        >
-          <div className="pane-heading">
-            <div>
-              <span className="eyebrow">
-                {workspacePage === 'daily'
-                  ? 'Shared signals'
-                  : 'Weekly workspace'}
-              </span>
-              <h1>
-                {workspacePage === 'daily' ? 'Daily' : 'Discussion Notes'}
-              </h1>
+      <main
+        className={`dashboard ${
+          workspacePage === 'signals' ? 'signals-page' : 'synthesis-page'
+        }`}
+      >
+        {workspacePage === 'signals' && (
+          <section className="news-pane" aria-label="Live Signals">
+            <div className="pane-heading">
+              <div>
+                <span className="eyebrow">What is happening now?</span>
+                <h1>Live Signals</h1>
+              </div>
             </div>
-            <div className="heading-actions">
-              {workspacePage === 'weekly' && (
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => setShowAddNote(true)}
-                  hidden={!canEdit}
-                >
-                  + Add Note
-                </button>
-              )}
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => setShowAddLink(true)}
-              >
-                + Add link
-              </button>
-            </div>
-          </div>
-
-          <div className="filters">
-            <label className="search-field">
-              <span>Search</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search signals"
-              />
-            </label>
-            <select
-              value={period}
-              onChange={(event) => setPeriod(event.target.value)}
-              aria-label="Filter by month or week"
-            >
-              <option value="all">All dates</option>
-              <optgroup label="Weeks">
-                {availableWeeks.map((week) => (
-                  <option value={`week:${week}`} key={week}>
-                    {weekLabel(week)}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Months">
-                {availableMonths.map((month) => (
-                  <option value={`month:${month}`} key={month}>
-                    {monthName(month)}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-            {workspacePage === 'daily' && (
-              <select
-                value={newsScope}
-                onChange={(event) =>
-                  setNewsScope(event.target.value as NewsScope)
-                }
-                aria-label="Filter by review status"
-              >
-                <option value="undecided">Undiscussed</option>
-                <option value="pipeline">In pipeline</option>
-                <option value="archived">Read & archived</option>
-                <option value="all">All news</option>
-                {canAdmin && <option value="removed">Removed</option>}
-              </select>
-            )}
-          </div>
-
-          {workspacePage === 'daily' ? (
-            <div className="briefing-layout">
-              {briefingSections.map((section) => {
-                const items =
-                  section.id === 'highlights'
-                    ? highlightNews
-                    : visibleNews.filter(
-                        (item) =>
-                          !item.deletedAt && item.category === section.category,
-                      )
+            {readout ? (
+              <div className="daily-review">
+                <strong>AI Daily Review</strong>
+                <p>{readout.lede}</p>
+                {editorialHealth ? (
+                  <small>Editorial: {editorialHealth.status}</small>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="signals-grid">
+              {liveSignalCategories.map((category) => {
+                const items = visibleNews.filter(
+                  (item) => !item.deletedAt && item.category === category,
+                )
                 return (
-                  <section className="briefing-section" key={section.id}>
+                  <section className="category-panel" key={category}>
                     <header>
-                      <h2>{section.title}</h2>
-                      <span>
-                        {section.id === 'highlights' && readout
-                          ? readout.periodKey
-                          : `${items.length} note${items.length === 1 ? '' : 's'}`}
-                      </span>
+                      <h2>
+                        {categoryLabels[category]}
+                        <span>{items.length}</span>
+                      </h2>
+                      <span>View All &gt;</span>
                     </header>
-                    {section.id === 'highlights' && canEdit && editorialHealth && (
-                      <small className={`editorial-health ${editorialHealth.status}`}>
-                        Last editorial run: {editorialHealth.status}
-                      </small>
-                    )}
-                    {section.id === 'highlights' && readout && (
-                      <div className="readout">
-                        <p>{readout.lede}</p>
-                        {readout.bullets.length > 0 && (
-                          <ul>
-                            {readout.bullets.map((bullet) => (
-                              <li key={bullet}>{bullet}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
                     <div className="news-list">
                       {items.length > 0
-                        ? items.map((item) => renderNoteCard(item))
+                        ? items.map((item) =>
+                            renderNoteCard(item, { variant: 'live' }),
+                          )
                         : (
-                          <div className="month-empty">
-                            No notes in this section yet.
-                          </div>
+                          <div className="month-empty">No signals yet.</div>
                         )}
                     </div>
                   </section>
                 )
               })}
             </div>
-          ) : (
-            <div
-              className={`news-list discussion-list ${
-                noteDropIndex !== null ? 'accepting-reorder' : ''
-              }`}
+            <form
+              className="idea-composer"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void submitIdea()
+              }}
             >
-              {discussionNotes.map((item, index) =>
-                renderNoteCard(item, {
-                  listIndex: index,
-                  allowReorder: canEdit,
-                }),
-              )}
-              {discussionNotes.length === 0 && (
-                <div className="month-empty">
-                  Vote on Daily notes or add a discussion note to build this week&apos;s agenda.
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        {workspacePage === 'weekly' && (
-          <section
-            className="topic-pane"
-            aria-label="Topic dashboard"
-            onScroll={(event) =>
-              setHeaderHidden(event.currentTarget.scrollTop > 16)
-            }
-          >
-            <div className="pane-heading">
-              <div>
-                <span className="eyebrow">Next-stage analysis</span>
-                <h1>Topics</h1>
-              </div>
-              <div className="heading-actions">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={openNewTopic}
-                  hidden={!canEdit}
-                >
-                  + New topic
-                </button>
-              </div>
-            </div>
-
-            <div className="topic-scope-toggle" aria-label="Topic type">
-              {(['all', 'insight', 'poc', 'roadmap'] as TopicKindFilter[]).map(
-                (kind) => (
-                  <button
-                    key={kind}
-                    className={topicKindFilter === kind ? 'active' : ''}
-                    type="button"
-                    onClick={() => setTopicKindFilter(kind)}
-                  >
-                    {kind === 'all' ? 'All' : topicKindLabels[kind]}
-                  </button>
-                ),
-              )}
-            </div>
-
-            <div className="topic-list kind-pipeline">
-              {visibleTopics.map((topic) => renderTopicCard(topic))}
-              {visibleTopics.length === 0 && (
-                <div className="month-empty">
-                  No topics in this filter yet. Create an Insight, POC, or Roadmap.
-                </div>
-              )}
-            </div>
+              <input
+                value={ideaText}
+                onChange={(event) => setIdeaText(event.target.value)}
+                placeholder={
+                  ideaNewsId
+                    ? 'Share an idea for this signal. AI Daily Review stays anonymous.'
+                    : 'What are you noticing? Share an idea for AI Daily Review…'
+                }
+                aria-label="Team idea"
+              />
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={startVoiceIdea}
+              >
+                {ideaListening ? 'Listening…' : 'Voice'}
+              </button>
+              <button className="primary-button" type="submit">
+                Submit
+              </button>
+            </form>
           </section>
         )}
+
+        {(workspacePage === 'synthesis' || workspacePage === 'threads') && (
+          <>
+            {workspacePage === 'synthesis' && (
+              <section
+                className="news-pane"
+                aria-label="Discussion Candidates"
+              >
+                <div className="pane-heading">
+                  <div>
+                    <span className="eyebrow">What actually matters?</span>
+                    <h1>Discussion Candidates</h1>
+                  </div>
+                </div>
+                <div className="news-list discussion-list">
+                  {discussionCandidates.map((item) =>
+                    renderNoteCard(item, { variant: 'candidate' }),
+                  )}
+                  {discussionCandidates.length === 0 && (
+                    <div className="month-empty">
+                      Vote on Live Signals or wait for AI Daily Review to promote candidates.
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+            <section
+              className="topic-pane"
+              aria-label="Action Threads"
+            >
+              <div className="pane-heading">
+                <div>
+                  <span className="eyebrow">What we do with it</span>
+                  <h1>Action Threads</h1>
+                </div>
+                <div className="heading-actions">
+                  {workspacePage === 'synthesis' && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => setWorkspacePage('threads')}
+                    >
+                      View All
+                    </button>
+                  )}
+                  {workspacePage === 'threads' && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => setWorkspacePage('synthesis')}
+                    >
+                      Back
+                    </button>
+                  )}
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => openCreateThread()}
+                    hidden={!canEdit}
+                  >
+                    + New Action Thread
+                  </button>
+                </div>
+              </div>
+              <div className="topic-scope-toggle" aria-label="Destination">
+                {(['all', 'pov', 'insight', 'strategy', 'roadmap', 'poc'] as TopicKindFilter[]).map(
+                  (kind) => (
+                    <button
+                      key={kind}
+                      className={topicKindFilter === kind ? 'active' : ''}
+                      type="button"
+                      onClick={() => setTopicKindFilter(kind)}
+                    >
+                      {kind === 'all' ? 'All' : topicKindLabels[kind]}
+                    </button>
+                  ),
+                )}
+              </div>
+              {workspacePage === 'threads' && (
+                <div className="thread-filters">
+                  <select
+                    aria-label="Status"
+                    value={threadStatusFilter}
+                    onChange={(event) =>
+                      setThreadStatusFilter(
+                        event.target.value as ThreadStatusFilter,
+                      )
+                    }
+                  >
+                    <option value="all">All statuses</option>
+                    {Object.entries(threadStatusLabels).map(([value, label]) => (
+                      <option value={value} key={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <label>
+                    Created from
+                    <input
+                      type="date"
+                      value={threadFrom}
+                      onChange={(event) => setThreadFrom(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Created to
+                    <input
+                      type="date"
+                      value={threadTo}
+                      onChange={(event) => setThreadTo(event.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+              <div
+                className={`drop-create ${draggedNewsId ? 'hot' : ''}`}
+                onDragOver={(event) => {
+                  if (!draggedNewsId) return
+                  event.preventDefault()
+                }}
+                onDrop={(event) => {
+                  const newsId =
+                    event.dataTransfer.getData('application/x-news-id') ||
+                    draggedNewsId
+                  if (!newsId) return
+                  event.preventDefault()
+                  openCreateThread(newsId)
+                  setDraggedNewsId('')
+                }}
+              >
+                Drop signal here to create a new Action Thread
+              </div>
+              <div className="topic-list kind-pipeline">
+                {visibleTopics.map((topic) => renderTopicCard(topic))}
+                {visibleTopics.length === 0 && (
+                  <div className="month-empty">
+                    No Action Threads in this filter yet.
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        )}
       </main>
+      </div>
+
+
+      {addSignalTopicId && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-signal-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">Action Thread</span>
+                <h2 id="add-signal-title">Add Signal</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setAddSignalTopicId('')}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              Search existing signals
+              <input
+                value={addSignalQuery}
+                onChange={(event) => setAddSignalQuery(event.target.value)}
+                placeholder="Headline or source"
+                autoFocus
+              />
+            </label>
+            <div className="news-list">
+              {news
+                .filter((item) => !item.deletedAt)
+                .filter((item) => {
+                  const needle = addSignalQuery.trim().toLowerCase()
+                  return (
+                    !needle ||
+                    `${item.title} ${item.source}`.toLowerCase().includes(needle)
+                  )
+                })
+                .slice(0, 12)
+                .map((item) => (
+                  <button
+                    type="button"
+                    className="signal-pick"
+                    key={item.id}
+                    onClick={() => {
+                      void moveNewsToTopic(item.id, addSignalTopicId, '')
+                      setAddSignalTopicId('')
+                    }}
+                  >
+                    {item.title}
+                    <small>
+                      {categoryLabels[item.category]} · {item.source}
+                    </small>
+                  </button>
+                ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {newsDraft && (
         <div className="modal-backdrop" role="presentation">
@@ -2198,9 +2421,9 @@ function App() {
           >
             <div className="modal-heading">
               <div>
-                <span className="eyebrow">Analysis pipeline</span>
+                <span className="eyebrow">Action Thread</span>
                 <h2 id="edit-topic-title">
-                  {creatingTopic ? 'Create topic' : 'Edit topic'}
+                  {creatingTopic ? 'New Action Thread' : 'Edit Action Thread'}
                 </h2>
               </div>
               <button
@@ -2216,7 +2439,7 @@ function App() {
               </button>
             </div>
             <label>
-              Topic title
+              Thread title
               <input
                 value={topicDraft.title}
                 onChange={(event) =>
@@ -2227,7 +2450,7 @@ function App() {
             </label>
             <div className="form-grid">
               <label>
-                Type
+                Destination
                 <select
                   value={topicDraft.kind}
                   onChange={(event) =>
@@ -2238,6 +2461,29 @@ function App() {
                   }
                 >
                   {Object.entries(topicKindLabels).map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Status
+                <select
+                  value={
+                    topicDraft.threadStatus ||
+                    threadStatusFromLegacy(topicDraft.status)
+                  }
+                  onChange={(event) => {
+                    const threadStatus = event.target.value as ThreadStatus
+                    setTopicDraft({
+                      ...topicDraft,
+                      threadStatus,
+                      status: legacyStatusFromThread(threadStatus),
+                    })
+                  }}
+                >
+                  {Object.entries(threadStatusLabels).map(([value, label]) => (
                     <option value={value} key={value}>
                       {label}
                     </option>
@@ -2465,7 +2711,7 @@ function App() {
                   type="button"
                   onClick={() => void saveTopicDraft()}
                 >
-                  {creatingTopic ? 'Create topic' : 'Save changes'}
+                  {creatingTopic ? 'Create Action Thread' : 'Save changes'}
                 </button>
               </div>
             </div>
@@ -2729,7 +2975,7 @@ function App() {
             <div className="modal-heading">
               <div>
                 <span className="eyebrow">Capture a signal</span>
-                <h2 id="add-link-title">Add link</h2>
+                <h2 id="add-link-title">Add News</h2>
               </div>
               <button
                 className="icon-button"
