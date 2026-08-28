@@ -42,14 +42,14 @@ describe('dashboard pilot shell', () => {
     ).toBeNull()
   })
 
-  it('keeps Live Signal overview to three cards and a stationary View all footer', () => {
+  it('keeps the Live Signal overview to one focused card and a stationary View all footer', () => {
     render(<App />)
     const live = screen.getByRole('region', { name: 'Live Signals' })
     const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     const scroll = panel!.querySelector('.signal-scroll')
     expect(scroll).toBeTruthy()
-    expect(scroll!.querySelectorAll('article.live-card').length).toBeLessThanOrEqual(3)
+    expect(scroll!.querySelectorAll('article.live-card').length).toBeLessThanOrEqual(1)
     expect(scroll!.querySelector('.view-all-link')).toBeNull()
     expect(
       within(panel as HTMLElement).getByRole('button', { name: /View all/ }),
@@ -112,8 +112,20 @@ describe('dashboard pilot shell', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /▾/ }))
     expect(screen.getByRole('dialog', { name: 'Select month' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Jul' }))
+    const july = screen.getByRole('button', { name: /^Jul 2026:/ })
+    expect(july.className).toMatch(/month-heat-[1-4]/)
+    fireEvent.click(july)
     expect(screen.getByRole('button', { name: /^Jul / })).toBeInTheDocument()
+  })
+
+  it('marks signals added since this viewer last opened Live Signals', () => {
+    window.localStorage.setItem(
+      'signal-intelligence:last-viewed:live-signals:demo',
+      '2026-01-01T00:00:00.000Z',
+    )
+    render(<App />)
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    expect(within(live).getAllByText('New').length).toBeGreaterThan(0)
   })
 
   it('reassigns a Live Signal category by dragging between modules', () => {
@@ -183,6 +195,26 @@ describe('dashboard pilot shell', () => {
     ).toBeNull()
   })
 
+  it('moves an Action Thread to another category by drag and drop', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+    )
+
+    const card = screen.getByText('Harness engineering').closest('article')
+    const target = screen
+      .getByRole('heading', { name: 'Entry & Interaction' })
+      .closest('section')
+    expect(card).toBeTruthy()
+    expect(target).toBeTruthy()
+    fireEvent.dragStart(card!)
+    fireEvent.drop(target!)
+    expect(
+      await within(target as HTMLElement).findByText('Harness engineering'),
+    ).toBeInTheDocument()
+  })
+
   it('redesigns the Action Thread editor into three sections', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
@@ -193,6 +225,7 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByText('Thread basics')).toBeInTheDocument()
     expect(screen.getByText('Linked signals')).toBeInTheDocument()
     expect(screen.getByText('Intelligence framing')).toBeInTheDocument()
+    expect(screen.getByLabelText('Timeline month')).toBeInTheDocument()
     expect(screen.queryByLabelText('Category')).toBeNull()
     expect(screen.queryByLabelText('Description')).toBeNull()
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()

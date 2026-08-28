@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { demoNews, demoTheses, demoTopics } from './demoData'
 import { useTeamAuth } from './auth-context'
@@ -18,6 +18,7 @@ import {
   persistNewsLink,
   persistTeamIdea,
   persistTopicNews,
+  recordWorkspaceView,
   restoreContent,
   purgeContent,
   purgeRecycleBin,
@@ -74,6 +75,8 @@ type AddLinkDraft = {
   targetTopicId: string
 }
 const addLinkDraftKey = 'signal-intelligence:add-link-draft'
+const liveSignalsViewStoragePrefix =
+  'signal-intelligence:last-viewed:live-signals'
 
 function workspaceFromLocation(): WorkspacePage {
   try {
@@ -155,6 +158,17 @@ function formatShortDate(value: string) {
     day: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(value))
+}
+
+function formatThreadMonth(monthKey: string) {
+  if (!monthKey) return 'Unscheduled'
+  const [year, month] = monthKey.split('-').map(Number)
+  if (!year || !month) return 'Unscheduled'
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1)))
 }
 
 function metadataStrings(
@@ -311,6 +325,7 @@ function App() {
   const [threadCreatedPreset, setThreadCreatedPreset] = useState('any')
   const [threadGroupMode, setThreadGroupMode] =
     useState<ThreadGroupMode>('category')
+  const [signalViewBaseline, setSignalViewBaseline] = useState('')
   const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
   const [categoryDrawer, setCategoryDrawer] = useState<NewsCategory | null>(
     null,
@@ -334,6 +349,7 @@ function App() {
   )
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedNewsSourceTopicId, setDraggedNewsSourceTopicId] = useState('')
+  const [draggedTopicId, setDraggedTopicId] = useState('')
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteTitle, setNoteTitle] = useState('')
   const [noteBody, setNoteBody] = useState('')
@@ -347,6 +363,7 @@ function App() {
   const [selectedThesisId, setSelectedThesisId] = useState('')
   const [notice, setNotice] = useState('')
   const [headerHidden, setHeaderHidden] = useState(false)
+  const recordedSignalViewFor = useRef('')
   const selectedActivityType = newsDraft
     ? ('news_items' as const)
     : topicDraft && !creatingTopic
@@ -480,6 +497,34 @@ function App() {
   }, [workspacePage])
 
   useEffect(() => {
+    if (workspacePage !== 'signals') return
+    const viewerKey = identity?.userId || 'demo'
+    if (recordedSignalViewFor.current === viewerKey) return
+    recordedSignalViewFor.current = viewerKey
+    const viewedAt = new Date().toISOString()
+    const storageKey = `${liveSignalsViewStoragePrefix}:${viewerKey}`
+
+    const recordLocalCursor = () => {
+      try {
+        const previous = window.localStorage.getItem(storageKey)
+        setSignalViewBaseline(previous || viewedAt)
+        window.localStorage.setItem(storageKey, viewedAt)
+      } catch {
+        setSignalViewBaseline(viewedAt)
+      }
+    }
+
+    if (!cloudConfigured || !identity?.userId) {
+      recordLocalCursor()
+      return
+    }
+
+    void recordWorkspaceView('live_signals', viewedAt)
+      .then((previous) => setSignalViewBaseline(previous || viewedAt))
+      .catch(recordLocalCursor)
+  }, [identity?.userId, workspacePage])
+
+  useEffect(() => {
     const hasDraft = Boolean(
       showAddLink ||
         linkUrl ||
@@ -565,6 +610,25 @@ function App() {
         visibleNews.filter((item) => !item.deletedAt),
       ),
     [visibleNews],
+  )
+
+  const pickerMonthCounts = useMemo(() => {
+    const counts = Array.from({ length: 12 }, () => 0)
+    news.forEach((item) => {
+      if (item.deletedAt) return
+      const captured = new Date(item.capturedAt)
+      if (captured.getUTCFullYear() !== pickerYear) return
+      counts[captured.getUTCMonth()] += 1
+    })
+    return counts
+  }, [news, pickerYear])
+
+  const pickerMonthMax = Math.max(...pickerMonthCounts, 1)
+
+  const isNewSignal = useCallback(
+    (item: NewsItem) =>
+      Boolean(signalViewBaseline && item.capturedAt > signalViewBaseline),
+    [signalViewBaseline],
   )
 
   const discussionCandidates = useMemo(() => {
@@ -1186,6 +1250,47 @@ function App() {
     }
   }
 
+  async function reassignTopicCategory(
+    topicId: string,
+    category: NewsCategory,
+  ) {
+    const topic = topics.find((candidate) => candidate.id === topicId)
+    if (!topic || topic.deletedAt || topic.category === category) return
+    setTopics((current) =>
+      current.map((candidate) =>
+        candidate.id === topicId ? { ...candidate, category } : candidate,
+      ),
+    )
+    if (!cloudConfigured) return
+    try {
+      const version = await updateTopicItem(
+        topicId,
+        { category },
+        topic.version,
+      )
+      setTopics((current) =>
+        current.map((candidate) =>
+          candidate.id === topicId
+            ? { ...candidate, category, version: version ?? candidate.version }
+            : candidate,
+        ),
+      )
+    } catch (error) {
+      setTopics((current) =>
+        current.map((candidate) =>
+          candidate.id === topicId
+            ? { ...candidate, category: topic.category }
+            : candidate,
+        ),
+      )
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not move this Action Thread',
+      )
+    }
+  }
+
   async function removeNews(id: string) {
     if (!window.confirm('Delete this news card and all of its topic links?')) {
       return
@@ -1544,9 +1649,7 @@ function App() {
       <div className="linked-signal-row" key={item.id}>
         <div>
           <span>{item.title}</span>
-          <small>
-            {categoryLabels[item.category]} · {formatShortDate(newsDate(item))}
-          </small>
+          <small>{formatShortDate(newsDate(item))}</small>
         </div>
         <button
           type="button"
@@ -1636,9 +1739,10 @@ function App() {
               {categoryLabels[item.category]}
             </span>
           ) : null}
-          <span className="meta-source">
-            {isManual ? 'Team note' : item.source}
-          </span>
+          {variant === 'live' && isNewSignal(item) ? (
+            <span className="new-signal-badge">New</span>
+          ) : null}
+          {isManual ? <span className="meta-source">Team note</span> : null}
           <span className="meta-time">
             {formatRelativeAge(signalTime(item))}
           </span>
@@ -1773,8 +1877,18 @@ function App() {
       <article
         className={`topic-card kind-${topic.kind} ${
           draggedNewsId ? 'accepting-news' : ''
-        }`}
+        } ${draggedTopicId === topic.id ? 'dragging-topic' : ''}`}
         key={topic.id}
+        draggable={workspacePage === 'threads' && canEdit}
+        onDragStart={(event) => {
+          if (workspacePage !== 'threads' || !canEdit) return
+          setDraggedTopicId(topic.id)
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move'
+            event.dataTransfer.setData('application/x-topic-id', topic.id)
+          }
+        }}
+        onDragEnd={() => setDraggedTopicId('')}
         onClick={() => {
           if (!canEdit) return
           setCreatingTopic(false)
@@ -1814,22 +1928,25 @@ function App() {
           </span>
         </div>
         <h3>{topic.title}</h3>
-        <p className="thread-created">
-          Created {formatShortDate(topic.createdAt || topic.updatedAt || new Date().toISOString())}
-        </p>
-        {framing ? <p className="thread-framing">{framing}</p> : null}
-        <div className="linked-signals">
-          <strong>
-            {linked.length} linked signal{linked.length === 1 ? '' : 's'}
-          </strong>
-          {linked.length === 0 ? (
-            <p className="linked-empty">No linked signals yet.</p>
-          ) : (
-            linked.map((item) =>
-              renderLinkedSignalRow(item, topic.id, { stopCardClick: true }),
-            )
-          )}
+        <div className="thread-card-meta">
+          <span>
+            Created{' '}
+            {formatShortDate(
+              topic.createdAt || topic.updatedAt || new Date().toISOString(),
+            )}
+          </span>
+          <span className="thread-timeline">
+            Timeline · {formatThreadMonth(topic.monthKey)}
+          </span>
         </div>
+        {framing ? <p className="thread-framing">{framing}</p> : null}
+        {linked.length > 0 ? (
+          <div className="linked-signals" aria-label="Linked signals">
+            {linked.map((item) =>
+              renderLinkedSignalRow(item, topic.id, { stopCardClick: true }),
+            )}
+          </div>
+        ) : null}
       </article>
     )
   }
@@ -1904,27 +2021,44 @@ function App() {
             </div>
             <div className="month-picker-grid">
               {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map(
-                (label, month) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className={
-                      selectedMonth.year === pickerYear &&
-                      selectedMonth.month === month &&
-                      timeMode === 'month'
-                        ? 'active'
-                        : ''
-                    }
-                    onClick={() => {
-                      setSelectedMonth({ year: pickerYear, month })
-                      setTimeMode('month')
-                      setMonthPickerOpen(false)
-                    }}
-                  >
-                    {label}
-                  </button>
-                ),
+                (label, month) => {
+                  const count = pickerMonthCounts[month]
+                  const heatLevel =
+                    count === 0
+                      ? 0
+                      : Math.max(1, Math.ceil((count / pickerMonthMax) * 4))
+                  const selected =
+                    selectedMonth.year === pickerYear &&
+                    selectedMonth.month === month &&
+                    timeMode === 'month'
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      className={`month-heat-${heatLevel} ${
+                        selected ? 'active' : ''
+                      }`}
+                      aria-label={`${label} ${pickerYear}: ${count} signals`}
+                      title={`${count} signal${count === 1 ? '' : 's'}`}
+                      onClick={() => {
+                        setSelectedMonth({ year: pickerYear, month })
+                        setTimeMode('month')
+                        setMonthPickerOpen(false)
+                      }}
+                    >
+                      <span>{label}</span>
+                      <small>{count}</small>
+                    </button>
+                  )
+                },
               )}
+            </div>
+            <div className="month-picker-legend" aria-hidden="true">
+              <span>Fewer</span>
+              {[0, 1, 2, 3, 4].map((level) => (
+                <i className={`month-heat-${level}`} key={level} />
+              ))}
+              <span>More</span>
             </div>
           </div>
         ) : null}
@@ -2072,7 +2206,8 @@ function App() {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
                 )
-                const preview = items.slice(0, 3)
+                const preview = items.slice(0, 1)
+                const newCount = items.filter(isNewSignal).length
                 return (
                   <section
                     className={`category-panel cat-${category} ${
@@ -2099,7 +2234,9 @@ function App() {
                         <span className="cat-dot" aria-hidden="true" />
                         {categoryLabels[category]}
                       </h2>
-                      <span className="count-badge">{items.length}</span>
+                      {newCount > 0 ? (
+                        <span className="new-count-badge">{newCount} new</span>
+                      ) : null}
                     </header>
                     <div className="news-list signal-scroll">
                       {preview.map((item) =>
@@ -2113,9 +2250,10 @@ function App() {
                       <button
                         type="button"
                         className="view-all-link"
+                        aria-label={`View all ${categoryLabels[category]}`}
                         onClick={() => setCategoryDrawer(category)}
                       >
-                        View all {items.length} →
+                        View all →
                       </button>
                     ) : (
                       <span className="view-all-link muted">No signals yet</span>
@@ -2322,8 +2460,26 @@ function App() {
                     if (categoryTopics.length === 0) return null
                     return (
                       <section
-                        className={`thread-category-group cat-${category}`}
+                        className={`thread-category-group cat-${category} ${
+                          draggedTopicId ? 'accepting-topic' : ''
+                        }`}
                         key={category}
+                        onDragOver={(event) => {
+                          if (!draggedTopicId) return
+                          event.preventDefault()
+                          event.dataTransfer.dropEffect = 'move'
+                        }}
+                        onDrop={(event) => {
+                          const topicId =
+                            event.dataTransfer?.getData(
+                              'application/x-topic-id',
+                            ) || draggedTopicId
+                          if (!topicId) return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void reassignTopicCategory(topicId, category)
+                          setDraggedTopicId('')
+                        }}
                       >
                         <header>
                           <h2>
@@ -2790,7 +2946,7 @@ function App() {
                     autoFocus
                   />
                 </label>
-                <div className="form-grid two-col">
+                <div className="form-grid three-col">
                   <label>
                     Destination
                     <select
@@ -2831,6 +2987,21 @@ function App() {
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label>
+                    Timeline month
+                    <input
+                      aria-label="Timeline month"
+                      type="month"
+                      value={topicDraft.monthKey}
+                      onChange={(event) =>
+                        setTopicDraft({
+                          ...topicDraft,
+                          monthKey: event.target.value,
+                          monthLabel: monthName(event.target.value),
+                        })
+                      }
+                    />
                   </label>
                 </div>
               </section>

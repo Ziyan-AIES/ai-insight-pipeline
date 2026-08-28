@@ -3620,3 +3620,225 @@ label input:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* Information-density pass: one visual layer, readable timelines, compact filters */
+.signals-grid {
+  grid-template-rows: repeat(2, minmax(280px, 1fr));
+  gap: 18px 24px;
+}
+
+.category-panel,
+.category-panel.accepting-signal,
+.category-panel.drop-highlight {
+  min-height: 280px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.category-panel header {
+  min-height: 34px;
+  margin: 0 0 10px;
+  padding: 0 4px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--cat-accent) 24%, var(--line));
+}
+
+.category-panel .news-list,
+.category-panel .news-list.signal-scroll {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.category-panel .live-card {
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffcf8;
+}
+
+.category-panel .view-all-link {
+  margin-top: 10px;
+  padding: 0 4px;
+}
+
+.new-count-badge,
+.new-signal-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #dff3e6;
+  color: #24633a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.new-signal-badge {
+  margin-right: 2px;
+}
+
+.month-picker-grid button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid rgba(79, 70, 100, 0.08);
+}
+
+.month-picker-grid button small {
+  font-size: 10px;
+  font-weight: 750;
+  opacity: 0.72;
+}
+
+.month-picker-grid button.month-heat-0,
+.month-picker-legend .month-heat-0 {
+  background: #f3f1ec;
+}
+
+.month-picker-grid button.month-heat-1,
+.month-picker-legend .month-heat-1 {
+  background: #e7e2f1;
+}
+
+.month-picker-grid button.month-heat-2,
+.month-picker-legend .month-heat-2 {
+  background: #cfc4e5;
+}
+
+.month-picker-grid button.month-heat-3,
+.month-picker-legend .month-heat-3 {
+  background: #a997cd;
+}
+
+.month-picker-grid button.month-heat-4,
+.month-picker-legend .month-heat-4 {
+  background: #725a9f;
+  color: #fff;
+}
+
+.month-picker-grid button.active {
+  box-shadow: inset 0 0 0 2px #2f2740;
+}
+
+.month-picker-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+  color: #8a849c;
+  font-size: 10px;
+}
+
+.month-picker-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.thread-toolbar {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(max-content, 1fr);
+  align-items: end;
+}
+
+.status-toolbar-field {
+  flex: none;
+  width: max-content;
+}
+
+.status-filter,
+.group-view-filter {
+  width: max-content;
+}
+
+.group-toolbar-field {
+  justify-self: end;
+}
+
+.topic-card-head {
+  gap: 10px;
+}
+
+.thread-card-category {
+  gap: 7px;
+  margin-left: 2px;
+}
+
+.thread-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 12px;
+  margin-top: 9px;
+  color: #8a849c;
+  font-size: 12px;
+}
+
+.thread-timeline {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #f0ece4;
+  color: #5f594f;
+  font-weight: 700;
+}
+
+.topic-card .linked-signals {
+  margin-top: 14px;
+  gap: 0;
+}
+
+.topic-card .linked-signal-row:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.topic-card.dragging-topic {
+  opacity: 0.52;
+}
+
+.page-threads .topic-card[draggable='true'] {
+  cursor: grab;
+}
+
+.page-threads .topic-card[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.thread-category-group.accepting-topic {
+  outline: 1px dashed color-mix(in srgb, var(--cat-accent) 70%, #4f4664);
+  outline-offset: -5px;
+}
+
+.thread-modal .form-grid.three-col {
+  grid-template-columns: 1fr 1fr minmax(170px, 0.72fr);
+}
+
+@media (max-width: 1180px) {
+  .thread-toolbar {
+    display: flex;
+  }
+
+  .group-toolbar-field {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .thread-modal .form-grid.three-col {
+    grid-template-columns: 1fr;
+  }
+}

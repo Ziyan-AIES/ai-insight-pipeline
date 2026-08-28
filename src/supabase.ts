@@ -338,6 +338,37 @@ export async function loadWorkspace(includeDeleted = false) {
   return { news, topics, theses, readout }
 }
 
+export async function recordWorkspaceView(
+  pageKey: 'live_signals',
+  viewedAt: string,
+) {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id
+  if (!userId) return null
+
+  const { data, error } = await supabase
+    .from('user_workspace_views')
+    .select('last_viewed_at')
+    .eq('user_id', userId)
+    .eq('page_key', pageKey)
+    .maybeSingle()
+  if (error) throw error
+
+  const { error: upsertError } = await supabase
+    .from('user_workspace_views')
+    .upsert(
+      {
+        user_id: userId,
+        page_key: pageKey,
+        last_viewed_at: viewedAt,
+      },
+      { onConflict: 'user_id,page_key' },
+    )
+  if (upsertError) throw upsertError
+  return data?.last_viewed_at || null
+}
+
 export async function persistTopicNews(topicId: string, newsId: string) {
   if (!supabase) return
   const session = await supabase.auth.getSession()
