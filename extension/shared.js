@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   startCollapsed: 'bswStartCollapsed',
   defaultCategory: 'bswDefaultCategory',
   pendingState: 'bswPendingAuthState',
+  pendingStartedAt: 'bswPendingStartedAt',
 }
 
 export const CATEGORIES = [

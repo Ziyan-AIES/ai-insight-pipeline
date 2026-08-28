@@ -1133,6 +1133,28 @@ label input:disabled {
   margin-top: 20px;
 }
 
+.extension-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  padding: 10px 24px;
+  background: #ece8ff;
+  color: #3d3470;
+  font-size: 13px;
+  border-bottom: 1px solid #d7d0f0;
+}
+
+.extension-banner.ready {
+  background: #e7f6ef;
+  color: #215c3d;
+  border-bottom-color: #cde8d8;
+}
+
+.extension-banner strong {
+  font-size: 13px;
+}
+
 .auth-screen {
   min-height: 100vh;
   display: grid;

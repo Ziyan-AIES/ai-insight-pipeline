@@ -12,17 +12,23 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.2.0')
+    expect(manifest.version).toBe('0.2.1')
+    expect(manifest.permissions).toContain('alarms')
   })
 
   it('signs in through the dashboard handshake without a name or token', () => {
     expect(contentSource).toMatch(/Not signed in/)
     expect(contentSource).toMatch(/Sign in with work email/)
+    expect(contentSource).toMatch(/setupDashboardHandshake/)
+    expect(contentSource).toMatch(/bsw-claim-now/)
     expect(backgroundSource).toMatch(/extension_auth=1&state=/)
+    expect(backgroundSource).toMatch(/chrome\.alarms/)
+    expect(backgroundSource).toMatch(/bsw-claim-now/)
     expect(contentSource).not.toMatch(/bswWriteToken/)
     expect(optionsHtml).not.toMatch(/Write token/)
     expect(optionsHtml).not.toMatch(/Display name/)
     expect(optionsSource).not.toMatch(/bswWriteToken/)
+    expect(optionsSource).toMatch(/Waiting for work-email sign-in/)
   })
 
   it('blocks capture when the signed-in account is not authorized', () => {

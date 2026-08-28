@@ -101,7 +101,7 @@ export async function handler(event) {
         )
       }
       const stateHash = hashState(state)
-      const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString()
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       await supabase('extension_auth_handoffs?state_hash=eq.' + stateHash, {
         method: 'DELETE',
       }).catch(() => null)

@@ -27,6 +27,7 @@ async function load() {
   const values = await chrome.storage.local.get(Object.values(STORAGE_KEYS))
   const signedIn = Boolean(values[STORAGE_KEYS.identity] || values[STORAGE_KEYS.email])
   const authorized = values[STORAGE_KEYS.authorized] === true
+  const pending = Boolean(values[STORAGE_KEYS.pendingState])
   const identity = values[STORAGE_KEYS.identity] || {}
   const storedOrigin = String(values[STORAGE_KEYS.apiBase] || '').trim()
   apiBaseInput.value = storedOrigin || DEFAULT_WORKSPACE_URL
@@ -41,6 +42,12 @@ async function load() {
   authorizedEl.textContent = authorized ? 'Yes' : 'No'
   startCollapsed.checked = values[STORAGE_KEYS.startCollapsed] !== false
   defaultCategory.value = values[STORAGE_KEYS.defaultCategory] || 'auto'
+  if (!signedIn && pending) {
+    statusEl.textContent =
+      'Waiting for work-email sign-in on the dashboard. This page updates automatically.'
+  } else if (!signedIn) {
+    statusEl.textContent = ''
+  }
 }
 
 document.getElementById('signIn').addEventListener('click', async () => {

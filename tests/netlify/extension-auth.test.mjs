@@ -88,6 +88,10 @@ describe('extension auth handshake', () => {
       authorized: true,
       identity: { displayName: 'Pilot Person', userId: 'user-1' },
     })
+    const stored = [...handoffs.values()][0]
+    const ttlMs = new Date(stored.expires_at).getTime() - Date.now()
+    expect(ttlMs).toBeGreaterThan(23 * 60 * 60 * 1000)
+    expect(ttlMs).toBeLessThan(25 * 60 * 60 * 1000)
 
     const claim = await handler(
       post({ action: 'claim', state: 'handshake-state-123456' }),

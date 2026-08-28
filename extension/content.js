@@ -1,7 +1,10 @@
 (function () {
   const DEFAULT_WORKSPACE_URL = 'https://aiinsightpipeline.netlify.app'
   const rootId = 'bsw-floating-tools'
-  if (isWorkspacePage()) return
+  if (isWorkspacePage()) {
+    setupDashboardHandshake()
+    return
+  }
   if (document.getElementById(rootId)) return
 
   const CATEGORIES = [
@@ -33,6 +36,7 @@
     startCollapsed: true,
     defaultCategory: 'auto',
     saved: false,
+    pendingState: '',
   }
 
   const root = document.createElement('div')
@@ -131,23 +135,31 @@
     state.email = values.bswEmail || values.bswIdentity?.email || ''
     state.startCollapsed = values.bswStartCollapsed !== false
     state.defaultCategory = values.bswDefaultCategory || 'auto'
+    state.pendingState = values.bswPendingAuthState || ''
   }
 
   function authMode() {
-    if (!state.accessToken && !state.email) return 'signed-out'
-    if (!state.authorized) return 'unauthorized'
-    return 'authorized'
+    if (state.authorized && state.accessToken) return 'authorized'
+    if (state.email && !state.authorized) return 'unauthorized'
+    if (state.pendingState) return 'pending'
+    return 'signed-out'
   }
 
   function renderPanel() {
     panel.hidden = !state.expanded
     const mode = authMode()
-    if (mode === 'signed-out') {
+    if (mode === 'signed-out' || mode === 'pending') {
       panel.innerHTML = `
         <h1>AI Signals</h1>
         <p>Not signed in</p>
-        <p>Sign in with work email</p>
-        <button type="button" data-act="signin">Sign in</button>
+        <p>${
+          mode === 'pending'
+            ? 'Finish work-email sign-in on the dashboard tab, then return here. Capture appears automatically.'
+            : 'Sign in with work email'
+        }</p>
+        <button type="button" data-act="signin">${
+          mode === 'pending' ? 'Open sign-in again' : 'Sign in'
+        }</button>
       `
       return
     }
@@ -355,5 +367,78 @@
 
   function isWorkspacePage() {
     return /aiinsightpipeline\.netlify\.app$/i.test(location.hostname)
+  }
+
+  function readSupabaseSession() {
+    const prefix = 'sb-'
+    const suffix = '-auth-token'
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i)
+      if (!key || !key.startsWith(prefix) || !key.endsWith(suffix)) continue
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '')
+        if (parsed?.access_token) {
+          return {
+            access_token: String(parsed.access_token),
+            refresh_token: String(parsed.refresh_token || ''),
+          }
+        }
+      } catch {
+        /* ignore malformed supabase keys */
+      }
+    }
+    return null
+  }
+
+  function setupDashboardHandshake() {
+    let inFlight = false
+    async function syncHandoff() {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const values = await chrome.storage.local.get([
+          'bswPendingAuthState',
+          'bswApiBase',
+        ])
+        const pending = values.bswPendingAuthState
+        if (!pending) return
+        chrome.runtime.sendMessage({ type: 'bsw-claim-now' })
+        const tokens = readSupabaseSession()
+        if (!tokens?.access_token) return
+        const origin = normalizeWorkspaceUrl(
+          values.bswApiBase || DEFAULT_WORKSPACE_URL,
+        )
+        await fetch(`${origin}/api/extension-auth`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${tokens.access_token}`,
+          },
+          body: JSON.stringify({
+            action: 'complete',
+            state: pending,
+            refresh_token: tokens.refresh_token || '',
+          }),
+        })
+        chrome.runtime.sendMessage({ type: 'bsw-claim-now' })
+      } catch (error) {
+        console.warn('[AI Signals] dashboard handshake failed', error)
+      } finally {
+        inFlight = false
+      }
+    }
+    void syncHandoff()
+    const timer = window.setInterval(() => {
+      chrome.storage.local.get('bswPendingAuthState', (values) => {
+        if (!values.bswPendingAuthState) {
+          window.clearInterval(timer)
+          return
+        }
+        void syncHandoff()
+      })
+    }, 2500)
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.bswPendingAuthState) void syncHandoff()
+    })
   }
 })()

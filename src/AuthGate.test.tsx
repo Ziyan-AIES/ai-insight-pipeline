@@ -148,9 +148,9 @@ describe('extension handshake', () => {
       </AuthGate>,
     )
     expect(
-      await screen.findByRole('heading', { name: 'Capture access enabled' }),
+      await screen.findByText('Capture access enabled'),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument()
+    expect(screen.getByText('Protected workspace')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       '/api/extension-auth',
       expect.objectContaining({
@@ -190,7 +190,6 @@ describe('extension handshake', () => {
     expect(await screen.findByRole('heading', { name: 'Access not enabled' })).toBeInTheDocument()
     expect(screen.getByText(/person@example.com/)).toBeInTheDocument()
     expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Capture access enabled' })).toBeNull()
     expect(fetch).toHaveBeenCalled()
   })
 
@@ -212,5 +211,39 @@ describe('extension handshake', () => {
         emailRedirectTo: `${window.location.origin}/?extension_auth=1&state=handshake-state-123456`,
       },
     })
+  })
+
+  it('resumes handshake from storage after a magic-link callback without query params', async () => {
+    window.history.replaceState({}, '', '/#access_token=callback')
+    window.localStorage.setItem(
+      'bsw-extension-auth-state',
+      JSON.stringify({ state: 'stored-handshake-state-123456', at: Date.now() }),
+    )
+    mocks.maybeSingle.mockResolvedValue({ data: member, error: null })
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    expect(await screen.findByText('Protected workspace')).toBeInTheDocument()
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1].body)
+    expect(body.state).toBe('stored-handshake-state-123456')
+  })
+
+  it('resumes a stored handshake when the magic link returns to the dashboard home URL', async () => {
+    window.history.replaceState({}, '', '/')
+    window.localStorage.setItem(
+      'bsw-extension-auth-state',
+      JSON.stringify({ state: 'stored-handshake-state-plain-1', at: Date.now() }),
+    )
+    mocks.maybeSingle.mockResolvedValue({ data: member, error: null })
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    expect(await screen.findByText('Capture access enabled')).toBeInTheDocument()
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1].body)
+    expect(body.state).toBe('stored-handshake-state-plain-1')
   })
 })

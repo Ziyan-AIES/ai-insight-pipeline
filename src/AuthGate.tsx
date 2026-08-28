@@ -13,14 +13,59 @@ import {
 } from './auth-context'
 import { cloudConfigured, supabase } from './supabase'
 
+const HANDSHAKE_STORAGE_KEY = 'bsw-extension-auth-state'
+const HANDSHAKE_TTL_MS = 24 * 60 * 60 * 1000
+
 function extensionHandshake() {
   if (typeof window === 'undefined') {
     return { enabled: false, state: '' }
   }
   const params = new URLSearchParams(window.location.search)
-  return {
-    enabled: params.get('extension_auth') === '1',
-    state: params.get('state') || '',
+  let enabled = params.get('extension_auth') === '1'
+  let state = params.get('state') || ''
+  if (enabled && state) {
+    persistHandshakeState(state)
+  } else {
+    const stored = readHandshakeState()
+    if (stored) {
+      enabled = true
+      state = stored
+    }
+  }
+  return { enabled, state }
+}
+
+function persistHandshakeState(state: string) {
+  try {
+    window.localStorage.setItem(
+      HANDSHAKE_STORAGE_KEY,
+      JSON.stringify({ state, at: Date.now() }),
+    )
+  } catch {
+    // Handshake persistence is best-effort.
+  }
+}
+
+function readHandshakeState() {
+  try {
+    const raw = window.localStorage.getItem(HANDSHAKE_STORAGE_KEY)
+    if (!raw) return ''
+    const parsed = JSON.parse(raw) as { state?: string; at?: number }
+    if (parsed.at && Date.now() - parsed.at > HANDSHAKE_TTL_MS) {
+      window.localStorage.removeItem(HANDSHAKE_STORAGE_KEY)
+      return ''
+    }
+    return parsed.state || ''
+  } catch {
+    return ''
+  }
+}
+
+function clearHandshakeState() {
+  try {
+    window.localStorage.removeItem(HANDSHAKE_STORAGE_KEY)
+  } catch {
+    // Ignore storage failures.
   }
 }
 
@@ -146,6 +191,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           return
         }
         setExtensionStatus('connected')
+        clearHandshakeState()
       })
       .catch(() => {
         if (!cancelled) {
@@ -210,17 +256,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (session && identity) {
       const connected = extensionStatus === 'connected'
       return (
-        <AuthCard
-          eyebrow="Chrome extension"
-          title={connected ? 'Capture access enabled' : 'Connecting extension'}
-        >
-          <p>
-            Signed in as {identity.displayName} ({identity.email}). The
-            extension uses this same authorized account. You can close this tab
-            after the extension shows Capture access enabled.
-          </p>
-          {extensionStatus === 'error' && message ? <small>{message}</small> : null}
-        </AuthCard>
+        <>
+          <div className={`extension-banner ${connected ? 'ready' : ''}`}>
+            <strong>
+              {connected ? 'Capture access enabled' : 'Connecting Chrome extension'}
+            </strong>
+            <span>
+              Signed in as {identity.displayName} ({identity.email}). Return to
+              any article tab — the extension should show capture, and this
+              session is kept signed in.
+            </span>
+            {extensionStatus === 'error' && message ? <small>{message}</small> : null}
+          </div>
+          <AuthContext.Provider value={context}>{children}</AuthContext.Provider>
+        </>
       )
     }
     if (session && !identity) {
