@@ -2,6 +2,11 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App, { NewsWhyItMatters } from './App'
 
+function selectJuly2026() {
+  fireEvent.click(screen.getByRole('button', { name: /▾/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Jul 2026:/ }))
+}
+
 describe('dashboard pilot shell', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
@@ -89,6 +94,7 @@ describe('dashboard pilot shell', () => {
   it('keeps Action Threads beside Discussion Candidates', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    selectJuly2026()
     expect(
       screen.getByRole('region', { name: 'Discussion Candidates' }),
     ).toBeInTheDocument()
@@ -130,6 +136,7 @@ describe('dashboard pilot shell', () => {
 
   it('reassigns a Live Signal category by dragging between modules', () => {
     render(<App />)
+    selectJuly2026()
     const heading = screen.getByRole('link', {
       name: /Granola brings ambient meeting memory/,
     })
@@ -296,6 +303,7 @@ describe('dashboard pilot shell', () => {
 
   it('lets an editor set the article publication date separately', async () => {
     render(<App />)
+    selectJuly2026()
     const heading = screen.getByRole('link', {
       name: /Granola brings ambient meeting memory/,
     })

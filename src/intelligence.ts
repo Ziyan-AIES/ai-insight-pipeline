@@ -3,9 +3,9 @@ import type { NewsItem } from './types'
 export function discussionPriorityScore(item: NewsItem) {
   if (item.discussionPriorityScore) return item.discussionPriorityScore
   const votes = item.voteCount || 0
-  const updated = Date.parse(item.updatedAt || item.publishedAt || item.capturedAt)
-  const ageDays = Number.isFinite(updated)
-    ? Math.max(0, (Date.now() - updated) / 86400000)
+  const publishedOrAdded = Date.parse(item.publishedAt || item.capturedAt)
+  const ageDays = Number.isFinite(publishedOrAdded)
+    ? Math.max(0, (Date.now() - publishedOrAdded) / 86400000)
     : 14
   const importance = item.industryImportance?.trim() ? 3 : 0
   const qira = item.qiraRelevance?.trim() ? 3 : 0
@@ -30,11 +30,10 @@ export function firstSentences(text: string | undefined, max = 2) {
 }
 
 export function signalTime(item: {
-  updatedAt?: string
   publishedAt?: string
   capturedAt: string
 }) {
-  return item.updatedAt || item.publishedAt || item.capturedAt
+  return item.publishedAt || item.capturedAt
 }
 
 export type DashboardTimeMode = 'week' | 'fortnight' | 'month'

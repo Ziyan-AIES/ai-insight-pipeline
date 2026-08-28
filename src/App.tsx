@@ -616,9 +616,9 @@ function App() {
     const counts = Array.from({ length: 12 }, () => 0)
     news.forEach((item) => {
       if (item.deletedAt) return
-      const captured = new Date(item.capturedAt)
-      if (captured.getUTCFullYear() !== pickerYear) return
-      counts[captured.getUTCMonth()] += 1
+      const displayedDate = new Date(signalTime(item))
+      if (displayedDate.getUTCFullYear() !== pickerYear) return
+      counts[displayedDate.getUTCMonth()] += 1
     })
     return counts
   }, [news, pickerYear])
