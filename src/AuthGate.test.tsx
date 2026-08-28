@@ -28,6 +28,17 @@ vi.mock('./supabase', () => ({
 
 import { AuthGate } from './AuthGate'
 
+function handshakeRequestBody() {
+  const init = vi.mocked(fetch).mock.calls[0]?.[1]
+  expect(init).toBeTruthy()
+  expect(typeof init?.body).toBe('string')
+  return JSON.parse(String(init?.body)) as {
+    action?: string
+    state?: string
+    refresh_token?: string
+  }
+}
+
 const session = {
   access_token: 'access-token',
   refresh_token: 'refresh-token',
@@ -160,7 +171,7 @@ describe('extension handshake', () => {
         }),
       }),
     )
-    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1].body)
+    const body = handshakeRequestBody()
     expect(body).toMatchObject({
       action: 'complete',
       state: 'handshake-state-123456',
@@ -226,7 +237,7 @@ describe('extension handshake', () => {
       </AuthGate>,
     )
     expect(await screen.findByText('Protected workspace')).toBeInTheDocument()
-    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1].body)
+    const body = handshakeRequestBody()
     expect(body.state).toBe('stored-handshake-state-123456')
   })
 
@@ -243,7 +254,7 @@ describe('extension handshake', () => {
       </AuthGate>,
     )
     expect(await screen.findByText('Capture access enabled')).toBeInTheDocument()
-    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1].body)
+    const body = handshakeRequestBody()
     expect(body.state).toBe('stored-handshake-state-plain-1')
   })
 })
