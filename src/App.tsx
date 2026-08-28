@@ -119,22 +119,18 @@ function monthName(key: string) {
   return topicMonthLabel(key)
 }
 
-function isoWeekKey(value: string) {
-  const date = new Date(value)
-  const utc = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-  )
-  const day = utc.getUTCDay() || 7
-  utc.setUTCDate(utc.getUTCDate() + 4 - day)
-  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1))
-  const week = Math.ceil(
-    ((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
-  )
-  return `${utc.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
-}
-
 function newsDate(item: NewsItem) {
   return item.publishedAt || item.capturedAt
+}
+
+type TimeRange = 'week' | 'fortnight' | 'month'
+
+function inTimeRange(iso: string, range: TimeRange, now = Date.now()) {
+  const then = Date.parse(iso)
+  if (!Number.isFinite(then)) return true
+  if (then > now) return true
+  const days = range === 'week' ? 7 : range === 'fortnight' ? 14 : 31
+  return now - then <= days * 86400000
 }
 
 function noteTakeaway(item: NewsItem) {
@@ -302,7 +298,7 @@ function App() {
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     workspaceFromLocation,
   )
-  const [period] = useState('all')
+  const [timeRange, setTimeRange] = useState<TimeRange>('month')
   const [newsScope] = useState<NewsScope>('all')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
@@ -521,12 +517,10 @@ function App() {
     return news
       .filter((item) => {
         const matchesCategory = true
-        const matchesPeriod =
-          period === 'all' ||
-          (period.startsWith('month:') &&
-            newsDate(item).slice(0, 7) === period.slice(6)) ||
-          (period.startsWith('week:') &&
-            isoWeekKey(newsDate(item)) === period.slice(5))
+        const matchesPeriod = inTimeRange(
+          item.updatedAt || newsDate(item),
+          timeRange,
+        )
         const matchesScope =
           (newsScope === 'removed' && Boolean(item.deletedAt)) ||
           (!item.deletedAt &&
@@ -546,7 +540,7 @@ function App() {
       .sort((a, b) =>
         (b.updatedAt || newsDate(b)).localeCompare(a.updatedAt || newsDate(a)),
       )
-  }, [news, newsScope, period, query])
+  }, [news, newsScope, query, timeRange])
 
   const discussionNotes = useMemo(
     () =>
@@ -1133,6 +1127,33 @@ function App() {
     setNotice('News card updated')
   }
 
+  async function reassignNewsCategory(newsId: string, category: NewsCategory) {
+    const item = news.find((candidate) => candidate.id === newsId)
+    if (!item || item.deletedAt || item.category === category) return
+    setNews((current) =>
+      current.map((candidate) =>
+        candidate.id === newsId ? { ...candidate, category } : candidate,
+      ),
+    )
+    if (!cloudConfigured) return
+    try {
+      await updateNewsItem(newsId, { category }, item.version)
+    } catch (error) {
+      setNews((current) =>
+        current.map((candidate) =>
+          candidate.id === newsId
+            ? { ...candidate, category: item.category }
+            : candidate,
+        ),
+      )
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not reassign this signal',
+      )
+    }
+  }
+
   async function removeNews(id: string) {
     if (!window.confirm('Delete this news card and all of its topic links?')) {
       return
@@ -1518,6 +1539,7 @@ function App() {
       listIndex?: number
       allowReorder?: boolean
       variant?: 'live' | 'candidate'
+      dropCategory?: NewsCategory
     } = {},
   ) {
     const takeaway = noteTakeaway(item)
@@ -1536,33 +1558,41 @@ function App() {
         onDragStart={(event) => {
           setDraggedNewsId(item.id)
           setDraggedNewsSourceTopicId('')
-          event.dataTransfer.effectAllowed = 'copyMove'
-          event.dataTransfer.setData('application/x-news-id', item.id)
-          event.dataTransfer.setData(
-            'application/x-news-source-topic-id',
-            '',
-          )
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'copyMove'
+            event.dataTransfer.setData('application/x-news-id', item.id)
+            event.dataTransfer.setData(
+              'application/x-news-source-topic-id',
+              '',
+            )
+          }
         }}
         onDragEnd={() => {
           setDraggedNewsId('')
           setDraggedNewsSourceTopicId('')
         }}
         onDragOver={
-          options.allowReorder
+          options.allowReorder || options.dropCategory
             ? (event) => {
                 event.preventDefault()
               }
             : undefined
         }
         onDrop={
-          options.allowReorder
+          options.allowReorder || options.dropCategory
             ? (event) => {
                 event.preventDefault()
                 const newsId =
-                  event.dataTransfer.getData('application/x-news-id') ||
+                  event.dataTransfer?.getData('application/x-news-id') ||
                   draggedNewsId
-                if (newsId && options.listIndex !== undefined) {
+                if (options.allowReorder && newsId && options.listIndex !== undefined) {
                   void reorderDiscussionNotes(newsId, options.listIndex)
+                  return
+                }
+                if (options.dropCategory && newsId) {
+                  event.stopPropagation()
+                  void reassignNewsCategory(newsId, options.dropCategory)
+                  setDraggedNewsId('')
                 }
               }
             : undefined
@@ -1868,6 +1898,27 @@ function App() {
               placeholder="Search news, sources, or takeaways..."
             />
           </label>
+          {(workspacePage === 'signals' || workspacePage === 'synthesis') && (
+            <div className="time-filter" role="group" aria-label="Time range">
+              {(
+                [
+                  ['week', 'Past week'],
+                  ['fortnight', 'Past 2 weeks'],
+                  ['month', 'Month'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={timeRange === value ? 'active' : ''}
+                  aria-pressed={timeRange === value}
+                  onClick={() => setTimeRange(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="account-actions">
             <button
               className="primary-button"
@@ -1907,11 +1958,28 @@ function App() {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
                 )
-                const preview = items.slice(0, 2)
+                const preview = items.slice(0, 3)
+                const emptySlots = Math.max(0, 3 - preview.length)
                 return (
                   <section
-                    className={`category-panel cat-${category}`}
+                    className={`category-panel cat-${category} ${
+                      draggedNewsId ? 'accepting-signal' : ''
+                    }`}
                     key={category}
+        onDragOver={(event) => {
+          if (!draggedNewsId) return
+          event.preventDefault()
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+        }}
+                    onDrop={(event) => {
+                      const newsId =
+                        event.dataTransfer?.getData('application/x-news-id') ||
+                        draggedNewsId
+                      if (!newsId) return
+                      event.preventDefault()
+                      void reassignNewsCategory(newsId, category)
+                      setDraggedNewsId('')
+                    }}
                   >
                     <header>
                       <h2>
@@ -1921,13 +1989,18 @@ function App() {
                       <span className="count-badge">{items.length}</span>
                     </header>
                     <div className="news-list">
-                      {preview.length > 0
-                        ? preview.map((item) =>
-                            renderNoteCard(item, { variant: 'live' }),
-                          )
-                        : (
-                          <div className="month-empty">No signals yet.</div>
-                        )}
+                      {preview.map((item) =>
+                        renderNoteCard(item, {
+                          variant: 'live',
+                          dropCategory: category,
+                        }),
+                      )}
+                      {Array.from({ length: emptySlots }, (_, index) => (
+                        <div
+                          className="live-card live-card-slot"
+                          key={`${category}-slot-${index}`}
+                        />
+                      ))}
                     </div>
                     {items.length > 0 ? (
                       <button
@@ -1937,7 +2010,9 @@ function App() {
                       >
                         View all {items.length} →
                       </button>
-                    ) : null}
+                    ) : (
+                      <span className="view-all-link muted">No signals yet</span>
+                    )}
                   </section>
                 )
               })}
@@ -2153,7 +2228,12 @@ function App() {
                   (item) =>
                     !item.deletedAt && item.category === categoryDrawer,
                 )
-                .map((item) => renderNoteCard(item, { variant: 'live' }))}
+                .map((item) =>
+                  renderNoteCard(item, {
+                    variant: 'live',
+                    dropCategory: categoryDrawer,
+                  }),
+                )}
             </div>
           </aside>
         </>
