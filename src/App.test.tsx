@@ -148,6 +148,41 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows direct status filters and groups full Action Threads by category', () => {
+    render(<App />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Intelligence Synthesis' }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+    )
+
+    const status = screen.getByRole('group', { name: 'Status' })
+    expect(
+      within(status).getByRole('button', { name: 'All' }),
+    ).toBeInTheDocument()
+    expect(
+      within(status).getByRole('button', { name: 'Open' }),
+    ).toBeInTheDocument()
+    expect(
+      within(status).getByRole('button', { name: 'In Progress' }),
+    ).toBeInTheDocument()
+    expect(
+      within(status).getByRole('button', { name: 'Parked' }),
+    ).toBeInTheDocument()
+    expect(
+      within(status).getByRole('button', { name: 'Closed' }),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByLabelText('Action Threads grouped by category'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Most recent' }))
+    expect(
+      screen.queryByLabelText('Action Threads grouped by category'),
+    ).toBeNull()
+  })
+
   it('redesigns the Action Thread editor into three sections', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))

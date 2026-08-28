@@ -15,10 +15,13 @@ test('does not compress Live Signal or Discussion Candidate cards', async ({
 
   const panels = page.locator('.category-panel')
   await expect(panels).toHaveCount(6)
+  const gridBox = await page.locator('.signals-grid').boundingBox()
+  expect(gridBox?.height ?? 0).toBeGreaterThanOrEqual(500)
   const heights = await panels.evaluateAll((nodes) =>
     nodes.map((node) => Math.round(node.getBoundingClientRect().height)),
   )
   expect(new Set(heights).size).toBe(1)
+  expect(heights[0]).toBeGreaterThanOrEqual(250)
 
   const liveCards = page.locator('.signals-grid article.live-card')
   const liveCount = await liveCards.count()
@@ -26,6 +29,18 @@ test('does not compress Live Signal or Discussion Candidate cards', async ({
   for (let index = 0; index < liveCount; index += 1) {
     const box = await liveCards.nth(index).boundingBox()
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(160)
+  }
+
+  for (let index = 0; index < 6; index += 1) {
+    const panel = panels.nth(index)
+    const panelBox = await panel.boundingBox()
+    const firstCardBox = await panel
+      .locator('article.live-card')
+      .first()
+      .boundingBox()
+    expect(firstCardBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      (panelBox?.y ?? 0) + (panelBox?.height ?? 0),
+    )
   }
 
   const signalScroll = page.locator('.category-panel .signal-scroll').first()

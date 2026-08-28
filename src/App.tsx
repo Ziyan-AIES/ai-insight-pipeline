@@ -65,6 +65,7 @@ import type {
 type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
+type ThreadGroupMode = 'category' | 'recent'
 type AddLinkDraft = {
   open: boolean
   url: string
@@ -308,6 +309,8 @@ function App() {
   const [threadFrom, setThreadFrom] = useState('')
   const [threadTo, setThreadTo] = useState('')
   const [threadCreatedPreset, setThreadCreatedPreset] = useState('any')
+  const [threadGroupMode, setThreadGroupMode] =
+    useState<ThreadGroupMode>('category')
   const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
   const [categoryDrawer, setCategoryDrawer] = useState<NewsCategory | null>(
     null,
@@ -1802,6 +1805,10 @@ function App() {
           <span className={`chip topic-kind kind-${topic.kind}`}>
             {topicKindLabels[topic.kind] || topic.kind}
           </span>
+          <span className={`thread-card-category cat-${topic.category}`}>
+            <span className="cat-dot" aria-hidden="true" />
+            {categoryLabels[topic.category]}
+          </span>
           <span className={`chip thread-status status-${status}`}>
             {threadStatusLabels[status]}
           </span>
@@ -2058,8 +2065,8 @@ function App() {
                 <span className="eyebrow">What is happening now</span>
                 <h1>Live Signals</h1>
               </div>
+              {renderTimeFilter()}
             </div>
-            {renderTimeFilter()}
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -2132,8 +2139,8 @@ function App() {
                     <span className="eyebrow">What actually matters</span>
                     <h1>Discussion Candidates</h1>
                   </div>
+                  {renderTimeFilter()}
                 </div>
-                {renderTimeFilter()}
                 <div className="news-list discussion-list">
                   {discussionCandidates.map((item) =>
                     renderNoteCard(item, { variant: 'candidate' }),
@@ -2203,25 +2210,33 @@ function App() {
               </div>
               {workspacePage === 'threads' && (
                 <div className="thread-toolbar">
-                  <label className="toolbar-field">
+                  <div className="toolbar-field status-toolbar-field">
                     <span>Status</span>
-                    <select
+                    <div
+                      className="status-filter"
+                      role="group"
                       aria-label="Status"
-                      value={threadStatusFilter}
-                      onChange={(event) =>
-                        setThreadStatusFilter(
-                          event.target.value as ThreadStatusFilter,
-                        )
-                      }
                     >
-                      <option value="all">All statuses</option>
-                      {Object.entries(threadStatusLabels).map(([value, label]) => (
-                        <option value={value} key={value}>
+                      {(
+                        [
+                          ['all', 'All'],
+                          ...Object.entries(threadStatusLabels),
+                        ] as Array<[ThreadStatusFilter, string]>
+                      ).map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className={
+                            threadStatusFilter === value ? 'active' : ''
+                          }
+                          aria-pressed={threadStatusFilter === value}
+                          onClick={() => setThreadStatusFilter(value)}
+                        >
                           {label}
-                        </option>
+                        </button>
                       ))}
-                    </select>
-                  </label>
+                    </div>
+                  </div>
                   <label className="toolbar-field">
                     <span>Created</span>
                     <select
@@ -2248,6 +2263,31 @@ function App() {
                       <option value="90">Last 90 days</option>
                     </select>
                   </label>
+                  <div className="toolbar-field group-toolbar-field">
+                    <span>View</span>
+                    <div
+                      className="group-view-filter"
+                      role="group"
+                      aria-label="Thread view"
+                    >
+                      <button
+                        type="button"
+                        className={threadGroupMode === 'category' ? 'active' : ''}
+                        aria-pressed={threadGroupMode === 'category'}
+                        onClick={() => setThreadGroupMode('category')}
+                      >
+                        By category
+                      </button>
+                      <button
+                        type="button"
+                        className={threadGroupMode === 'recent' ? 'active' : ''}
+                        aria-pressed={threadGroupMode === 'recent'}
+                        onClick={() => setThreadGroupMode('recent')}
+                      >
+                        Most recent
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
               {workspacePage === 'synthesis' && (
@@ -2270,14 +2310,52 @@ function App() {
                 + Drop a signal to create a thread
               </div>
               )}
-              <div className="topic-list kind-pipeline">
-                {visibleTopics.map((topic) => renderTopicCard(topic))}
-                {visibleTopics.length === 0 && (
-                  <div className="month-empty">
-                    No Action Threads in this filter yet.
-                  </div>
-                )}
-              </div>
+              {workspacePage === 'threads' && threadGroupMode === 'category' ? (
+                <div
+                  className="thread-groups"
+                  aria-label="Action Threads grouped by category"
+                >
+                  {liveSignalCategories.map((category) => {
+                    const categoryTopics = visibleTopics.filter(
+                      (topic) => topic.category === category,
+                    )
+                    if (categoryTopics.length === 0) return null
+                    return (
+                      <section
+                        className={`thread-category-group cat-${category}`}
+                        key={category}
+                      >
+                        <header>
+                          <h2>
+                            <span className="cat-dot" aria-hidden="true" />
+                            {categoryLabels[category]}
+                          </h2>
+                          <span className="count-badge">
+                            {categoryTopics.length}
+                          </span>
+                        </header>
+                        <div className="thread-category-grid">
+                          {categoryTopics.map((topic) => renderTopicCard(topic))}
+                        </div>
+                      </section>
+                    )
+                  })}
+                  {visibleTopics.length === 0 && (
+                    <div className="month-empty">
+                      No Action Threads in this filter yet.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="topic-list kind-pipeline">
+                  {visibleTopics.map((topic) => renderTopicCard(topic))}
+                  {visibleTopics.length === 0 && (
+                    <div className="month-empty">
+                      No Action Threads in this filter yet.
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           </>
         )}
