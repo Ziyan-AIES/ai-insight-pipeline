@@ -7,19 +7,25 @@ $logPath = Join-Path $logDirectory "local-editorial.log"
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 Set-Location $root
 
-"[$(Get-Date -Format o)] Starting local editorial review." | Add-Content $logPath
+function Write-EditorialLogLine {
+    param([string]$Message)
+    $Message | Out-File -FilePath $logPath -Append -Encoding utf8
+}
+
+Write-EditorialLogLine "[$(Get-Date -Format o)] Starting local editorial review."
 
 try {
     $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & $npm run editorial:local *>> $logPath
+    $env:EDITORIAL_BATCH_SIZE = "5"
+    & $npm run editorial:drain 2>&1 | Out-File -FilePath $logPath -Append -Encoding utf8
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = $previousErrorActionPreference
-    "[$(Get-Date -Format o)] Finished with exit code $exitCode." | Add-Content $logPath
+    Write-EditorialLogLine "[$(Get-Date -Format o)] Finished with exit code $exitCode."
     exit $exitCode
 }
 catch {
-    "[$(Get-Date -Format o)] Failed: $($_.Exception.Message)" | Add-Content $logPath
+    Write-EditorialLogLine "[$(Get-Date -Format o)] Failed: $($_.Exception.Message)"
     exit 1
 }

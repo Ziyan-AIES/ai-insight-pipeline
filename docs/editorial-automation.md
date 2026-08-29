@@ -33,10 +33,17 @@ the repository, logs, prompts, or task arguments.
 - `npm run editorial:check` validates the five variables, Cursor API access, and
   the pending Supabase queue without invoking a model or writing data.
 - `npm run editorial:local` runs one editorial batch immediately.
+- `npm run editorial:drain` processes five items per batch until the pending
+  queue is empty or a batch produces no publishable items.
 - `npm run editorial:schedule` creates or replaces the Windows task named
   `Signal Intelligence Editorial Review` for weekdays at 18:00 local time.
 - Scheduled output is appended to `logs/local-editorial.log`, which is ignored
   by Git.
+
+The registered Windows task uses `editorial:drain`, so a backlog larger than a
+single model batch is cleared sequentially without overlapping runs. Each batch
+is limited to five items to keep the model response and synchronization payload
+reliable.
 
 ## Agent instructions
 

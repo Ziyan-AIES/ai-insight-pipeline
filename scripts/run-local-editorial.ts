@@ -437,8 +437,9 @@ function validatePayload(
 
 async function main() {
   const env = environment()
+  const drainMode = process.argv.includes('--drain')
   const batchSize = Math.min(
-    Math.max(Number(process.env.EDITORIAL_BATCH_SIZE || 10), 1),
+    Math.max(Number(process.env.EDITORIAL_BATCH_SIZE || (drainMode ? 5 : 10)), 1),
     25,
   )
   const select =
@@ -459,7 +460,11 @@ async function main() {
     return
   }
   if (!pending.length) {
-    console.log('No pending news. Nothing was changed.')
+    console.log(
+      drainMode
+        ? 'Editorial queue is empty. Drain complete.'
+        : 'No pending news. Nothing was changed.',
+    )
     return
   }
   const externalRunId = `local-${new Date().toISOString()}-${crypto.randomUUID()}`
@@ -580,11 +585,15 @@ Return only valid JSON with this shape:
       console.log(`Needs review: ${failure.url} — ${failure.reason}`)
     }
   }
+  if (drainMode) {
+    console.log('Continuing with the next editorial batch.')
+    return main()
+  }
 }
 
 main()
   .then(() => {
-    process.exit(0)
+    process.exitCode = 0
   })
   .catch(async (error: unknown) => {
   if (activeClaim) {
@@ -608,5 +617,5 @@ main()
   } else {
     console.error(error instanceof Error ? error.message : String(error))
   }
-  process.exit(1)
+  process.exitCode = 1
 })

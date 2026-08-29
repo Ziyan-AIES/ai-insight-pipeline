@@ -16,6 +16,7 @@
     "editorial:export": "node scripts/export-editorial-queue.mjs",
     "editorial:check": "tsx scripts/run-local-editorial.ts --check",
     "editorial:local": "tsx scripts/run-local-editorial.ts",
+    "editorial:drain": "tsx scripts/run-local-editorial.ts --drain",
     "editorial:schedule": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/register-editorial-task.ps1",
     "pilot:report": "node scripts/pilot-report.mjs"
   },
