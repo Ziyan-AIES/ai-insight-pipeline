@@ -3942,10 +3942,24 @@ label input:disabled {
 }
 
 .drawer-list .live-card .ai-takeaway p {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  display: block;
+  overflow: visible;
+  -webkit-box-orient: initial;
+  -webkit-line-clamp: unset;
+}
+
+.signals-page .live-card .ai-takeaway,
+.category-drawer .live-card .ai-takeaway {
+  min-height: 0;
+  overflow: visible;
+}
+
+.signals-page .live-card .ai-takeaway p,
+.category-drawer .live-card .ai-takeaway p {
+  display: block;
+  overflow: visible;
+  -webkit-box-orient: initial;
+  -webkit-line-clamp: unset;
 }
 
 .thread-timeline-board {
