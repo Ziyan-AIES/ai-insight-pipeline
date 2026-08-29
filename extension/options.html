@@ -5,61 +5,128 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI Signals Settings</title>
   <style>
-    body { margin: 0; padding: 24px; font-family: Inter, Segoe UI, Arial, sans-serif; color: #20243d; background: linear-gradient(135deg, #eef7ff, #f3edff); }
-    main { max-width: 520px; background: rgba(255,255,255,.86); border: 1px solid rgba(151, 164, 255, .34); border-radius: 22px; padding: 22px; box-shadow: 0 24px 60px rgba(92, 83, 194, .18); }
-    h1 { margin: 0 0 8px; font-size: 22px; }
-    h2 { margin: 22px 0 10px; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; color: #6269df; }
-    p, .status { color: #6269df; font-size: 13px; line-height: 1.5; }
-    label { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; color: #555b80; }
-    input, select { height: 40px; border: 1px solid rgba(151, 164, 255, .42); border-radius: 14px; padding: 0 12px; font: 14px Inter, Segoe UI, Arial, sans-serif; color: #20243d; }
-    button { height: 40px; border: 0; border-radius: 14px; background: linear-gradient(135deg, #7179ff, #9a72ff); color: #fff; font-weight: 700; padding: 0 16px; cursor: pointer; }
-    button.secondary { background: #fff; color: #4a4f7a; border: 1px solid rgba(151, 164, 255, .42); }
-    .row { display: flex; gap: 8px; align-items: center; }
-    .account dt { color: #8a90ad; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-    .account dd { margin: 0 0 10px; font-weight: 700; color: #20243d; }
-    .check { display: flex; align-items: center; gap: 8px; color: #41486f; font-size: 13px; }
-    .check input { width: 16px; height: 16px; }
+    :root {
+      color: #20242a;
+      background: #f3f1f6;
+      font-family: Aptos, "Helvetica Neue", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 420px; padding: 32px; background: #f3f1f6; }
+    main {
+      width: min(100%, 480px);
+      margin: 0 auto;
+      border: 1px solid #dedbe4;
+      border-radius: 12px;
+      background: #f7f6fa;
+      box-shadow: 0 16px 36px rgba(23, 16, 47, .08);
+      overflow: hidden;
+    }
+    header { display: flex; gap: 14px; align-items: center; padding: 22px 22px 18px; border-bottom: 1px solid #e2dfe6; }
+    .brand-mark { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #dedbe4; border-radius: 9px; background: #fff; }
+    .brand-mark img { width: 34px; height: 34px; display: block; }
+    h1 { margin: 0; color: #20242a; font-size: 21px; line-height: 1.15; }
+    header p { margin: 4px 0 0; color: #697079; font-size: 13px; line-height: 1.4; }
+    section { padding: 20px 22px; }
+    section + section { border-top: 1px solid #e2dfe6; }
+    h2 { margin: 0 0 12px; color: #646b73; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .connection { display: grid; gap: 14px; }
+    .connection-state { display: flex; gap: 10px; align-items: flex-start; }
+    .status-dot { width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: #9da3aa; box-shadow: 0 0 0 3px rgba(157, 163, 170, .14); }
+    .status-dot[data-state="ok"] { background: #2f9765; box-shadow: 0 0 0 3px rgba(47, 151, 101, .14); }
+    .status-dot[data-state="err"] { background: #b9434b; box-shadow: 0 0 0 3px rgba(185, 67, 75, .14); }
+    .connection strong { display: block; color: #20242a; font-size: 14px; }
+    .muted { margin: 3px 0 0; color: #697079; font-size: 13px; line-height: 1.45; }
+    .identity { display: grid; gap: 3px; padding: 12px 0 2px; }
+    .identity strong { font-size: 15px; }
+    .identity span { color: #697079; font-size: 13px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      min-height: 38px;
+      border: 1px solid #17102f;
+      border-radius: 8px;
+      padding: 0 14px;
+      background: #17102f;
+      color: #fff;
+      cursor: pointer;
+      font: 700 13px/1 Aptos, "Helvetica Neue", "Segoe UI", sans-serif;
+    }
+    button:hover { background: #2a2144; }
+    button.secondary { border-color: #d7dbe0; background: #fff; color: #30353c; }
+    button.secondary:hover { background: #f0eef3; }
+    button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 70, 145, .22); outline-offset: 2px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .setting-copy strong { display: block; color: #20242a; font-size: 14px; }
+    .setting-copy span { display: block; margin-top: 3px; color: #697079; font-size: 12px; line-height: 1.4; }
+    .switch { position: relative; width: 38px; height: 22px; flex: 0 0 auto; }
+    .switch input { position: absolute; opacity: 0; pointer-events: none; }
+    .switch-track { position: absolute; inset: 0; border: 1px solid #c9cbd0; border-radius: 999px; background: #d9dbe0; transition: background 150ms ease, border-color 150ms ease; }
+    .switch-track::after { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(32, 36, 42, .24); transition: transform 150ms ease; }
+    .switch input:checked + .switch-track { border-color: #17102f; background: #17102f; }
+    .switch input:checked + .switch-track::after { transform: translateX(16px); }
+    .switch input:focus-visible + .switch-track { outline: 3px solid rgba(92, 70, 145, .22); outline-offset: 2px; }
+    .live-status { min-height: 18px; margin: 10px 0 0; color: #646b73; font-size: 12px; }
   </style>
 </head>
 <body>
   <main>
-    <h1>AI Signals</h1>
-    <p>Sign in with the same work email used for the team dashboard. Capture is allowed only for accounts in team_members.</p>
+    <header>
+      <span class="brand-mark"><img src="qira-mark.svg" alt=""></span>
+      <div>
+        <h1>AI Signals</h1>
+        <p>Quiet capture for the team intelligence workspace.</p>
+      </div>
+    </header>
+
     <section id="signedOut">
-      <label id="workspaceField">
-        Workspace URL
-        <input id="apiBase" placeholder="https://aiinsightpipeline.netlify.app">
-      </label>
-      <div class="row">
-        <button id="signIn" type="button">Sign in with work email</button>
-        <span class="status" id="status"></span>
+      <h2>Connection</h2>
+      <div class="connection">
+        <div class="connection-state">
+          <span class="status-dot"></span>
+          <div>
+            <strong>Connect to AI Signals</strong>
+            <p class="muted">Use the same work email as the team dashboard.</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="signIn" type="button">Sign in</button>
+        </div>
+        <p class="live-status" id="status" aria-live="polite"></p>
       </div>
     </section>
+
     <section id="account" hidden>
       <h2>Account</h2>
-      <dl class="account">
-        <dt>Name</dt>
-        <dd id="displayName"></dd>
-        <dt>Email</dt>
-        <dd id="email"></dd>
-        <dt>Authorized</dt>
-        <dd id="authorized"></dd>
-      </dl>
-      <button class="secondary" id="signOut" type="button">Sign out</button>
+      <div class="connection">
+        <div class="connection-state">
+          <span class="status-dot" id="accountDot"></span>
+          <div>
+            <strong id="connectionLabel">Connected to AI Signals</strong>
+            <p class="muted" id="accessLabel">Capture enabled</p>
+          </div>
+        </div>
+        <div class="identity">
+          <strong id="displayName"></strong>
+          <span id="email"></span>
+        </div>
+        <div class="actions">
+          <button id="openDashboard" type="button">Open Dashboard</button>
+          <button class="secondary" id="signOut" type="button">Sign out</button>
+        </div>
+      </div>
     </section>
+
     <section>
-      <h2>Display</h2>
-      <label class="check">
-        <input id="startCollapsed" type="checkbox">
-        Start collapsed
-      </label>
-    </section>
-    <section>
-      <h2>Capture</h2>
-      <label>
-        Default category
-        <select id="defaultCategory"></select>
-      </label>
+      <h2>Extension</h2>
+      <div class="setting-row">
+        <div class="setting-copy">
+          <strong>Show floating capture button</strong>
+          <span>Keep the Qira capture control available on article pages.</span>
+        </div>
+        <label class="switch" aria-label="Show floating capture button">
+          <input id="dockEnabled" type="checkbox">
+          <span class="switch-track"></span>
+        </label>
+      </div>
     </section>
   </main>
   <script src="options.js" type="module"></script>

@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.2.3')
+    expect(manifest.version).toBe('0.3.0')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
@@ -21,19 +21,30 @@ describe('extension session UI', () => {
     expect(contentSource).not.toMatch(/>MI</)
   })
 
-  it('keeps the official color mark on a white orb in every status', () => {
+  it('keeps the official color mark on an unchanged white orb', () => {
     expect(qiraMark).toMatch(/#EB6296/)
     expect(qiraMark).toMatch(/#FF7257/)
     expect(qiraMark).toMatch(/#5C8DFF/)
     expect(qiraMark).toMatch(/#A079FF/)
     expect(qiraMark).toMatch(/#D06AD6/)
     expect(contentSource).toMatch(/background: rgba\(255, 255, 255, \.98\)/)
-    expect(contentSource).toMatch(/\.bsw-orb\[data-kind="ok"\][\s\S]*border-color/)
-    expect(contentSource).toMatch(/\.bsw-orb\[data-kind="err"\][\s\S]*border-color/)
+    expect(contentSource).not.toMatch(/orb\.dataset\.kind/)
+    expect(contentSource).not.toMatch(/orb\.dataset\.busy/)
+  })
+
+  it('reveals a labeled vertical action hierarchy around Qira', () => {
+    expect(contentSource).toMatch(/bsw-slot-top/)
+    expect(contentSource).toMatch(/bsw-slot-bottom/)
+    expect(contentSource).toMatch(/bsw-action-label/)
+    expect(contentSource).toMatch(/topSlot\.innerHTML = actionMarkup\([\s\S]*'save'/)
+    expect(contentSource).toMatch(/bottomSlot\.innerHTML = actionMarkup\('dashboard'/)
+    expect(contentSource).not.toMatch(/\.bsw-actions/)
+    expect(contentSource).not.toMatch(/translateX\(6px\)/)
   })
 
   it('signs in through the dashboard handshake without a name or token', () => {
-    expect(contentSource).toMatch(/aria-label="Sign in"/)
+    expect(contentSource).toMatch(/actionMarkup\('signin', 'Sign in'/)
+    expect(contentSource).toContain('aria-label="${label}"')
     expect(contentSource).toMatch(/setupDashboardHandshake/)
     expect(contentSource).toMatch(/bsw-claim-now/)
     expect(backgroundSource).toMatch(/extension_auth=1&state=/)
@@ -51,13 +62,32 @@ describe('extension session UI', () => {
     expect(contentSource).toMatch(/unauthorized/)
   })
 
-  it('one-click captures through the service worker and shows Saved or an error', () => {
-    expect(contentSource).toMatch(/data-act="save"/)
-    expect(contentSource).toMatch(/data-act="dashboard"/)
+  it('shows action-level capture progress and mature result feedback', () => {
+    expect(contentSource).toMatch(/topSlot\.innerHTML = actionMarkup\([\s\S]*'save'/)
+    expect(contentSource).toMatch(/bottomSlot\.innerHTML = actionMarkup\('dashboard'/)
+    expect(contentSource).toContain('data-act="${act}"')
     expect(contentSource).toMatch(/type: 'bsw-capture'/)
-    expect(contentSource).toMatch(/Saved/)
-    expect(contentSource).toMatch(/Save failed/)
+    expect(contentSource).toMatch(/captureIcon\(state\.captureState\)/)
+    expect(contentSource).toMatch(/Saved to AI Signals/)
+    expect(contentSource).toMatch(/Already in Signals/)
+    expect(contentSource).toMatch(/Access expired/)
+    expect(contentSource).toMatch(/Couldn't save/)
+    expect(contentSource).toMatch(/Retry/)
     expect(backgroundSource).toMatch(/authorization: `Bearer \$\{accessToken\}`/)
     expect(contentSource).not.toMatch(/user:\s*state\.user/)
+  })
+
+  it('keeps settings lightweight and aligned to the Dashboard', () => {
+    expect(optionsHtml).toMatch(/Aptos/)
+    expect(optionsHtml).toMatch(/#f3f1f6/)
+    expect(optionsHtml).toMatch(/#17102f/)
+    expect(optionsHtml).toMatch(/Open Dashboard/)
+    expect(optionsHtml).toMatch(/Show floating capture button/)
+    expect(optionsHtml).not.toMatch(/Workspace URL/)
+    expect(optionsHtml).not.toMatch(/Start collapsed/)
+    expect(optionsHtml).not.toMatch(/Default category/)
+    expect(optionsSource).toMatch(/STORAGE_KEYS\.dockEnabled/)
+    expect(optionsSource).not.toMatch(/startCollapsed/)
+    expect(optionsSource).not.toMatch(/defaultCategory/)
   })
 })

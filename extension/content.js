@@ -17,9 +17,11 @@
     authorized: false,
     email: '',
     pendingState: '',
-    defaultCategory: 'auto',
+    dockEnabled: true,
     toast: '',
     toastKind: 'ok',
+    toastAction: '',
+    captureState: 'idle',
     busy: false,
   }
   const onDashboard = isWorkspacePage()
@@ -47,7 +49,7 @@
     state.authorized = values.bswAuthorized === true
     state.email = values.bswEmail || values.bswIdentity?.email || ''
     state.pendingState = values.bswPendingAuthState || ''
-    state.defaultCategory = values.bswDefaultCategory || 'auto'
+    state.dockEnabled = values.bswDockEnabled !== false
   }
 
   function authMode() {
@@ -68,181 +70,242 @@
           right: 16px;
           top: 42%;
           z-index: 2147483647;
-          font-family: Inter, Segoe UI, Arial, sans-serif;
+          color: #20242a;
+          font-family: Aptos, "Helvetica Neue", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
         }
         #${rootId} .bsw-dock {
-          display: flex;
-          align-items: center;
-          gap: 8px;
+          position: relative;
+          width: 40px;
+          height: 40px;
+          display: grid;
+          place-items: center;
         }
-        #${rootId} .bsw-actions {
+        #${rootId} .bsw-dock::before {
+          content: "";
+          position: absolute;
+          inset: -48px -8px;
+          z-index: 0;
+          pointer-events: auto;
+        }
+        #${rootId} .bsw-slot {
+          position: absolute;
+          right: 0;
+          z-index: 3;
+          min-width: 164px;
           display: flex;
           align-items: center;
+          justify-content: flex-end;
           gap: 8px;
           opacity: 0;
           pointer-events: none;
-          transform: translateX(6px);
-          transition: opacity 140ms ease, transform 140ms ease;
+          transition: opacity 150ms ease, transform 150ms ease;
         }
-        #${rootId} .bsw-dock:hover .bsw-actions,
-        #${rootId} .bsw-dock:focus-within .bsw-actions,
-        #${rootId}.bsw-hold .bsw-actions {
+        #${rootId} .bsw-slot-top {
+          bottom: calc(100% + 6px);
+          transform: translateY(7px);
+        }
+        #${rootId} .bsw-slot-bottom {
+          top: calc(100% + 6px);
+          transform: translateY(-7px);
+        }
+        #${rootId} .bsw-dock:hover .bsw-slot,
+        #${rootId} .bsw-dock:focus-within .bsw-slot,
+        #${rootId}.bsw-hold .bsw-slot {
           opacity: 1;
           pointer-events: auto;
           transform: none;
         }
+        #${rootId} .bsw-action-label {
+          padding: 5px 8px;
+          border: 1px solid rgba(215, 219, 224, .9);
+          border-radius: 7px;
+          background: rgba(247, 246, 250, .97);
+          color: #30353c;
+          font-size: 12px;
+          font-weight: 650;
+          line-height: 1;
+          white-space: nowrap;
+          box-shadow: 0 5px 14px rgba(23, 16, 47, .08);
+        }
         #${rootId} .bsw-orb,
         #${rootId} .bsw-icon {
-          width: 40px;
-          height: 40px;
-          border: 0;
-          border-radius: 50%;
-          cursor: pointer;
           display: grid;
           place-items: center;
-          box-shadow: 0 8px 22px rgba(61, 52, 112, .22);
+          cursor: pointer;
         }
         #${rootId} .bsw-orb {
           position: relative;
+          z-index: 2;
+          width: 40px;
+          height: 40px;
           padding: 0;
           overflow: hidden;
           border: 1px solid rgba(137, 121, 201, .24);
+          border-radius: 50%;
           background: rgba(255, 255, 255, .98);
-          box-shadow:
-            0 10px 28px rgba(90, 76, 147, .2),
-            0 0 0 4px rgba(142, 126, 224, .07);
-          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+          box-shadow: 0 8px 20px rgba(23, 16, 47, .14);
+          transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
         }
         #${rootId} .bsw-orb:hover,
         #${rootId} .bsw-orb:focus-visible {
-          transform: translateY(-1px) scale(1.03);
-          border-color: rgba(127, 105, 221, .42);
-          box-shadow:
-            0 13px 32px rgba(90, 76, 147, .24),
-            0 0 0 5px rgba(142, 126, 224, .1);
+          transform: scale(1.03);
+          border-color: rgba(77, 70, 125, .38);
+          box-shadow: 0 10px 24px rgba(23, 16, 47, .17);
           outline: none;
         }
         #${rootId} .bsw-orb img {
           width: 31px;
           height: 31px;
           display: block;
-          transition: opacity 160ms ease, transform 160ms ease;
         }
-        #${rootId} .bsw-orb[data-kind="ok"] {
-          border-color: rgba(47, 151, 101, .42);
-          box-shadow: 0 10px 28px rgba(47, 151, 101, .18), 0 0 0 4px rgba(47, 151, 101, .08);
-        }
-        #${rootId} .bsw-orb[data-kind="err"] {
-          border-color: rgba(190, 67, 75, .44);
-          box-shadow: 0 10px 28px rgba(190, 67, 75, .2), 0 0 0 4px rgba(190, 67, 75, .08);
-        }
-        #${rootId} .bsw-orb[data-busy="true"] img {
-          opacity: .34;
-          transform: scale(.88);
-        }
-        #${rootId} .bsw-orb[data-busy="true"]::after {
-          content: "";
-          position: absolute;
-          width: 24px;
-          height: 24px;
-          border: 2px solid rgba(126, 104, 218, .2);
-          border-top-color: #806ce0;
-          border-radius: 50%;
-          animation: bsw-orb-spin 760ms linear infinite;
-        }
-        @keyframes bsw-orb-spin { to { transform: rotate(360deg); } }
         #${rootId} .bsw-icon {
+          width: 36px;
+          height: 36px;
+          padding: 0;
+          border: 1px solid #d7dbe0;
+          border-radius: 10px;
           background: #fff;
-          color: #3d3470;
-          border: 1px solid #d7d0f0;
+          color: #30353c;
+          box-shadow: 0 5px 14px rgba(23, 16, 47, .08);
+          transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
         }
-        #${rootId} .bsw-icon svg { width: 18px; height: 18px; }
+        #${rootId} .bsw-icon:hover,
+        #${rootId} .bsw-icon:focus-visible {
+          transform: translateY(-1px);
+          border-color: #aaaeb5;
+          background: #f7f6fa;
+          outline: none;
+        }
+        #${rootId} .bsw-icon[data-state="saved"] { color: #287f57; border-color: rgba(47, 151, 101, .4); }
+        #${rootId} .bsw-icon[data-state="error"] { color: #a53a43; border-color: rgba(185, 67, 75, .42); }
+        #${rootId} .bsw-icon svg { width: 17px; height: 17px; }
+        #${rootId} .bsw-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(48, 53, 60, .18);
+          border-top-color: #30353c;
+          border-radius: 50%;
+          animation: bsw-spin 700ms linear infinite;
+        }
+        @keyframes bsw-spin { to { transform: rotate(360deg); } }
         #${rootId} .bsw-toast {
           position: absolute;
           right: 0;
-          top: calc(100% + 8px);
-          min-width: 140px;
-          max-width: 220px;
-          padding: 8px 10px;
-          border-radius: 10px;
-          background: #20243d;
+          top: calc(100% + 58px);
+          min-width: 176px;
+          max-width: 250px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 10px;
+          border-radius: 8px;
+          background: #20242a;
           color: #fff;
           font-size: 12px;
           line-height: 1.35;
-          box-shadow: 0 10px 24px rgba(32, 36, 61, .24);
+          box-shadow: 0 10px 24px rgba(32, 36, 42, .2);
         }
-        #${rootId} .bsw-toast[data-kind="err"] { background: #8a2f2f; }
+        #${rootId} .bsw-toast[data-kind="err"] { background: #7f2d34; }
+        #${rootId} .bsw-toast button {
+          margin-left: auto;
+          padding: 3px 6px;
+          border: 1px solid rgba(255, 255, 255, .34);
+          border-radius: 5px;
+          background: transparent;
+          color: #fff;
+          cursor: pointer;
+          font: 700 11px/1 Aptos, "Segoe UI", sans-serif;
+          white-space: nowrap;
+        }
       </style>
       <div class="bsw-dock">
-        <div class="bsw-actions"></div>
+        <div class="bsw-slot bsw-slot-top"></div>
         <button class="bsw-orb" type="button" title="AI Signals" aria-label="AI Signals">
           <img src="${QIRA_MARK_URL}" alt="" aria-hidden="true">
         </button>
+        <div class="bsw-slot bsw-slot-bottom"></div>
       </div>
       <div class="bsw-toast" hidden></div>
     `
     document.documentElement.appendChild(root)
-    root.querySelector('.bsw-actions').addEventListener('click', onActionClick)
+    root.addEventListener('click', onActionClick)
   }
 
   function renderDock() {
     const root = document.getElementById(rootId)
     if (!root) return
     const mode = authMode()
-    if (onDashboard && mode === 'authorized') {
+    if (!state.dockEnabled || (onDashboard && mode === 'authorized')) {
       root.hidden = true
       return
     }
     root.hidden = false
-    const orb = root.querySelector('.bsw-orb')
-    const actions = root.querySelector('.bsw-actions')
+    const topSlot = root.querySelector('.bsw-slot-top')
+    const bottomSlot = root.querySelector('.bsw-slot-bottom')
     const toast = root.querySelector('.bsw-toast')
-    orb.dataset.busy = String(state.busy)
-    orb.dataset.kind = state.toastKind === 'err' && state.toast ? 'err' : state.toastKind === 'ok' && state.toast ? 'ok' : 'idle'
     if (mode === 'authorized') {
-      actions.innerHTML = `
-        <button class="bsw-icon" type="button" data-act="save" title="Capture" aria-label="Capture">
-          ${captureIcon()}
-        </button>
-        <button class="bsw-icon" type="button" data-act="dashboard" title="Dashboard" aria-label="Dashboard">
-          ${dashboardIcon()}
-        </button>
-      `
+      topSlot.innerHTML = actionMarkup(
+        'save',
+        'Capture',
+        captureIcon(state.captureState),
+        state.captureState,
+      )
+      bottomSlot.innerHTML = actionMarkup('dashboard', 'Dashboard', dashboardIcon())
     } else if (mode === 'unauthorized') {
-      actions.innerHTML = `
-        <button class="bsw-icon" type="button" data-act="dashboard" title="Dashboard" aria-label="Dashboard">
-          ${dashboardIcon()}
-        </button>
-      `
+      topSlot.innerHTML = actionMarkup('signin', 'Sign in again', signInIcon())
+      bottomSlot.innerHTML = actionMarkup('dashboard', 'Dashboard', dashboardIcon())
     } else {
-      actions.innerHTML = `
-        <button class="bsw-icon" type="button" data-act="signin" title="Sign in" aria-label="Sign in">
-          ${signInIcon()}
-        </button>
-      `
+      topSlot.innerHTML = actionMarkup('signin', 'Sign in', signInIcon())
+      bottomSlot.innerHTML = ''
     }
     if (state.toast) {
       toast.hidden = false
       toast.dataset.kind = state.toastKind
-      toast.textContent = state.toast
+      toast.replaceChildren()
+      const copy = document.createElement('span')
+      copy.textContent = state.toast
+      toast.append(copy)
+      if (state.toastAction) {
+        const action = document.createElement('button')
+        action.type = 'button'
+        action.dataset.act = state.toastAction
+        action.textContent = state.toastAction === 'retry'
+          ? 'Retry'
+          : state.toastAction === 'dashboard'
+            ? 'Dashboard'
+            : 'Sign in again'
+        toast.append(action)
+      }
       root.classList.add('bsw-hold')
     } else {
       toast.hidden = true
-      toast.textContent = ''
+      toast.replaceChildren()
       root.classList.remove('bsw-hold')
     }
+  }
+
+  function actionMarkup(act, label, icon, stateName = '') {
+    const stateAttribute = stateName && stateName !== 'idle'
+      ? ` data-state="${stateName}"`
+      : ''
+    return `
+      <span class="bsw-action-label">${label}</span>
+      <button class="bsw-icon" type="button" data-act="${act}"${stateAttribute} aria-label="${label}">
+        ${icon}
+      </button>
+    `
   }
 
   async function onActionClick(event) {
     const act = event.target.closest('[data-act]')?.dataset.act
     if (act === 'signin') {
       chrome.runtime.sendMessage({ type: 'bsw-sign-in', apiBase: state.apiBase })
-      showToast('Open the dashboard tab to finish sign-in', 'ok')
+      showToast('Finish sign-in in the dashboard', 'ok', '', 3000)
     }
     if (act === 'dashboard') {
       window.open(state.apiBase, '_blank', 'noopener')
     }
-    if (act === 'save') {
+    if (act === 'save' || act === 'retry') {
       await saveSignal()
     }
   }
@@ -250,12 +313,13 @@
   async function saveSignal() {
     if (state.busy) return
     state.busy = true
-    showToast('Saving…', 'ok')
+    state.captureState = 'saving'
+    clearToast()
+    renderDock()
     const page = scrapePage()
-    const category =
-      state.defaultCategory === 'auto'
-        ? detectCategory(`${page.title} ${page.url} ${page.text.slice(0, 4000)}`)
-        : state.defaultCategory
+    const category = detectCategory(
+      `${page.title} ${page.url} ${page.text.slice(0, 4000)}`,
+    )
     try {
       const result = await chrome.runtime.sendMessage({
         type: 'bsw-capture',
@@ -269,28 +333,49 @@
         },
       })
       if (result?.ok) {
-        showToast(result.already_existed ? 'Already saved' : 'Saved', 'ok')
+        state.captureState = 'saved'
+        showToast(
+          result.already_existed ? 'Already in Signals' : 'Saved to AI Signals',
+          'ok',
+        )
+      } else if (result?.status === 401) {
+        state.captureState = 'error'
+        showToast('Access expired', 'err', 'signin', 6000)
+      } else if (result?.status === 403) {
+        state.captureState = 'error'
+        showToast('Access not enabled', 'err', 'dashboard', 6000)
       } else {
-        showToast(result?.error || 'Save failed', 'err')
+        state.captureState = 'error'
+        showToast("Couldn't save", 'err', 'retry', 6000)
       }
-    } catch (error) {
-      showToast(error.message || 'Save failed', 'err')
+    } catch {
+      state.captureState = 'error'
+      showToast("Couldn't save", 'err', 'retry', 6000)
     } finally {
       state.busy = false
       renderDock()
     }
   }
 
-  function showToast(text, kind) {
+  function clearToast() {
+    window.clearTimeout(showToast.timer)
+    state.toast = ''
+    state.toastAction = ''
+  }
+
+  function showToast(text, kind, action = '', duration = action ? 6000 : 1800) {
     state.toast = text
     state.toastKind = kind
+    state.toastAction = action
     renderDock()
     window.clearTimeout(showToast.timer)
     showToast.timer = window.setTimeout(() => {
       state.toast = ''
       state.toastKind = 'ok'
+      state.toastAction = ''
+      state.captureState = 'idle'
       renderDock()
-    }, 2400)
+    }, duration)
   }
 
   function scrapePage() {
@@ -359,7 +444,16 @@
     }
   }
 
-  function captureIcon() {
+  function captureIcon(stateName = 'idle') {
+    if (stateName === 'saving') {
+      return '<span class="bsw-spinner" aria-hidden="true"></span>'
+    }
+    if (stateName === 'saved') {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>'
+    }
+    if (stateName === 'error') {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 7v6"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>'
+    }
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="9"/></svg>`
   }
 

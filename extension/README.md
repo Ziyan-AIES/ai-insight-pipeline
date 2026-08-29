@@ -8,7 +8,7 @@ It uses the **same magic-link login and `team_members` list** as the dashboard. 
 
 After updating these files you **must reload the unpacked extension** in `chrome://extensions` (Developer mode → Reload). Existing tabs also need a refresh before the new capture UI appears.
 
-Version **0.2.3** uses the official Qira color logomark on a compact white orb. Hover to Capture (one click) or open Dashboard. Sign-in prompts appear on the dashboard until the handshake succeeds, then they hide.
+Version **0.3.0** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it, with visible action labels and action-level save feedback.
 
 The bundled `qira-mark.svg` is sourced from Lenovo's official Qira product page and is kept local so the extension UI works without loading a remote image.
 
@@ -20,7 +20,11 @@ The bundled `qira-mark.svg` is sourced from Lenovo's official Qira product page 
 4. Return to the article tab. Hover the **Qira mark** and click Capture. A toast shows **Saved** or the error.
 5. Dashboard opens from the grid icon. Capture UI is not shown on the dashboard after you are signed in.
 
-Default workspace URL: `https://aiinsightpipeline.netlify.app`. When you are signed out and no origin is stored, Options can show a workspace URL field (for a Netlify preview, for example).
+Default workspace URL: `https://aiinsightpipeline.netlify.app`. It is fixed in the normal team-member UI; development overrides remain supported through extension storage.
+
+## Settings
+
+Settings follows the Dashboard's muted editorial visual system and exposes only account status, Open Dashboard, Sign out, and the functional floating-button toggle. Capture category is always detected from the page and can be corrected later in the Dashboard.
 
 ## Source of truth
 

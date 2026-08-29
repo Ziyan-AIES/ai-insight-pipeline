@@ -253,8 +253,7 @@ async function getStoredSession() {
     identity: values[STORAGE_KEYS.identity] || null,
     authorized: values[STORAGE_KEYS.authorized] === true,
     email: values[STORAGE_KEYS.email] || values[STORAGE_KEYS.identity]?.email || '',
-    startCollapsed: values[STORAGE_KEYS.startCollapsed] !== false,
-    defaultCategory: values[STORAGE_KEYS.defaultCategory] || 'auto',
+    dockEnabled: values[STORAGE_KEYS.dockEnabled] !== false,
     pendingState: values[STORAGE_KEYS.pendingState] || '',
     pendingStartedAt: Number(values[STORAGE_KEYS.pendingStartedAt] || 0),
   }
