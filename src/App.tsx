@@ -1894,7 +1894,7 @@ function App() {
             className={`ai-takeaway ${takeawayText ? '' : 'pending'}`}
             title={takeawayText || undefined}
           >
-            <span className="ai-badge">AI</span>
+            {variant !== 'live' ? <span className="ai-badge">AI</span> : null}
             <p>{takeawayText || 'Review pending'}</p>
           </div>
         ) : null}
