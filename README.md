@@ -78,8 +78,9 @@ Never commit real values.
 
 ## Chrome extension
 
-The capture extension lives in `extension/` in this repo (and in
-[browser-signal-watcher](https://github.com/Ziyan-AIES/browser-signal-watcher)).
+The canonical capture extension lives in `extension/` in this repository.
+Load and develop this copy; standalone Browser Signal Watcher repositories are
+historical mirrors and do not need to be kept in sync.
 
 You **must reload the unpacked extension** in `chrome://extensions` after this
 change, then refresh open tabs.
@@ -91,7 +92,7 @@ Sign-in flow:
 3. Authorized `team_members` get **Capture access enabled**. Contributor names come from the team profile, not a typed name.
 4. Signed-in accounts that are not on `team_members` see **Access not enabled**. Capture stays blocked.
 
-Default workspace URL: `https://aiinsightpipeline.netlify.app`. If this agent could not push `browser-signal-watcher`, copy `extension/` from this repository over that project.
+Default workspace URL: `https://aiinsightpipeline.netlify.app`.
 
 ## Historical migration
 

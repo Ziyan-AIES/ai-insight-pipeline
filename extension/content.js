@@ -1,6 +1,7 @@
 (function () {
   const DEFAULT_WORKSPACE_URL = 'https://aiinsightpipeline.netlify.app'
   const rootId = 'bsw-floating-tools'
+  const QIRA_MARK_URL = chrome.runtime.getURL('qira-mark.svg')
   const CATEGORY_KEYWORDS = {
     interaction: ['interaction', 'interface', 'ux', 'ui', 'assistant', 'browser', 'voice', 'multimodal'],
     ai_software: ['software', 'app', 'saas', 'copilot', 'agent', 'workflow', 'automation', 'cursor'],
@@ -102,14 +103,54 @@
           box-shadow: 0 8px 22px rgba(61, 52, 112, .22);
         }
         #${rootId} .bsw-orb {
-          background: #4d467d;
-          color: #fff;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: .04em;
+          position: relative;
+          padding: 0;
+          overflow: hidden;
+          border: 1px solid rgba(137, 121, 201, .24);
+          background: rgba(255, 255, 255, .98);
+          box-shadow:
+            0 10px 28px rgba(90, 76, 147, .2),
+            0 0 0 4px rgba(142, 126, 224, .07);
+          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
         }
-        #${rootId} .bsw-orb[data-kind="ok"] { background: #215c3d; }
-        #${rootId} .bsw-orb[data-kind="err"] { background: #8a2f2f; }
+        #${rootId} .bsw-orb:hover,
+        #${rootId} .bsw-orb:focus-visible {
+          transform: translateY(-1px) scale(1.03);
+          border-color: rgba(127, 105, 221, .42);
+          box-shadow:
+            0 13px 32px rgba(90, 76, 147, .24),
+            0 0 0 5px rgba(142, 126, 224, .1);
+          outline: none;
+        }
+        #${rootId} .bsw-orb img {
+          width: 31px;
+          height: 31px;
+          display: block;
+          transition: opacity 160ms ease, transform 160ms ease;
+        }
+        #${rootId} .bsw-orb[data-kind="ok"] {
+          border-color: rgba(47, 151, 101, .42);
+          box-shadow: 0 10px 28px rgba(47, 151, 101, .18), 0 0 0 4px rgba(47, 151, 101, .08);
+        }
+        #${rootId} .bsw-orb[data-kind="err"] {
+          border-color: rgba(190, 67, 75, .44);
+          box-shadow: 0 10px 28px rgba(190, 67, 75, .2), 0 0 0 4px rgba(190, 67, 75, .08);
+        }
+        #${rootId} .bsw-orb[data-busy="true"] img {
+          opacity: .34;
+          transform: scale(.88);
+        }
+        #${rootId} .bsw-orb[data-busy="true"]::after {
+          content: "";
+          position: absolute;
+          width: 24px;
+          height: 24px;
+          border: 2px solid rgba(126, 104, 218, .2);
+          border-top-color: #806ce0;
+          border-radius: 50%;
+          animation: bsw-orb-spin 760ms linear infinite;
+        }
+        @keyframes bsw-orb-spin { to { transform: rotate(360deg); } }
         #${rootId} .bsw-icon {
           background: #fff;
           color: #3d3470;
@@ -134,7 +175,9 @@
       </style>
       <div class="bsw-dock">
         <div class="bsw-actions"></div>
-        <button class="bsw-orb" type="button" aria-label="MI">MI</button>
+        <button class="bsw-orb" type="button" title="AI Signals" aria-label="AI Signals">
+          <img src="${QIRA_MARK_URL}" alt="" aria-hidden="true">
+        </button>
       </div>
       <div class="bsw-toast" hidden></div>
     `
@@ -154,7 +197,7 @@
     const orb = root.querySelector('.bsw-orb')
     const actions = root.querySelector('.bsw-actions')
     const toast = root.querySelector('.bsw-toast')
-    orb.textContent = state.busy ? '…' : 'MI'
+    orb.dataset.busy = String(state.busy)
     orb.dataset.kind = state.toastKind === 'err' && state.toast ? 'err' : state.toastKind === 'ok' && state.toast ? 'ok' : 'idle'
     if (mode === 'authorized') {
       actions.innerHTML = `
