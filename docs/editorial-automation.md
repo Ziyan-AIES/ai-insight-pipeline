@@ -45,7 +45,9 @@ the repository, logs, prompts, or task arguments.
 3. For each pending item:
    - preserve deliberate human edits;
    - translate Chinese source material into concise English;
-   - write a factual title and short summary;
+   - write a factual title and one 15-20-word English summary sentence;
+   - state the direct impact, or use the article's single most important
+     highlighted fact when an impact is not clearly supported;
    - assign one category from interaction, AI software, AI hardware, ecosystem, AI capability, or industry events;
    - keep hardware, devices, and form-factor stories in AI hardware even when interaction is prominent;
    - return at most one evidence-backed `Why it matters for Qira` sentence;

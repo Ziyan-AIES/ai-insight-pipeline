@@ -6,6 +6,7 @@ import path from 'node:path'
 import process from 'node:process'
 import ipaddr from 'ipaddr.js'
 import { Agent as UndiciAgent, fetch as undiciFetch } from 'undici-pinned'
+import { hasValidEditorialSummaryLength } from './editorial-summary'
 
 const requiredVariables = [
   'CURSOR_API_KEY',
@@ -364,6 +365,7 @@ function validatePayload(
       item.status !== 'reviewed' ||
       typeof item.summary !== 'string' ||
       !item.summary.trim() ||
+      !hasValidEditorialSummaryLength(item.summary) ||
       evidence.length === 0
     ) {
       return []
@@ -492,7 +494,10 @@ For each item:
 - open the source URL only when the supplied raw_text is insufficient;
 - translate Chinese material into concise English;
 - separate source evidence from interpretation;
-- produce a factual title, a concise 2-3 sentence summary, one valid category, 2-5 concrete facts, and zero or one concise Qira implication;
+- produce a factual title, one valid category, 2-5 concrete facts, and zero or one concise Qira implication;
+- write the summary as exactly one English sentence of 15-20 words;
+- state the direct impact first; when impact is not clearly supported, extract the article's single most important highlighted fact instead;
+- avoid generic framing such as "this article discusses," background detail, source attribution, and repeated title wording;
 - use exactly one category: interaction, ai_software, ai_hardware, ecosystem, ai_capability, industry_events;
 - keep hardware, devices, and form-factor stories in ai_hardware.
 - mark status "reviewed" only when at least one claim is supported by supplied or fetched source material;
