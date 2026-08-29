@@ -2061,6 +2061,46 @@ label input:disabled {
   text-transform: uppercase;
 }
 
+.candidate-synthesis {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f3f0ea;
+}
+
+.candidate-synthesis.team-informed {
+  background: #f0edf6;
+}
+
+.synthesis-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.synthesis-heading strong {
+  color: #5f5969;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.synthesis-heading span {
+  color: #746b82;
+  font-size: 11px;
+}
+
+.candidate-synthesis p {
+  margin: 0;
+  color: #373141;
+  font-size: 14px;
+  font-weight: 540;
+  line-height: 1.5;
+}
+
 .candidate-card {
   padding: 20px;
   background: linear-gradient(180deg, #fcfbfd 0%, #f8f5fd 100%);
@@ -3334,7 +3374,7 @@ label input:disabled {
   overflow: hidden;
 }
 
-.candidate-card .ai-takeaway p {
+.candidate-card .candidate-synthesis p {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -3823,8 +3863,8 @@ label input:disabled {
   outline-offset: -5px;
 }
 
-.thread-modal .form-grid.three-col {
-  grid-template-columns: 1fr 1fr minmax(170px, 0.72fr);
+.thread-modal .form-grid.four-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (max-width: 1180px) {
@@ -3838,7 +3878,7 @@ label input:disabled {
 }
 
 @media (max-width: 760px) {
-  .thread-modal .form-grid.three-col {
+  .thread-modal .form-grid.four-col {
     grid-template-columns: 1fr;
   }
 }

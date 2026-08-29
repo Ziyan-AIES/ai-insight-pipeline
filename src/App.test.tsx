@@ -79,6 +79,10 @@ describe('dashboard pilot shell', () => {
         card.classList.contains('candidate-card'),
       ),
     ).toBe(true)
+    expect(within(pane).queryByText('AI')).toBeNull()
+    expect(
+      within(pane).getAllByText(/Team synthesis|Editorial takeaway/).length,
+    ).toBeGreaterThan(0)
   })
 
   it('opens a category drawer from View all', () => {
@@ -309,7 +313,11 @@ describe('dashboard pilot shell', () => {
       target: { value: 'closed' },
     })
     expect(screen.getByLabelText('Completed month')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Category')).toBeNull()
+    expect(screen.getByLabelText('Category')).toHaveValue('ai_capability')
+    fireEvent.change(screen.getByLabelText('Category'), {
+      target: { value: 'interaction' },
+    })
+    expect(screen.getByLabelText('Category')).toHaveValue('interaction')
     expect(screen.queryByLabelText('Description')).toBeNull()
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
   })

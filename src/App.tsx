@@ -1122,7 +1122,8 @@ function App() {
 
   function openCreateThread(newsId = '') {
     setPendingThreadNewsId(newsId)
-    openNewTopic()
+    const sourceCategory = news.find((item) => item.id === newsId)?.category
+    openNewTopic(sourceCategory)
   }
 
 
@@ -1462,14 +1463,14 @@ function App() {
     setNotice('Thesis deleted')
   }
 
-  function openNewTopic() {
+  function openNewTopic(category: NewsCategory = 'ai_capability') {
     setCreatingTopic(true)
     setTopicDraft({
       id: '',
       title: '',
       monthKey: '',
       monthLabel: monthName(''),
-      category: 'ai_capability',
+      category,
       status: 'idea',
       threadStatus: 'open',
       kind: 'insight',
@@ -1765,6 +1766,8 @@ function App() {
     const qiraImplication = firstSentences(item.qiraRelevance, 1)
     const takeawayText =
       variant === 'candidate' ? firstSentences(takeaway, 2) : takeaway
+    const synthesisText = teamView || qiraImplication || takeawayText
+    const synthesisLabel = teamView ? 'Team synthesis' : 'Editorial takeaway'
     return (
       <article
         className={`news-card ${variant}-card ${draggedNewsId === item.id ? 'dragging' : ''}`}
@@ -1889,33 +1892,38 @@ function App() {
             item.title
           )}
         </h2>
-        {variant === 'live' || takeawayText ? (
+        {variant === 'live' ? (
           <div
             className={`ai-takeaway ${takeawayText ? '' : 'pending'}`}
             title={takeawayText || undefined}
           >
-            {variant !== 'live' ? <span className="ai-badge">AI</span> : null}
             <p>{takeawayText || 'Review pending'}</p>
           </div>
         ) : null}
         {variant === 'candidate' && (
           <>
+            {synthesisText ? (
+              <div
+                className={`candidate-synthesis ${teamView ? 'team-informed' : ''}`}
+                title={synthesisText}
+              >
+                <div className="synthesis-heading">
+                  <strong>{synthesisLabel}</strong>
+                  {teamView ? <span>Team-informed</span> : null}
+                </div>
+                <p>{firstSentences(synthesisText, 2)}</p>
+              </div>
+            ) : null}
             {whyItMatters ? (
               <div className="intel-block">
                 <strong>Why it matters</strong>
                 <p>{whyItMatters}</p>
               </div>
             ) : null}
-            {qiraImplication ? (
+            {qiraImplication && qiraImplication !== synthesisText ? (
               <div className="intel-block">
                 <strong>QIRA implication</strong>
                 <p>{qiraImplication}</p>
-              </div>
-            ) : null}
-            {teamView ? (
-              <div className="intel-block">
-                <strong>Team input</strong>
-                <p>{firstSentences(teamView, 1)}</p>
               </div>
             ) : null}
           </>
@@ -3145,7 +3153,7 @@ function App() {
                     autoFocus
                   />
                 </label>
-                <div className="form-grid three-col">
+                <div className="form-grid four-col">
                   <label>
                     Destination
                     <select
@@ -3158,6 +3166,24 @@ function App() {
                       }
                     >
                       {Object.entries(topicKindLabels).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Category
+                    <select
+                      value={topicDraft.category}
+                      onChange={(event) =>
+                        setTopicDraft({
+                          ...topicDraft,
+                          category: event.target.value as NewsCategory,
+                        })
+                      }
+                    >
+                      {Object.entries(categoryLabels).map(([value, label]) => (
                         <option value={value} key={value}>
                           {label}
                         </option>
