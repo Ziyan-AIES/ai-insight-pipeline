@@ -6,13 +6,13 @@ A private team workspace that connects news capture, AI editorial review, and Ac
 
 ## Product flow
 
-1. Capture a link from Live Signals, Intelligence Synthesis, or the AI Signals Chrome extension.
+1. Capture a link from Live Signals, Intelligence Synthesis, or the AI Signals Chrome extension; optionally add a quick thought before saving.
 2. Scan **Live Signals** as a 2×3 category grid of what is happening now.
 3. Vote to Discuss and add anonymous ideas for AI Daily Review.
-4. Open **Intelligence Synthesis** to see Discussion Candidates (2/3) and **Action Threads** (1/3).
-5. Drag a candidate onto an Action Thread to link it. Linked news stays visible one row per signal. Destination is POV / Insight / Strategy / Roadmap / POC. Status is Open / In Progress / Parked / Closed.
+4. Open **Intelligence Synthesis** to review the explicit team states: Needs discuss, Discussed, and In threads. Meeting mode moves through the current Needs discuss queue one signal at a time.
+5. Drag a candidate onto an Action Thread to link it. Threads carry an owner, team decision, next step, outcome link, destination, status, and work month.
 
-The top-level navigation is **Live Signals | Intelligence Synthesis**. Search News and + Add News stay in the global bar.
+The top-level navigation is **Live Signals | Intelligence Synthesis**. Global search finds news and Action Threads across time, with category and contributor filters. + Add News stays in the global bar. There is intentionally no Today homepage: the product opens on followed-category signal updates and their takeaways.
 
 ## Stack
 

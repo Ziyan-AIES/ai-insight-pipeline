@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
 import type {
   ActivityEvent,
+  DiscussionState,
   EditorialReadout,
   EditorialHealth,
   NewsCategory,
@@ -46,6 +47,9 @@ type NewsRow = {
   image_url: string
   editorial_status: 'pending' | 'processed' | 'failed'
   last_reviewed_at?: string | null
+  discussion_state?: DiscussionState | null
+  discussed_at?: string | null
+  discussed_by?: string | null
   metadata: Record<string, unknown> | null
   updated_at: string
   version?: number
@@ -162,10 +166,15 @@ function parseTopicOutputs(value: unknown): TopicOutput[] {
 
 export async function loadWorkspace(includeDeleted = false) {
   if (!supabase) return null
+  const legacyNewsSelect =
+    'id,canonical_url,title,source,summary,takeaway,industry_importance,qira_relevance,team_synthesis,discussion_priority_score,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,last_reviewed_at,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))'
   let newsQuery = supabase
     .from('news_items')
     .select(
-      'id,canonical_url,title,source,summary,takeaway,industry_importance,qira_relevance,team_synthesis,discussion_priority_score,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,last_reviewed_at,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
+      legacyNewsSelect.replace(
+        'last_reviewed_at,metadata',
+        'last_reviewed_at,discussion_state,discussed_at,discussed_by,metadata',
+      ),
     )
     .order('captured_at', { ascending: false })
   let topicQuery = supabase
@@ -196,8 +205,23 @@ export async function loadWorkspace(includeDeleted = false) {
         : Promise.resolve({ data: [] as Array<{ news_id: string }>, error: null }),
       supabase.from('news_ideas').select('news_id'),
     ])
+  let effectiveNewsData: unknown = newsResult.data
+  let effectiveNewsError = newsResult.error
+  if (
+    effectiveNewsError &&
+    /discussion_(state|at|by)/i.test(effectiveNewsError.message)
+  ) {
+    let legacyQuery = supabase
+      .from('news_items')
+      .select(legacyNewsSelect)
+      .order('captured_at', { ascending: false })
+    if (!includeDeleted) legacyQuery = legacyQuery.is('deleted_at', null)
+    const legacyResult = await legacyQuery
+    effectiveNewsData = legacyResult.data
+    effectiveNewsError = legacyResult.error
+  }
   const error =
-    newsResult.error ||
+    effectiveNewsError ||
     topicResult.error ||
     thesisResult.error ||
     memberResult.error ||
@@ -219,7 +243,7 @@ export async function loadWorkspace(includeDeleted = false) {
       member.display_name || member.email?.split('@')[0] || 'Team member',
     ]),
   )
-  const news: NewsItem[] = ((newsResult.data || []) as unknown as NewsRow[]).map(
+  const news: NewsItem[] = ((effectiveNewsData || []) as NewsRow[]).map(
     (row) => {
       const metadata = row.metadata || {}
       const contributedName = captureContributorName(
@@ -262,10 +286,21 @@ export async function loadWorkspace(includeDeleted = false) {
         editorialStatus: row.editorial_status,
         lastReviewedAt: row.last_reviewed_at || undefined,
         ideaCount: ideaCounts.get(row.id) || 0,
+        discussionState:
+          row.discussion_state ||
+          ((row.topic_news || []).some((link) => !link.deleted_at)
+            ? 'in_thread'
+            : typeof metadata.discussion_completed_at === 'string'
+              ? 'discussed'
+              : 'needs_discussion'),
         discussedAt:
-          typeof metadata.discussion_completed_at === 'string'
+          row.discussed_at ||
+          (typeof metadata.discussion_completed_at === 'string'
             ? metadata.discussion_completed_at
-            : undefined,
+            : undefined),
+        discussedBy: row.discussed_by
+          ? memberNames.get(row.discussed_by) || 'Team member'
+          : undefined,
         updatedAt: row.updated_at,
         version: row.version,
         deletedAt: row.deleted_at || undefined,
@@ -310,6 +345,13 @@ export async function loadWorkspace(includeDeleted = false) {
       notes: row.notes,
       analysis: parseTopicAnalysis(row.analysis),
       outputs: parseTopicOutputs(row.outputs),
+      ownerId: row.owner_id || undefined,
+      ownerName: row.owner_id
+        ? memberNames.get(row.owner_id) || 'Team member'
+        : undefined,
+      decisionSummary: String(row.decision_summary || ''),
+      nextStep: String(row.next_step || ''),
+      outcomeUrl: String(row.outcome_url || ''),
       createdAt: row.created_at,
       displayOrder: row.display_order,
       updatedAt: row.updated_at,
@@ -559,6 +601,9 @@ export async function updateNewsItem(
     category?: NewsCategory
     published_at?: string | null
     discussion_order?: number | null
+    discussion_state?: DiscussionState
+    discussed_at?: string | null
+    discussed_by?: string | null
     metadata?: Record<string, unknown>
   },
   expectedVersion?: number,
@@ -645,6 +690,10 @@ export async function createTopic(input: {
   thesisId?: string
   analysis?: TopicAnalysis
   outputs?: TopicOutput[]
+  ownerId?: string
+  decisionSummary?: string
+  nextStep?: string
+  outcomeUrl?: string
 }) {
   if (!supabase) return null
   const session = await supabase.auth.getSession()
@@ -662,6 +711,10 @@ export async function createTopic(input: {
       thesis_id: input.thesisId || null,
       analysis: input.analysis || emptyTopicAnalysis,
       outputs: input.outputs || [],
+      owner_id: input.ownerId || null,
+      decision_summary: input.decisionSummary || '',
+      next_step: input.nextStep || '',
+      outcome_url: input.outcomeUrl || '',
       created_by: userId,
       updated_by: userId,
     })
@@ -684,6 +737,10 @@ export async function updateTopicItem(
     thesis_id?: string | null
     analysis?: TopicAnalysis
     outputs?: TopicOutput[]
+    owner_id?: string | null
+    decision_summary?: string
+    next_step?: string
+    outcome_url?: string
   },
   expectedVersion?: number,
 ) {

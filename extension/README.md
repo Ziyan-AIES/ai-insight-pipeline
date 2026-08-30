@@ -8,7 +8,7 @@ It uses the **same magic-link login and `team_members` list** as the dashboard. 
 
 After updating these files you **must reload the unpacked extension** in `chrome://extensions` (Developer mode → Reload). Existing tabs also need a refresh before the new capture UI appears.
 
-Version **0.3.0** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it, with visible action labels and action-level save feedback.
+Version **0.4.0** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens a small composer where a team member can add an optional thought before saving; success, duplicate, access, and retry outcomes are explicit.
 
 The bundled `qira-mark.svg` is sourced from Lenovo's official Qira product page and is kept local so the extension UI works without loading a remote image.
 
@@ -17,7 +17,7 @@ The bundled `qira-mark.svg` is sourced from Lenovo's official Qira product page 
 1. Load this `extension/` folder as an unpacked Chrome extension.
 2. On a news page, hover the **Qira mark** and click Sign in (or use Options).
 3. Complete the work-email magic link. The dashboard may briefly show **Connecting Chrome extension**, then returns to Daily/Weekly with no persistent sign-in banner.
-4. Return to the article tab. Hover the **Qira mark** and click Capture. A toast shows **Saved** or the error.
+4. Return to the article tab. Hover the **Qira mark** and click Capture. Optionally add a thought, then save. The result says whether the signal was saved, enriched, deduplicated, or needs a retry.
 5. Dashboard opens from the grid icon. Capture UI is not shown on the dashboard after you are signed in.
 
 Default workspace URL: `https://aiinsightpipeline.netlify.app`. It is fixed in the normal team-member UI; development overrides remain supported through extension storage.

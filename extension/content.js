@@ -23,6 +23,8 @@
     toastAction: '',
     captureState: 'idle',
     busy: false,
+    composerOpen: false,
+    thought: '',
   }
   const onDashboard = isWorkspacePage()
 
@@ -221,6 +223,44 @@
           font: 700 11px/1 Aptos, "Segoe UI", sans-serif;
           white-space: nowrap;
         }
+        #${rootId} .bsw-composer {
+          position: absolute;
+          right: 52px;
+          top: -24px;
+          width: 292px;
+          padding: 12px;
+          border: 1px solid #d7dbe0;
+          border-radius: 12px;
+          background: #fff;
+          box-shadow: 0 18px 42px rgba(32, 36, 42, .18);
+        }
+        #${rootId} .bsw-composer[hidden] { display: none; }
+        #${rootId} .bsw-composer strong { display: block; font-size: 13px; }
+        #${rootId} .bsw-composer p { margin: 4px 0 9px; color: #697079; font-size: 11px; line-height: 1.35; }
+        #${rootId} .bsw-composer textarea {
+          width: 100%;
+          min-height: 68px;
+          resize: vertical;
+          padding: 8px 9px;
+          border: 1px solid #d7dbe0;
+          border-radius: 8px;
+          color: #20242a;
+          background: #faf9fb;
+          font: 12px/1.4 Aptos, "Segoe UI", sans-serif;
+        }
+        #${rootId} .bsw-composer textarea:focus { border-color: #6e5b8d; outline: 2px solid rgba(85, 68, 114, .14); }
+        #${rootId} .bsw-composer-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 9px; }
+        #${rootId} .bsw-composer-actions button {
+          min-height: 30px;
+          padding: 0 10px;
+          border: 1px solid #d7dbe0;
+          border-radius: 7px;
+          background: #fff;
+          color: #30353c;
+          cursor: pointer;
+          font: 700 11px/1 Aptos, "Segoe UI", sans-serif;
+        }
+        #${rootId} .bsw-composer-actions button[data-act="capture-save"] { border-color: #17102f; background: #17102f; color: #fff; }
       </style>
       <div class="bsw-dock">
         <div class="bsw-slot bsw-slot-top"></div>
@@ -229,10 +269,22 @@
         </button>
         <div class="bsw-slot bsw-slot-bottom"></div>
       </div>
+      <div class="bsw-composer" hidden>
+        <strong>Save to AI Signals</strong>
+        <p>Add a thought if there is something the team should discuss.</p>
+        <textarea maxlength="500" aria-label="Optional thought" placeholder="Optional thought…"></textarea>
+        <div class="bsw-composer-actions">
+          <button type="button" data-act="capture-cancel">Cancel</button>
+          <button type="button" data-act="capture-save">Save</button>
+        </div>
+      </div>
       <div class="bsw-toast" hidden></div>
     `
     document.documentElement.appendChild(root)
     root.addEventListener('click', onActionClick)
+    root.addEventListener('input', (event) => {
+      if (event.target.matches('.bsw-composer textarea')) state.thought = event.target.value
+    })
   }
 
   function renderDock() {
@@ -247,6 +299,7 @@
     const topSlot = root.querySelector('.bsw-slot-top')
     const bottomSlot = root.querySelector('.bsw-slot-bottom')
     const toast = root.querySelector('.bsw-toast')
+    const composer = root.querySelector('.bsw-composer')
     if (mode === 'authorized') {
       topSlot.innerHTML = actionMarkup(
         'save',
@@ -286,6 +339,9 @@
       toast.replaceChildren()
       root.classList.remove('bsw-hold')
     }
+    composer.hidden = !state.composerOpen || mode !== 'authorized'
+    const thoughtInput = composer.querySelector('textarea')
+    if (thoughtInput.value !== state.thought) thoughtInput.value = state.thought
   }
 
   function actionMarkup(act, label, icon, stateName = '') {
@@ -309,7 +365,18 @@
     if (act === 'dashboard') {
       window.open(state.apiBase, '_blank', 'noopener')
     }
-    if (act === 'save' || act === 'retry') {
+    if (act === 'save') {
+      state.composerOpen = true
+      clearToast()
+      renderDock()
+      document.getElementById(rootId)?.querySelector('.bsw-composer textarea')?.focus()
+    }
+    if (act === 'capture-cancel') {
+      state.composerOpen = false
+      state.thought = ''
+      renderDock()
+    }
+    if (act === 'capture-save' || act === 'retry') {
       await saveSignal()
     }
   }
@@ -334,12 +401,22 @@
           text: page.text,
           images: page.images,
           category,
+          takeaway: state.thought.trim(),
         },
       })
       if (result?.ok) {
         state.captureState = 'saved'
+        const hadThought = Boolean(state.thought.trim())
+        state.composerOpen = false
+        state.thought = ''
         showToast(
-          result.already_existed ? 'Already in Signals' : 'Saved to AI Signals',
+          result.already_existed
+            ? hadThought
+              ? 'Already saved · thought added'
+              : 'Already saved · no duplicate created'
+            : hadThought
+              ? 'Saved with thought'
+              : 'Saved to AI Signals',
           'ok',
         )
       } else if (result?.status === 401) {

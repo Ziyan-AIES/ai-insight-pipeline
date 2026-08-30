@@ -4,8 +4,8 @@
   --font-editorial:
     "Aptos Display", Aptos, Inter, "Helvetica Neue", "Segoe UI", ui-sans-serif,
     system-ui, sans-serif;
-  color: #20242a;
-  background: #f5f6f8;
+  color: var(--color-ink);
+  background: var(--color-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -18,7 +18,7 @@
 
 html {
   min-width: 320px;
-  background: #f5f6f8;
+  background: var(--color-canvas);
 }
 
 body {

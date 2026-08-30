@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { CategoryLabel } from './components/CategoryLabel'
 import { demoNews, demoTheses, demoTopics } from './demoData'
 import { useTeamAuth } from './auth-context'
 import {
@@ -341,6 +342,10 @@ function App() {
   const [ideaNewsId, setIdeaNewsId] = useState('')
   const [ideaListening, setIdeaListening] = useState(false)
   const [query, setQuery] = useState('')
+  const [searchCategory, setSearchCategory] = useState<NewsCategory | 'all'>('all')
+  const [searchContributor, setSearchContributor] = useState('all')
+  const [meetingMode, setMeetingMode] = useState(false)
+  const [meetingIndex, setMeetingIndex] = useState(0)
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
   const [showRecycleBin, setShowRecycleBin] = useState(false)
   const [showTeam, setShowTeam] = useState(false)
@@ -438,6 +443,11 @@ function App() {
       .then(setActivity)
       .catch(() => setActivity([]))
   }, [selectedActivityId, selectedActivityType])
+
+  useEffect(() => {
+    if (!topicDraft || !cloudConfigured || teamMembers.length > 0) return
+    void loadTeamMembers().then(setTeamMembers).catch(() => undefined)
+  }, [teamMembers.length, topicDraft])
 
   useEffect(() => {
     const handleWindowScroll = () => setHeaderHidden(window.scrollY > 16)
@@ -586,11 +596,9 @@ function App() {
     return news
       .filter((item) => {
         const matchesCategory = true
-        const matchesPeriod = isInDashboardTimeRange(
-          signalTime(item),
-          timeMode,
-          selectedMonth,
-        )
+        const matchesPeriod = needle
+          ? true
+          : isInDashboardTimeRange(signalTime(item), timeMode, selectedMonth)
         const matchesScope = !item.deletedAt && !item.archivedAt
         const matchesQuery =
           !needle ||
@@ -601,6 +609,52 @@ function App() {
       })
       .sort((a, b) => signalTime(b).localeCompare(signalTime(a)))
   }, [news, query, selectedMonth, timeMode])
+
+  const searchContributors = useMemo(
+    () =>
+      Array.from(
+        new Set(news.map((item) => item.capturedBy).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [news],
+  )
+
+  const globalNewsResults = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return []
+    return news
+      .filter((item) => !item.deletedAt && !item.archivedAt)
+      .filter(
+        (item) =>
+          searchCategory === 'all' || item.category === searchCategory,
+      )
+      .filter(
+        (item) =>
+          searchContributor === 'all' || item.capturedBy === searchContributor,
+      )
+      .filter((item) =>
+        `${item.title} ${item.summary} ${item.takeaway} ${item.teamSynthesis} ${item.capturedBy} ${categoryLabels[item.category]}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .slice(0, 8)
+  }, [news, query, searchCategory, searchContributor])
+
+  const globalTopicResults = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return []
+    return topics
+      .filter((topic) => !topic.deletedAt)
+      .filter(
+        (topic) =>
+          searchCategory === 'all' || topic.category === searchCategory,
+      )
+      .filter((topic) =>
+        `${topic.title} ${topic.notes} ${topic.decisionSummary} ${topic.nextStep} ${topic.ownerName || ''} ${categoryLabels[topic.category]}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .slice(0, 6)
+  }, [query, searchCategory, topics])
 
   const discussionNotes = useMemo(
     () =>
@@ -634,10 +688,10 @@ function App() {
       .filter((item) => {
         if (newsScope === 'pipeline') return item.topicLinks.length > 0
         if (newsScope === 'discussed') {
-          return item.topicLinks.length === 0 && Boolean(item.discussedAt)
+          return item.discussionState === 'discussed'
         }
         if (newsScope === 'needs_discuss') {
-          return item.topicLinks.length === 0 && !item.discussedAt
+          return item.discussionState === 'needs_discussion'
         }
         return true
       })
@@ -648,6 +702,20 @@ function App() {
           signalTime(b).localeCompare(signalTime(a)),
       )
   }, [newsScope, visibleNews])
+
+  const meetingQueue = useMemo(
+    () =>
+      visibleNews
+        .filter((item) => item.discussionState === 'needs_discussion')
+        .slice()
+        .sort(
+          (a, b) =>
+            discussionPriorityScore(b) - discussionPriorityScore(a) ||
+            signalTime(b).localeCompare(signalTime(a)),
+        ),
+    [visibleNews],
+  )
+  const meetingItem = meetingQueue[Math.min(meetingIndex, meetingQueue.length - 1)]
 
   const visibleTopics = useMemo(
     () =>
@@ -896,6 +964,7 @@ function App() {
         !candidate.topicLinks.some((link) => link.topicId === topicId)
           ? {
               ...candidate,
+              discussionState: 'in_thread',
               topicLinks: [
                 ...candidate.topicLinks,
                 {
@@ -965,10 +1034,15 @@ function App() {
             (link) => link.topicId !== sourceTopicId,
           )
           if (withoutSource.some((link) => link.topicId === targetTopicId)) {
-            return { ...candidate, topicLinks: withoutSource }
+            return {
+              ...candidate,
+              discussionState: 'in_thread',
+              topicLinks: withoutSource,
+            }
           }
           return {
             ...candidate,
+            discussionState: 'in_thread',
             topicLinks: [
               ...withoutSource,
               {
@@ -1133,8 +1207,12 @@ function App() {
         current.map((item) =>
           item.id === newsId
             ? {
-                ...item,
-                topicLinks: item.topicLinks.filter((link) => link.topicId !== topicId),
+              ...item,
+              discussionState:
+                item.topicLinks.filter((link) => link.topicId !== topicId).length > 0
+                  ? 'in_thread'
+                  : 'discussed',
+              topicLinks: item.topicLinks.filter((link) => link.topicId !== topicId),
               }
             : item,
         ),
@@ -1209,6 +1287,7 @@ function App() {
       capturedBy: persisted?.contributorName || identity?.displayName || 'Current user',
       editorialStatus: 'processed',
       ideaCount: 0,
+      discussionState: 'needs_discussion',
       voteCount: 0,
       version: 1,
       topicLinks: [],
@@ -1309,21 +1388,33 @@ function App() {
   }
 
   async function toggleDiscussionComplete(item: NewsItem) {
-    const discussedAt = item.discussedAt ? undefined : new Date().toISOString()
-    const metadata = {
-      ...(item.metadata || {}),
-      discussion_completed_at: discussedAt || null,
-    }
+    const discussed = item.discussionState !== 'discussed'
+    const discussedAt = discussed ? new Date().toISOString() : undefined
+    const discussionState = discussed ? 'discussed' : 'needs_discussion'
     try {
       let version = item.version
       if (cloudConfigured) {
-        const result = await updateNewsItem(item.id, { metadata }, item.version)
+        const result = await updateNewsItem(
+          item.id,
+          {
+            discussion_state: discussionState,
+            discussed_at: discussedAt || null,
+            discussed_by: discussed ? identity?.userId || null : null,
+          },
+          item.version,
+        )
         version = result?.version || version
       }
       setNews((current) =>
         current.map((candidate) =>
           candidate.id === item.id
-            ? { ...candidate, metadata, discussedAt, version }
+            ? {
+                ...candidate,
+                discussionState,
+                discussedAt,
+                discussedBy: discussed ? identity?.displayName : undefined,
+                version,
+              }
             : candidate,
         ),
       )
@@ -1529,6 +1620,11 @@ function App() {
       notes: '',
       analysis: { ...emptyTopicAnalysis },
       outputs: [],
+      ownerId: identity?.userId,
+      ownerName: identity?.displayName,
+      decisionSummary: '',
+      nextStep: '',
+      outcomeUrl: '',
       createdAt: new Date().toISOString(),
       displayOrder: 1,
       supportingNews: [],
@@ -1556,6 +1652,10 @@ function App() {
             thesisId: topicDraft.thesisId,
             analysis: topicDraft.analysis,
             outputs: topicDraft.outputs,
+            ownerId: topicDraft.ownerId,
+            decisionSummary: topicDraft.decisionSummary,
+            nextStep: topicDraft.nextStep,
+            outcomeUrl: topicDraft.outcomeUrl,
           })) || `topic-${Date.now()}`
       } catch (error) {
         const detail =
@@ -1608,6 +1708,10 @@ function App() {
             thesis_id: topicDraft.thesisId || null,
             analysis: topicDraft.analysis,
             outputs: topicDraft.outputs,
+            owner_id: topicDraft.ownerId || null,
+            decision_summary: topicDraft.decisionSummary,
+            next_step: topicDraft.nextStep,
+            outcome_url: topicDraft.outcomeUrl,
           },
           topicDraft.version,
         )
@@ -1745,6 +1849,7 @@ function App() {
       metadata: { contributor_name: contributorName },
       editorialStatus: 'pending',
       ideaCount: 0,
+      discussionState: topic ? 'in_thread' : 'needs_discussion',
       voteCount: 0,
       version: 1,
       topicLinks: topic
@@ -1872,10 +1977,7 @@ function App() {
       >
         <div className="news-meta">
           {variant === 'candidate' ? (
-            <span className={`category-token cat-${item.category}`}>
-              <span className="cat-dot" aria-hidden="true" />
-              {categoryLabels[item.category]}
-            </span>
+            <CategoryLabel category={item.category} className="category-token" />
           ) : null}
           {variant === 'live' && isNewSignal(item) ? (
             <span className="new-signal-badge">New</span>
@@ -1891,7 +1993,7 @@ function App() {
             <span className="pipeline-state">
               {item.topicLinks.length > 0
                 ? 'In thread'
-                : item.discussedAt
+                : item.discussionState === 'discussed'
                   ? 'Discussed'
                   : 'Needs discuss'}
             </span>
@@ -2028,7 +2130,9 @@ function App() {
               type="button"
               onClick={() => void toggleDiscussionComplete(item)}
             >
-              {item.discussedAt ? 'Move to Needs discuss' : 'Mark discussed'}
+              {item.discussionState === 'discussed'
+                ? 'Move to Needs discuss'
+                : 'Mark discussed'}
             </button>
           ) : null}
         </div>
@@ -2091,10 +2195,7 @@ function App() {
           <span className={`chip topic-kind kind-${topic.kind}`}>
             {topicKindLabels[topic.kind] || topic.kind}
           </span>
-          <span className={`thread-card-category cat-${topic.category}`}>
-            <span className="cat-dot" aria-hidden="true" />
-            {categoryLabels[topic.category]}
-          </span>
+          <CategoryLabel category={topic.category} className="thread-card-category" />
           <span className={`chip thread-status status-${status}`}>
             {threadStatusLabels[status]}
           </span>
@@ -2108,6 +2209,15 @@ function App() {
           </div>
         ) : null}
         {framing ? <p className="thread-framing">{framing}</p> : null}
+        {topic.ownerName || topic.nextStep ? (
+          <div className="thread-accountability">
+            {topic.ownerName ? <span>Owner · {topic.ownerName}</span> : null}
+            {topic.nextStep ? <span>Next · {firstSentences(topic.nextStep, 1)}</span> : null}
+          </div>
+        ) : null}
+        {topic.decisionSummary ? (
+          <p className="thread-decision">Decision · {topic.decisionSummary}</p>
+        ) : null}
         {linked.length > 0 ? (
           <div className="linked-signals" aria-label="Linked signals">
             {linked.map((item) =>
@@ -2349,26 +2459,92 @@ function App() {
 
       <div className="workspace-main">
         <header className="utility-bar">
-          <label className="search-field">
-            <span>Search news</span>
-            <svg
-              className="search-icon"
-              viewBox="0 0 20 20"
-              width="16"
-              height="16"
-              aria-hidden="true"
-            >
-              <path
-                fill="currentColor"
-                d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.06 1.06-3.65-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
+          <div className="search-shell">
+            <label className="search-field">
+              <span>Search workspace</span>
+              <svg
+                className="search-icon"
+                viewBox="0 0 20 20"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
+                <path
+                  fill="currentColor"
+                  d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.06 1.06-3.65-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
+                />
+              </svg>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search all news and threads..."
               />
-            </svg>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search news, sources, or takeaways..."
-            />
-          </label>
+            </label>
+            {query.trim() ? (
+              <div className="global-search-results" role="dialog" aria-label="Search results">
+                <div className="search-result-filters">
+                  <select
+                    aria-label="Search category"
+                    value={searchCategory}
+                    onChange={(event) =>
+                      setSearchCategory(event.target.value as NewsCategory | 'all')
+                    }
+                  >
+                    <option value="all">All categories</option>
+                    {Object.entries(categoryLabels).map(([value, label]) => (
+                      <option value={value} key={value}>{label}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Search contributor"
+                    value={searchContributor}
+                    onChange={(event) => setSearchContributor(event.target.value)}
+                  >
+                    <option value="all">All contributors</option>
+                    {searchContributors.map((name) => (
+                      <option value={name} key={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="search-result-section">
+                  <strong>News</strong>
+                  {globalNewsResults.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => {
+                        setNewsDraft({ ...item })
+                        setQuery('')
+                      }}
+                    >
+                      <span>{item.title}</span>
+                      <small>{categoryLabels[item.category]} · {item.capturedBy}</small>
+                    </button>
+                  ))}
+                </div>
+                <div className="search-result-section">
+                  <strong>Action Threads</strong>
+                  {globalTopicResults.map((topic) => (
+                    <button
+                      type="button"
+                      key={topic.id}
+                      onClick={() => {
+                        setCreatingTopic(false)
+                        setTopicDraft({ ...topic })
+                        setQuery('')
+                      }}
+                    >
+                      <span>{topic.title}</span>
+                      <small>{topicKindLabels[topic.kind]} · {topic.ownerName || 'Unassigned'}</small>
+                    </button>
+                  ))}
+                </div>
+                {globalNewsResults.length + globalTopicResults.length === 0 ? (
+                  <p className="search-empty">No matching news or threads.</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <div className="account-actions">
             {workspacePage !== 'threads' ? renderTimeFilter() : null}
             <button
@@ -2480,8 +2656,19 @@ function App() {
                     <span className="eyebrow">What actually matters</span>
                     <h1>Discussion Candidates</h1>
                   </div>
+                  <button
+                    className="secondary-button meeting-start"
+                    type="button"
+                    onClick={() => {
+                      setQuery('')
+                      setMeetingIndex(0)
+                      setMeetingMode(true)
+                    }}
+                  >
+                    Start meeting · {meetingQueue.length}
+                  </button>
                 </div>
-                {renderNewsScopeFilter()}
+                <div className="discussion-toolbar">{renderNewsScopeFilter()}</div>
                 <div className="news-list discussion-list">
                   {discussionCandidates.map((item) =>
                     renderNoteCard(item, { variant: 'candidate' }),
@@ -3148,6 +3335,125 @@ function App() {
         </div>
       )}
 
+      {meetingMode && (
+        <div className="modal-backdrop meeting-backdrop" role="presentation">
+          <section
+            className="meeting-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="meeting-title"
+          >
+            <header className="meeting-header">
+              <div>
+                <span className="eyebrow">Team discussion</span>
+                <h2 id="meeting-title">Signal review</h2>
+              </div>
+              <div className="meeting-progress">
+                {meetingQueue.length > 0
+                  ? `${Math.min(meetingIndex + 1, meetingQueue.length)} of ${meetingQueue.length}`
+                  : 'Complete'}
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Close meeting"
+                onClick={() => setMeetingMode(false)}
+              >
+                ×
+              </button>
+            </header>
+            {meetingItem ? (
+              <div className="meeting-content">
+                <div className="meeting-signal-meta">
+                  <CategoryLabel category={meetingItem.category} />
+                  <span>{meetingItem.capturedBy}</span>
+                  <span>↑ {meetingItem.voteCount} Discuss</span>
+                  {meetingItem.ideaCount > 0 ? (
+                    <span>{meetingItem.ideaCount} team thought{meetingItem.ideaCount === 1 ? '' : 's'}</span>
+                  ) : null}
+                </div>
+                <h3>{meetingItem.title}</h3>
+                {meetingItem.teamSynthesis ? (
+                  <div className="meeting-takeaway team">
+                    <strong>Team synthesis</strong>
+                    <p>{meetingItem.teamSynthesis}</p>
+                  </div>
+                ) : meetingItem.takeaway ? (
+                  <div className="meeting-takeaway">
+                    <strong>Editorial takeaway</strong>
+                    <p>{meetingItem.takeaway}</p>
+                  </div>
+                ) : null}
+                {meetingItem.industryImportance ? (
+                  <div className="meeting-why">
+                    <strong>Why it matters</strong>
+                    <p>{meetingItem.industryImportance}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="meeting-complete">
+                <span aria-hidden="true">✓</span>
+                <h3>Discussion queue complete</h3>
+                <p>Every visible signal has been discussed or moved into an Action Thread.</p>
+              </div>
+            )}
+            <footer className="meeting-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={meetingIndex === 0 || meetingQueue.length === 0}
+                onClick={() => setMeetingIndex((index) => Math.max(0, index - 1))}
+              >
+                Back
+              </button>
+              <div>
+                {meetingItem ? (
+                  <>
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={() =>
+                        setMeetingIndex((index) =>
+                          meetingQueue.length ? (index + 1) % meetingQueue.length : 0,
+                        )
+                      }
+                    >
+                      Skip
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => {
+                        setMeetingMode(false)
+                        openCreateThread(meetingItem.id)
+                      }}
+                    >
+                      Create thread
+                    </button>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => void toggleDiscussionComplete(meetingItem)}
+                    >
+                      Discussed · next
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => setMeetingMode(false)}
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
+
       {ideaNewsId && (
         <div
           className="modal-backdrop"
@@ -3353,6 +3659,76 @@ function App() {
                     <p className="linked-empty">No linked signals yet.</p>
                   ) : null}
                 </div>
+              </section>
+              <section className="modal-section collaboration-section">
+                <h3>Ownership and decision</h3>
+                <div className="form-grid two-col">
+                  <label>
+                    Owner
+                    <select
+                      value={topicDraft.ownerId || ''}
+                      onChange={(event) => {
+                        const owner = teamMembers.find(
+                          (member) => member.userId === event.target.value,
+                        )
+                        setTopicDraft({
+                          ...topicDraft,
+                          ownerId: event.target.value || undefined,
+                          ownerName: owner?.displayName,
+                        })
+                      }}
+                    >
+                      <option value="">Unassigned</option>
+                      {topicDraft.ownerId &&
+                      !teamMembers.some((member) => member.userId === topicDraft.ownerId) ? (
+                        <option value={topicDraft.ownerId}>
+                          {topicDraft.ownerName || 'Current owner'}
+                        </option>
+                      ) : null}
+                      {teamMembers.map((member) => (
+                        <option value={member.userId} key={member.userId}>
+                          {member.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Outcome link
+                    <input
+                      type="url"
+                      value={topicDraft.outcomeUrl}
+                      onChange={(event) =>
+                        setTopicDraft({ ...topicDraft, outcomeUrl: event.target.value })
+                      }
+                      placeholder="https://…"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Team decision
+                  <textarea
+                    rows={2}
+                    value={topicDraft.decisionSummary}
+                    onChange={(event) =>
+                      setTopicDraft({
+                        ...topicDraft,
+                        decisionSummary: event.target.value,
+                      })
+                    }
+                    placeholder="What did the team agree, reject, or decide?"
+                  />
+                </label>
+                <label>
+                  Next step
+                  <textarea
+                    rows={2}
+                    value={topicDraft.nextStep}
+                    onChange={(event) =>
+                      setTopicDraft({ ...topicDraft, nextStep: event.target.value })
+                    }
+                    placeholder="What happens next, and what should the owner produce?"
+                  />
+                </label>
               </section>
               <section className="modal-section">
                 <h3>Intelligence framing</h3>

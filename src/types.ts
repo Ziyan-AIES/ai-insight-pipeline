@@ -16,6 +16,8 @@ export type TopicStatus =
 
 export type ThreadStatus = 'open' | 'in_progress' | 'parked' | 'closed'
 
+export type DiscussionState = 'needs_discussion' | 'discussed' | 'in_thread'
+
 export type TopicKind = 'pov' | 'insight' | 'strategy' | 'roadmap' | 'poc'
 
 export type NoteSourceType = 'captured_news' | 'manual_note'
@@ -62,7 +64,9 @@ export interface NewsItem {
   editorialStatus: 'pending' | 'processed' | 'failed'
   lastReviewedAt?: string
   ideaCount: number
+  discussionState: DiscussionState
   discussedAt?: string
+  discussedBy?: string
   voteCount: number
   votedByMe?: boolean
   discussionOrder?: number
@@ -91,6 +95,11 @@ export interface Topic {
   notes: string
   analysis: TopicAnalysis
   outputs: TopicOutput[]
+  ownerId?: string
+  ownerName?: string
+  decisionSummary: string
+  nextStep: string
+  outcomeUrl: string
   createdAt?: string
   displayOrder: number
   updatedAt?: string

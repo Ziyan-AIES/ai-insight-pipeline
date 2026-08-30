@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.3.1')
+    expect(manifest.version).toBe('0.4.0')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
@@ -76,8 +76,14 @@ describe('extension session UI', () => {
     expect(contentSource).toContain('data-act="${act}"')
     expect(contentSource).toMatch(/type: 'bsw-capture'/)
     expect(contentSource).toMatch(/captureIcon\(state\.captureState\)/)
+    expect(contentSource).toMatch(/Save to AI Signals/)
+    expect(contentSource).toMatch(/Optional thought/)
+    expect(contentSource).toMatch(/data-act="capture-save"/)
+    expect(contentSource).toMatch(/takeaway: state\.thought\.trim\(\)/)
+    expect(contentSource).toMatch(/Saved with thought/)
     expect(contentSource).toMatch(/Saved to AI Signals/)
-    expect(contentSource).toMatch(/Already in Signals/)
+    expect(contentSource).toMatch(/Already saved · thought added/)
+    expect(contentSource).toMatch(/Already saved · no duplicate created/)
     expect(contentSource).toMatch(/Access expired/)
     expect(contentSource).toMatch(/Couldn't save/)
     expect(contentSource).toMatch(/Retry/)
