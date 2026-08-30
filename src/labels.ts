@@ -4,7 +4,7 @@ export const categoryLabels: Record<NewsCategory, string> = {
   interaction: 'Entry & Interaction',
   ai_hardware: 'AI Devices',
   ai_software: 'AI Experiences',
-  ai_capability: 'AI Capability & Technology',
+  ai_capability: 'AI Capability & Tech',
   ecosystem: 'Ecosystem',
   industry_events: 'Industry & Market',
 }

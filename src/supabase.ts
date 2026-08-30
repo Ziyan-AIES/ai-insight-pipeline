@@ -262,6 +262,10 @@ export async function loadWorkspace(includeDeleted = false) {
         editorialStatus: row.editorial_status,
         lastReviewedAt: row.last_reviewed_at || undefined,
         ideaCount: ideaCounts.get(row.id) || 0,
+        discussedAt:
+          typeof metadata.discussion_completed_at === 'string'
+            ? metadata.discussion_completed_at
+            : undefined,
         updatedAt: row.updated_at,
         version: row.version,
         deletedAt: row.deleted_at || undefined,

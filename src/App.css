@@ -4442,12 +4442,26 @@ label input:disabled {
 .account-actions .page-toolbar {
   position: relative;
   flex: 0 1 auto;
+  margin: 0;
 }
 
 .account-actions .time-filter button {
+  height: 38px;
   min-height: 38px;
   padding: 0 12px;
   font-size: 11px;
+}
+
+.account-actions .time-filter {
+  height: 38px;
+}
+
+.account-actions > .primary-button {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  line-height: 1;
 }
 
 .account-actions .month-picker {
@@ -4543,6 +4557,24 @@ label input:disabled {
   white-space: nowrap;
 }
 
+.candidate-card .pipeline-state {
+  background: #eeeae4;
+  color: #6b655d;
+}
+
+.thought-count {
+  color: #8a8492;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.discussion-state-action {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 10px;
+}
+
 .review-processed {
   background: #e5f1eb;
   color: #3f715a;
@@ -4608,6 +4640,43 @@ label input:disabled {
 
 .linked-signal-row > div {
   display: block;
+}
+
+.topic-card .linked-signal-row span,
+.modal-linked .linked-signal-row span {
+  font-weight: 400;
+}
+
+.topic-card-head {
+  margin-bottom: 10px;
+}
+
+.topic-card h3 {
+  margin-top: 0;
+  line-height: 1.25;
+}
+
+.topic-card .thread-framing {
+  margin-top: 8px;
+}
+
+.thread-toolbar .status-filter,
+.thread-toolbar .group-view-filter,
+.thread-toolbar select {
+  box-sizing: border-box;
+  min-height: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.thread-toolbar .status-filter button,
+.thread-toolbar .group-view-filter button {
+  min-height: 36px;
+  height: 36px;
+}
+
+.thread-toolbar .toolbar-field {
+  align-self: end;
 }
 
 .thread-card-meta {
@@ -4764,6 +4833,10 @@ label input:disabled {
 @media (max-width: 720px) {
   .account-actions {
     width: 100%;
+    justify-content: flex-end;
+  }
+
+  .account-actions:has(.page-toolbar) {
     justify-content: space-between;
   }
 

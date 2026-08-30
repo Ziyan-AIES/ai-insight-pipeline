@@ -63,7 +63,7 @@ import type {
   WorkspacePage,
 } from './types'
 
-type NewsScope = 'all' | 'needs_review' | 'reviewed' | 'pipeline' | 'ideas' | 'archived'
+type NewsScope = 'all' | 'pipeline' | 'discussed' | 'needs_discuss'
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
 type ThreadGroupMode = 'timeline' | 'category' | 'recent'
@@ -591,19 +591,7 @@ function App() {
           timeMode,
           selectedMonth,
         )
-        const matchesScope =
-          !item.deletedAt &&
-          (newsScope === 'all'
-            ? !item.archivedAt
-            : newsScope === 'needs_review'
-              ? !item.archivedAt && item.editorialStatus !== 'processed'
-              : newsScope === 'reviewed'
-                ? !item.archivedAt && item.editorialStatus === 'processed'
-                : newsScope === 'pipeline'
-                  ? !item.archivedAt && item.topicLinks.length > 0
-                  : newsScope === 'ideas'
-                    ? !item.archivedAt && item.ideaCount > 0
-                    : Boolean(item.archivedAt))
+        const matchesScope = !item.deletedAt && !item.archivedAt
         const matchesQuery =
           !needle ||
           `${item.title} ${item.summary} ${item.takeaway} ${item.source} ${item.category} ${item.topicLinks.map((link) => link.topicTitle).join(' ')}`
@@ -612,7 +600,7 @@ function App() {
         return matchesCategory && matchesPeriod && matchesScope && matchesQuery
       })
       .sort((a, b) => signalTime(b).localeCompare(signalTime(a)))
-  }, [news, newsScope, query, selectedMonth, timeMode])
+  }, [news, query, selectedMonth, timeMode])
 
   const discussionNotes = useMemo(
     () =>
@@ -643,14 +631,23 @@ function App() {
 
   const discussionCandidates = useMemo(() => {
     return visibleNews
-      .filter((item) => !item.deletedAt)
+      .filter((item) => {
+        if (newsScope === 'pipeline') return item.topicLinks.length > 0
+        if (newsScope === 'discussed') {
+          return item.topicLinks.length === 0 && Boolean(item.discussedAt)
+        }
+        if (newsScope === 'needs_discuss') {
+          return item.topicLinks.length === 0 && !item.discussedAt
+        }
+        return true
+      })
       .slice()
       .sort(
         (a, b) =>
           discussionPriorityScore(b) - discussionPriorityScore(a) ||
           signalTime(b).localeCompare(signalTime(a)),
       )
-  }, [visibleNews])
+  }, [newsScope, visibleNews])
 
   const visibleTopics = useMemo(
     () =>
@@ -1032,12 +1029,17 @@ function App() {
     const content = ideaText.trim()
     if (!content) return
     try {
+      const linkedItem = news.find((item) => item.id === linkedNewsId)
+      let voteResult: { voteCount: number; voted: boolean } | null = null
       if (cloudConfigured) {
         await persistTeamIdea({
           content,
           newsId: linkedNewsId || undefined,
           inputType: ideaListening ? 'voice' : 'text',
         })
+        if (linkedNewsId && linkedItem && !linkedItem.votedByMe) {
+          voteResult = await toggleNewsVote(linkedNewsId)
+        }
       }
       setIdeaText('')
       setIdeaNewsId('')
@@ -1045,13 +1047,20 @@ function App() {
         setNews((current) =>
           current.map((item) =>
             item.id === linkedNewsId
-              ? { ...item, ideaCount: item.ideaCount + 1 }
+              ? {
+                  ...item,
+                  ideaCount: item.ideaCount + 1,
+                  votedByMe: voteResult?.voted ?? true,
+                  voteCount:
+                    voteResult?.voteCount ??
+                    (item.votedByMe ? item.voteCount : item.voteCount + 1),
+                }
               : item,
           ),
         )
       }
       setNotice(
-        'Context saved for the next AI Daily Review.',
+        'Thought saved and added to the discussion queue.',
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not save idea')
@@ -1296,6 +1305,31 @@ function App() {
           ? error.message
           : 'Could not reassign this signal',
       )
+    }
+  }
+
+  async function toggleDiscussionComplete(item: NewsItem) {
+    const discussedAt = item.discussedAt ? undefined : new Date().toISOString()
+    const metadata = {
+      ...(item.metadata || {}),
+      discussion_completed_at: discussedAt || null,
+    }
+    try {
+      let version = item.version
+      if (cloudConfigured) {
+        const result = await updateNewsItem(item.id, { metadata }, item.version)
+        version = result?.version || version
+      }
+      setNews((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id
+            ? { ...candidate, metadata, discussedAt, version }
+            : candidate,
+        ),
+      )
+      setNotice(discussedAt ? 'Marked as discussed.' : 'Moved back to Needs discuss.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not update discussion state')
     }
   }
 
@@ -1853,15 +1887,14 @@ function App() {
           {item.capturedBy ? (
             <span className="meta-contributor">· {item.capturedBy}</span>
           ) : null}
-          <span className={`review-state review-${item.editorialStatus}`}>
-            {item.editorialStatus === 'processed'
-              ? 'Reviewed'
-              : item.editorialStatus === 'failed'
-                ? 'Review failed'
-                : 'Awaiting review'}
-          </span>
-          {item.topicLinks.length > 0 ? (
-            <span className="pipeline-state">In thread</span>
+          {variant === 'candidate' ? (
+            <span className="pipeline-state">
+              {item.topicLinks.length > 0
+                ? 'In thread'
+                : item.discussedAt
+                  ? 'Discussed'
+                  : 'Needs discuss'}
+            </span>
           ) : null}
           <div className="card-actions">
             {item.deletedAt ? (
@@ -1926,12 +1959,12 @@ function App() {
             item.title
           )}
         </h2>
-        {variant === 'live' ? (
+        {variant === 'live' && takeawayText ? (
           <div
-            className={`ai-takeaway ${takeawayText ? '' : 'pending'}`}
-            title={takeawayText || undefined}
+            className="ai-takeaway"
+            title={takeawayText}
           >
-            <p>{takeawayText || 'Review pending'}</p>
+            <p>{takeawayText}</p>
           </div>
         ) : null}
         {variant === 'candidate' && (
@@ -1963,26 +1996,41 @@ function App() {
           </>
         )}
         <div className="card-footer">
-          <button
-            className={`vote-button ${item.votedByMe ? 'voted' : ''}`}
-            type="button"
-            title="Vote to discuss"
-            onClick={() => void voteToDiscuss(item)}
-          >
-            ↑ {item.voteCount || 0} Discuss
-          </button>
-          <button
-            className="text-action idea-button"
-            type="button"
-            onClick={() => {
-              setIdeaNewsId(item.id)
-              setIdeaText('')
-            }}
-          >
-            {item.ideaCount > 0
-              ? `Add context · ${item.ideaCount}`
-              : 'Add context'}
-          </button>
+          {variant === 'live' ? (
+            <>
+              <button
+                className={`vote-button ${item.votedByMe ? 'voted' : ''}`}
+                type="button"
+                title="Vote to discuss"
+                onClick={() => void voteToDiscuss(item)}
+              >
+                ↑ {item.voteCount || 0} Discuss
+              </button>
+              <button
+                className="text-action idea-button"
+                type="button"
+                onClick={() => {
+                  setIdeaNewsId(item.id)
+                  setIdeaText('')
+                }}
+              >
+                Add thought
+              </button>
+              {item.ideaCount > 0 ? (
+                <span className="thought-count">
+                  {item.ideaCount} team thought{item.ideaCount === 1 ? '' : 's'}
+                </span>
+              ) : null}
+            </>
+          ) : item.topicLinks.length === 0 ? (
+            <button
+              className="secondary-button discussion-state-action"
+              type="button"
+              onClick={() => void toggleDiscussionComplete(item)}
+            >
+              {item.discussedAt ? 'Move to Needs discuss' : 'Mark discussed'}
+            </button>
+          ) : null}
         </div>
       </article>
     )
@@ -2199,15 +2247,13 @@ function App() {
 
   function renderNewsScopeFilter() {
     const options: Array<{ value: NewsScope; label: string }> = [
-      { value: 'all', label: 'All signals' },
-      { value: 'needs_review', label: 'Needs review' },
-      { value: 'reviewed', label: 'Reviewed' },
+      { value: 'all', label: 'All news' },
       { value: 'pipeline', label: 'In threads' },
-      { value: 'ideas', label: 'Team context' },
-      { value: 'archived', label: 'Archived' },
+      { value: 'discussed', label: 'Discussed' },
+      { value: 'needs_discuss', label: 'Needs discuss' },
     ]
     return (
-      <div className="signal-scope-filter" role="group" aria-label="Signal status">
+      <div className="signal-scope-filter" role="group" aria-label="Discussion state">
         {options.map((option) => (
           <button
             key={option.value}
@@ -2358,7 +2404,6 @@ function App() {
                 <h1>Live Signals</h1>
               </div>
             </div>
-            {renderNewsScopeFilter()}
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -3124,7 +3169,7 @@ function App() {
             }}
           >
             <div className="modal-heading">
-              <h2 id="add-idea-title">Add context</h2>
+              <h2 id="add-idea-title">Add a thought</h2>
               <button
                 className="icon-button"
                 type="button"
@@ -3138,12 +3183,12 @@ function App() {
               </button>
             </div>
             <label>
-                <span className="sr-only">Context</span>
+                <span className="sr-only">Thought</span>
               <textarea
                 rows={4}
                 value={ideaText}
                 onChange={(event) => setIdeaText(event.target.value)}
-                placeholder="What should AI Daily Review notice about this signal?"
+                placeholder="What should the team notice or discuss about this signal?"
                 autoFocus
               />
             </label>

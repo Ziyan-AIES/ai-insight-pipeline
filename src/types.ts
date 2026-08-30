@@ -62,6 +62,7 @@ export interface NewsItem {
   editorialStatus: 'pending' | 'processed' | 'failed'
   lastReviewedAt?: string
   ideaCount: number
+  discussedAt?: string
   voteCount: number
   votedByMe?: boolean
   discussionOrder?: number

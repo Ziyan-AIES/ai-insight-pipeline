@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App, { NewsWhyItMatters } from './App'
 
@@ -135,10 +135,14 @@ describe('dashboard pilot shell', () => {
       screen.queryByRole('link', { name: /DataFlow-Harness turns agent reliability/ }),
     ).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Time range' })).getByRole('button', {
+        name: 'All',
+      }),
+    )
     const live = screen.getByRole('region', { name: 'Live Signals' })
     const panel = within(live)
-      .getByText('AI Capability & Technology')
+      .getByText('AI Capability & Tech')
       .closest('section')
     expect(panel).toBeTruthy()
     fireEvent.click(
@@ -147,7 +151,7 @@ describe('dashboard pilot shell', () => {
 
     expect(
       within(
-        screen.getByRole('dialog', { name: 'AI Capability & Technology' }),
+        screen.getByRole('dialog', { name: 'AI Capability & Tech' }),
       ).getByRole('link', {
         name: /DataFlow-Harness turns agent reliability/,
       }),
@@ -322,21 +326,55 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
   })
 
-  it('opens a team context popover bound to a signal', () => {
+  it('opens a team thought popover bound to a signal', () => {
     render(<App />)
-    fireEvent.click(screen.getAllByRole('button', { name: /Add context/ })[0])
-    expect(screen.getByRole('dialog', { name: 'Add context' })).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: /Add thought/ })[0])
+    expect(screen.getByRole('dialog', { name: 'Add a thought' })).toBeInTheDocument()
   })
 
-  it('filters signals by review and pipeline state', () => {
+  it('adds a thought to the discussion queue automatically', async () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Needs review' }))
-    expect(screen.getByText('Review pending')).toBeInTheDocument()
-    expect(screen.queryByText('Browser agents turn the address bar into an invocation layer')).toBeNull()
+    const heading = screen.getByRole('link', {
+      name: /Meta quietly launches vibe-coded gaming app Pocket/,
+    })
+    const card = heading.closest('article')
+    expect(card).toBeTruthy()
+    expect(within(card as HTMLElement).getByRole('button', { name: '↑ 0 Discuss' })).toBeInTheDocument()
+    fireEvent.click(within(card as HTMLElement).getByRole('button', { name: 'Add thought' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Thought' }), {
+      target: { value: 'Discuss the product implications with the team.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    await waitFor(() => {
+      expect(within(card as HTMLElement).getByRole('button', { name: '↑ 1 Discuss' })).toBeInTheDocument()
+      expect(within(card as HTMLElement).getByText('1 team thought')).toBeInTheDocument()
+    })
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+  it('keeps review state off Live Signals and filters Synthesis by discussion state', () => {
+    render(<App />)
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    expect(within(live).queryByRole('group', { name: 'Discussion state' })).toBeNull()
+    expect(within(live).queryByText('Awaiting review')).toBeNull()
+    expect(within(live).queryByText('Reviewed')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    expect(screen.getByRole('group', { name: 'Discussion state' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add thought/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Discussed' }))
+    expect(screen.getByText('Browser agents turn the address bar into an invocation layer')).toBeInTheDocument()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Time range' })).getByRole('button', {
+        name: 'All',
+      }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'In threads' }))
-    expect(screen.getByText('DataFlow-Harness turns agent reliability into an engineering discipline')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: 'Discussion Candidates' })).getByRole(
+        'link',
+        { name: 'DataFlow-Harness turns agent reliability into an engineering discipline' },
+      ),
+    ).toBeInTheDocument()
   })
 
   it('exposes a link capture action', () => {

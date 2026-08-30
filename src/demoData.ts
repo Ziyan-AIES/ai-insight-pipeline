@@ -99,6 +99,7 @@ export const demoNews: NewsItem[] = [
     updatedAt: '2026-08-27T14:00:00Z',
     capturedBy: 'Team',
     editorialStatus: 'processed',
+    discussedAt: '2026-08-28T10:00:00Z',
     ideaCount: 0,
     voteCount: 4,
     votedByMe: true,
