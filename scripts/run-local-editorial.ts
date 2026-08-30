@@ -35,6 +35,7 @@ type QueueItem = {
   captured_at: string
   metadata: Record<string, unknown>
   source_mode?: 'extension_text' | 'fetched_html' | 'url_only'
+  team_context?: string[]
 }
 
 type ReviewedItem = {
@@ -50,6 +51,7 @@ type ReviewedItem = {
   evidence?: unknown
   impact_paths?: unknown
   open_questions?: unknown
+  team_synthesis?: unknown
 }
 
 type EditorialPayload = {
@@ -210,6 +212,31 @@ async function queryNews(
     throw new Error(`Supabase queue request failed (${response.status})`)
   }
   return (await response.json()) as QueueItem[]
+}
+
+async function queryTeamContext(
+  env: ReturnType<typeof environment>,
+  newsIds: string[],
+) {
+  if (!newsIds.length) return new Map<string, string[]>()
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/news_ideas`)
+  url.searchParams.set('select', 'news_id,content,created_at')
+  url.searchParams.set('news_id', `in.(${newsIds.join(',')})`)
+  url.searchParams.set('order', 'created_at.asc')
+  const response = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+  if (!response.ok) throw new Error(`Team context request failed (${response.status})`)
+  const rows = (await response.json()) as Array<{ news_id: string; content: string }>
+  return rows.reduce((context, row) => {
+    const items = context.get(row.news_id) || []
+    if (row.content?.trim()) items.push(row.content.trim().slice(0, 1200))
+    context.set(row.news_id, items)
+    return context
+  }, new Map<string, string[]>())
 }
 
 async function claimEditorialJob(
@@ -387,6 +414,10 @@ function validatePayload(
             : original.source,
         text: original.raw_text,
         summary: item.summary.trim(),
+        team_synthesis:
+          typeof item.team_synthesis === 'string'
+            ? item.team_synthesis.trim().slice(0, 2000)
+            : '',
         category,
         news_facts:
           stringArray(item.news_facts).length > 0
@@ -481,7 +512,13 @@ async function main() {
     return
   }
 
-  const enrichedPending = await Promise.all(pending.map(enrichItem))
+  const teamContext = await queryTeamContext(env, pending.map((item) => item.id))
+  const enrichedPending = await Promise.all(
+    pending.map(async (item) => ({
+      ...(await enrichItem(item)),
+      team_context: teamContext.get(item.id) || [],
+    })),
+  )
   const weekContext = await queryNews(env, {
     select: 'canonical_url,title,source,summary,category,captured_at',
     captured_at: `gte.${currentWeekStart()}`,
@@ -505,6 +542,7 @@ For each item:
 - avoid generic framing such as "this article discusses," background detail, source attribution, and repeated title wording;
 - use exactly one category: interaction, ai_software, ai_hardware, ecosystem, ai_capability, industry_events;
 - keep hardware, devices, and form-factor stories in ai_hardware.
+- treat team_context as anonymous team input, not source evidence; when present, synthesize it into one concise team_synthesis sentence without naming contributors;
 - mark status "reviewed" only when at least one claim is supported by supplied or fetched source material;
 - otherwise mark status "insufficient_evidence", explain failure_reason, and do not invent missing facts;
 - include evidence entries with claim, source_url, and a short supporting excerpt;
@@ -516,7 +554,7 @@ For each item:
 Also create one current week-to-date readout using period_type "week" and period_key "${isoWeekKey()}". Base it on <week_context> plus the newly reviewed items. The readout needs a 1-2 sentence lede and 2-5 specific bullets, prioritizing concrete directional signals relevant to Qira without forcing a connection.
 
 Return only valid JSON with this shape:
-{"news":[{"url":"exact input canonical_url","status":"reviewed","failure_reason":"","title":"","source":"","summary":"","category":"","news_facts":[],"implications":[],"evidence":[{"claim":"","source_url":"","support":""}],"impact_paths":[],"open_questions":[]}],"readouts":[{"period_type":"week","period_key":"${isoWeekKey()}","lede":"","bullets":[],"generated_by":"cursor-local-editorial"}]}
+{"news":[{"url":"exact input canonical_url","status":"reviewed","failure_reason":"","title":"","source":"","summary":"","team_synthesis":"","category":"","news_facts":[],"implications":[],"evidence":[{"claim":"","source_url":"","support":""}],"impact_paths":[],"open_questions":[]}],"readouts":[{"period_type":"week","period_key":"${isoWeekKey()}","lede":"","bullets":[],"generated_by":"cursor-local-editorial"}]}
 
 <pending_news>${JSON.stringify(enrichedPending)}</pending_news>
 <week_context>${JSON.stringify(weekContext)}</week_context>`

@@ -59,7 +59,9 @@ export interface NewsItem {
   archivedAt?: string
   metadata?: Record<string, unknown>
   imageUrl?: string
-  editorialStatus: 'pending' | 'processed'
+  editorialStatus: 'pending' | 'processed' | 'failed'
+  lastReviewedAt?: string
+  ideaCount: number
   voteCount: number
   votedByMe?: boolean
   discussionOrder?: number

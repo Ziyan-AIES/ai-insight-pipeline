@@ -45,6 +45,7 @@ type NewsRow = {
   captured_by: string | null
   image_url: string
   editorial_status: 'pending' | 'processed' | 'failed'
+  last_reviewed_at?: string | null
   metadata: Record<string, unknown> | null
   updated_at: string
   version?: number
@@ -164,7 +165,7 @@ export async function loadWorkspace(includeDeleted = false) {
   let newsQuery = supabase
     .from('news_items')
     .select(
-      'id,canonical_url,title,source,summary,takeaway,industry_importance,qira_relevance,team_synthesis,discussion_priority_score,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
+      'id,canonical_url,title,source,summary,takeaway,industry_importance,qira_relevance,team_synthesis,discussion_priority_score,source_type,vote_count,discussion_order,category,captured_at,published_at,captured_by,image_url,editorial_status,last_reviewed_at,metadata,updated_at,version,deleted_at,topic_news(deleted_at,topics(id,title,scheduled_month,deleted_at))',
     )
     .order('captured_at', { ascending: false })
   let topicQuery = supabase
@@ -179,7 +180,7 @@ export async function loadWorkspace(includeDeleted = false) {
   }
   const session = await supabase.auth.getSession()
   const userId = session.data.session?.user.id
-  const [newsResult, topicResult, thesisResult, memberResult, readoutResult, voteResult] =
+  const [newsResult, topicResult, thesisResult, memberResult, readoutResult, voteResult, ideaResult] =
     await Promise.all([
       newsQuery,
       topicQuery,
@@ -193,6 +194,7 @@ export async function loadWorkspace(includeDeleted = false) {
       userId
         ? supabase.from('news_votes').select('news_id').eq('user_id', userId)
         : Promise.resolve({ data: [] as Array<{ news_id: string }>, error: null }),
+      supabase.from('news_ideas').select('news_id'),
     ])
   const error =
     newsResult.error ||
@@ -200,11 +202,16 @@ export async function loadWorkspace(includeDeleted = false) {
     thesisResult.error ||
     memberResult.error ||
     readoutResult.error ||
-    voteResult.error
+    voteResult.error ||
+    ideaResult.error
   if (error) throw error
   const votedIds = new Set(
     (voteResult.data || []).map((row) => row.news_id),
   )
+  const ideaCounts = (ideaResult.data || []).reduce((counts, row) => {
+    if (row.news_id) counts.set(row.news_id, (counts.get(row.news_id) || 0) + 1)
+    return counts
+  }, new Map<string, number>())
 
   const memberNames = new Map(
     (memberResult.data || []).map((member) => [
@@ -252,8 +259,9 @@ export async function loadWorkspace(includeDeleted = false) {
             : undefined,
         metadata,
         imageUrl: row.image_url,
-        editorialStatus:
-          row.editorial_status === 'processed' ? 'processed' : 'pending',
+        editorialStatus: row.editorial_status,
+        lastReviewedAt: row.last_reviewed_at || undefined,
+        ideaCount: ideaCounts.get(row.id) || 0,
         updatedAt: row.updated_at,
         version: row.version,
         deletedAt: row.deleted_at || undefined,

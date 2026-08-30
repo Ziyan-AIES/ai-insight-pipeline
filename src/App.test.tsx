@@ -322,10 +322,21 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
   })
 
-  it('opens an idea popover bound to a signal', () => {
+  it('opens a team context popover bound to a signal', () => {
     render(<App />)
-    fireEvent.click(screen.getAllByRole('button', { name: '+ Add idea' })[0])
-    expect(screen.getByRole('dialog', { name: 'Add an idea' })).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: /Add context/ })[0])
+    expect(screen.getByRole('dialog', { name: 'Add context' })).toBeInTheDocument()
+  })
+
+  it('filters signals by review and pipeline state', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Needs review' }))
+    expect(screen.getByText('Review pending')).toBeInTheDocument()
+    expect(screen.queryByText('Browser agents turn the address bar into an invocation layer')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+    fireEvent.click(screen.getByRole('button', { name: 'In threads' }))
+    expect(screen.getByText('DataFlow-Harness turns agent reliability into an engineering discipline')).toBeInTheDocument()
   })
 
   it('exposes a link capture action', () => {

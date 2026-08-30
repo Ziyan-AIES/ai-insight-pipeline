@@ -85,6 +85,7 @@ export async function handler(event) {
       source: String(item.source || '').slice(0, 200),
       raw_text: String(item.text || '').slice(0, 60000),
       summary: String(item.summary || '').slice(0, 4000),
+      team_synthesis: String(item.team_synthesis || '').slice(0, 2000),
       category: categories.has(item.category) ? item.category : 'ecosystem',
       image_url: String(item.image_url || item.selected_image || '').slice(
         0,

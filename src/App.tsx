@@ -63,7 +63,7 @@ import type {
   WorkspacePage,
 } from './types'
 
-type NewsScope = 'all' | 'undecided' | 'pipeline' | 'archived' | 'removed'
+type NewsScope = 'all' | 'needs_review' | 'reviewed' | 'pipeline' | 'ideas' | 'archived'
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
 type ThreadGroupMode = 'timeline' | 'category' | 'recent'
@@ -158,6 +158,12 @@ function formatShortDate(value: string) {
     day: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(value))
+}
+
+function compactWords(value: string, limit = 24) {
+  const words = value.trim().split(/\s+/).filter(Boolean)
+  if (words.length <= limit) return value.trim()
+  return `${words.slice(0, limit).join(' ').replace(/[.,;:!?—-]+$/, '')}…`
 }
 
 function formatThreadMonth(monthKey: string) {
@@ -316,7 +322,7 @@ function App() {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false)
   const [pickerYear, setPickerYear] = useState(() => new Date().getUTCFullYear())
   const [dropHighlight, setDropHighlight] = useState<NewsCategory | ''>('')
-  const [newsScope] = useState<NewsScope>('all')
+  const [newsScope, setNewsScope] = useState<NewsScope>('all')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -586,14 +592,18 @@ function App() {
           selectedMonth,
         )
         const matchesScope =
-          (newsScope === 'removed' && Boolean(item.deletedAt)) ||
-          (!item.deletedAt &&
-            (newsScope === 'all' ||
-              (newsScope === 'undecided' &&
-                !item.archivedAt &&
-                item.topicLinks.length === 0) ||
-              (newsScope === 'pipeline' && item.topicLinks.length > 0) ||
-              (newsScope === 'archived' && Boolean(item.archivedAt))))
+          !item.deletedAt &&
+          (newsScope === 'all'
+            ? !item.archivedAt
+            : newsScope === 'needs_review'
+              ? !item.archivedAt && item.editorialStatus !== 'processed'
+              : newsScope === 'reviewed'
+                ? !item.archivedAt && item.editorialStatus === 'processed'
+                : newsScope === 'pipeline'
+                  ? !item.archivedAt && item.topicLinks.length > 0
+                  : newsScope === 'ideas'
+                    ? !item.archivedAt && item.ideaCount > 0
+                    : Boolean(item.archivedAt))
         const matchesQuery =
           !needle ||
           `${item.title} ${item.summary} ${item.takeaway} ${item.source} ${item.category} ${item.topicLinks.map((link) => link.topicTitle).join(' ')}`
@@ -1031,10 +1041,17 @@ function App() {
       }
       setIdeaText('')
       setIdeaNewsId('')
+      if (linkedNewsId) {
+        setNews((current) =>
+          current.map((item) =>
+            item.id === linkedNewsId
+              ? { ...item, ideaCount: item.ideaCount + 1 }
+              : item,
+          ),
+        )
+      }
       setNotice(
-        linkedNewsId
-          ? 'Idea captured for AI Daily Review. Synthesis stays anonymous.'
-          : 'Idea captured for AI Daily Review. Synthesis stays anonymous.',
+        'Context saved for the next AI Daily Review.',
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not save idea')
@@ -1182,6 +1199,7 @@ function App() {
       capturedAt: persisted?.capturedAt || new Date().toISOString(),
       capturedBy: persisted?.contributorName || identity?.displayName || 'Current user',
       editorialStatus: 'processed',
+      ideaCount: 0,
       voteCount: 0,
       version: 1,
       topicLinks: [],
@@ -1692,6 +1710,7 @@ function App() {
       capturedBy: contributorName,
       metadata: { contributor_name: contributorName },
       editorialStatus: 'pending',
+      ideaCount: 0,
       voteCount: 0,
       version: 1,
       topicLinks: topic
@@ -1730,7 +1749,6 @@ function App() {
       <div className="linked-signal-row" key={item.id}>
         <div>
           <span>{item.title}</span>
-          <small>{formatShortDate(newsDate(item))}</small>
         </div>
         <button
           type="button"
@@ -1764,8 +1782,10 @@ function App() {
     const teamView = item.teamSynthesis.trim()
     const whyItMatters = firstSentences(item.industryImportance, 1)
     const qiraImplication = firstSentences(item.qiraRelevance, 1)
-    const takeawayText =
-      variant === 'candidate' ? firstSentences(takeaway, 2) : takeaway
+    const takeawayText = compactWords(
+      variant === 'candidate' ? firstSentences(takeaway, 2) : takeaway,
+      variant === 'candidate' ? 30 : 24,
+    )
     const synthesisText = teamView || qiraImplication || takeawayText
     const synthesisLabel = teamView ? 'Team synthesis' : 'Editorial takeaway'
     return (
@@ -1818,7 +1838,8 @@ function App() {
       >
         <div className="news-meta">
           {variant === 'candidate' ? (
-            <span className={`chip category category-${item.category}`}>
+            <span className={`category-token cat-${item.category}`}>
+              <span className="cat-dot" aria-hidden="true" />
               {categoryLabels[item.category]}
             </span>
           ) : null}
@@ -1829,6 +1850,19 @@ function App() {
           <span className="meta-time">
             {formatRelativeAge(signalTime(item))}
           </span>
+          {item.capturedBy ? (
+            <span className="meta-contributor">· {item.capturedBy}</span>
+          ) : null}
+          <span className={`review-state review-${item.editorialStatus}`}>
+            {item.editorialStatus === 'processed'
+              ? 'Reviewed'
+              : item.editorialStatus === 'failed'
+                ? 'Review failed'
+                : 'Awaiting review'}
+          </span>
+          {item.topicLinks.length > 0 ? (
+            <span className="pipeline-state">In thread</span>
+          ) : null}
           <div className="card-actions">
             {item.deletedAt ? (
               <button
@@ -1945,7 +1979,9 @@ function App() {
               setIdeaText('')
             }}
           >
-            + Add idea
+            {item.ideaCount > 0
+              ? `Add context · ${item.ideaCount}`
+              : 'Add context'}
           </button>
         </div>
       </article>
@@ -2016,17 +2052,13 @@ function App() {
           </span>
         </div>
         <h3>{topic.title}</h3>
-        <div className="thread-card-meta">
-          <span>
-            Created{' '}
-            {formatShortDate(
-              topic.createdAt || topic.updatedAt || new Date().toISOString(),
-            )}
-          </span>
-          <span className="thread-timeline">
-            {formatThreadMonth(topic.monthKey)}
-          </span>
-        </div>
+        {!(workspacePage === 'threads' && threadGroupMode === 'timeline') ? (
+          <div className="thread-card-meta">
+            <span className="thread-timeline">
+              {formatThreadMonth(topic.monthKey)}
+            </span>
+          </div>
+        ) : null}
         {framing ? <p className="thread-framing">{framing}</p> : null}
         {linked.length > 0 ? (
           <div className="linked-signals" aria-label="Linked signals">
@@ -2165,6 +2197,32 @@ function App() {
     )
   }
 
+  function renderNewsScopeFilter() {
+    const options: Array<{ value: NewsScope; label: string }> = [
+      { value: 'all', label: 'All signals' },
+      { value: 'needs_review', label: 'Needs review' },
+      { value: 'reviewed', label: 'Reviewed' },
+      { value: 'pipeline', label: 'In threads' },
+      { value: 'ideas', label: 'Team context' },
+      { value: 'archived', label: 'Archived' },
+    ]
+    return (
+      <div className="signal-scope-filter" role="group" aria-label="Signal status">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={newsScope === option.value ? 'active' : ''}
+            aria-pressed={newsScope === option.value}
+            onClick={() => setNewsScope(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div
       className={`app-shell focus-${focus} page-${workspacePage} ${
@@ -2266,6 +2324,7 @@ function App() {
             />
           </label>
           <div className="account-actions">
+            {workspacePage !== 'threads' ? renderTimeFilter() : null}
             <button
               className="primary-button"
               type="button"
@@ -2298,8 +2357,8 @@ function App() {
                 <span className="eyebrow">What is happening now</span>
                 <h1>Live Signals</h1>
               </div>
-              {renderTimeFilter()}
             </div>
+            {renderNewsScopeFilter()}
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -2376,8 +2435,8 @@ function App() {
                     <span className="eyebrow">What actually matters</span>
                     <h1>Discussion Candidates</h1>
                   </div>
-                  {renderTimeFilter()}
                 </div>
+                {renderNewsScopeFilter()}
                 <div className="news-list discussion-list">
                   {discussionCandidates.map((item) =>
                     renderNoteCard(item, { variant: 'candidate' }),
@@ -2803,95 +2862,89 @@ function App() {
                 ×
               </button>
             </div>
-            <label>
-              Title
-              <input
-                value={newsDraft.title}
-                onChange={(event) =>
-                  setNewsDraft({ ...newsDraft, title: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Category
-              <select
-                value={newsDraft.category}
-                onChange={(event) =>
-                  setNewsDraft({
-                    ...newsDraft,
-                    category: event.target.value as NewsCategory,
-                  })
-                }
-              >
-                {Object.entries(categoryLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Contributor
-              <input
-                value={newsDraft.capturedBy}
-                onChange={(event) =>
-                  setNewsDraft({
-                    ...newsDraft,
-                    capturedBy: event.target.value,
-                  })
-                }
-                placeholder="Name of the person who shared this"
-              />
-              {newsDraft.lastEditedBy && (
-                <small>Last edited by {newsDraft.lastEditedBy}</small>
-              )}
-            </label>
-            <label>
-              Publication date
-              <input
-                type="date"
-                value={newsDraft.publishedAt?.slice(0, 10) || ''}
-                onChange={(event) =>
-                  setNewsDraft({
-                    ...newsDraft,
-                    publishedAt: event.target.value || undefined,
-                  })
-                }
-              />
-              <small>
-                Use the article&apos;s publication date. Leave blank to show
-                the date it was added (
-                {new Intl.DateTimeFormat('en', {
-                  dateStyle: 'medium',
-                  timeZone: 'UTC',
-                }).format(new Date(newsDraft.capturedAt))}
-                ).
-              </small>
-            </label>
-            <label>
-              Summary
-              <textarea
-                rows={5}
-                value={newsDraft.summary}
-                onChange={(event) =>
-                  setNewsDraft({ ...newsDraft, summary: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Takeaway
-              <textarea
-                rows={3}
-                value={newsDraft.takeaway}
-                onChange={(event) =>
-                  setNewsDraft({ ...newsDraft, takeaway: event.target.value })
-                }
-                placeholder="One sentence for weekly discussion"
-              />
-            </label>
-            <NewsAnalysis metadata={newsDraft.metadata} />
-            <ActivityHistory events={activity} />
-            <label className="archive-control">
+            <div className="modal-body">
+              <section className="modal-section">
+                <h3>Signal basics</h3>
+                <div className="signal-provenance">
+                  <span className={`review-state review-${newsDraft.editorialStatus}`}>
+                    {newsDraft.editorialStatus === 'processed'
+                      ? 'AI reviewed'
+                      : newsDraft.editorialStatus === 'failed'
+                        ? 'AI review failed'
+                        : 'Awaiting AI review'}
+                  </span>
+                  <span>Added {formatShortDate(newsDraft.capturedAt)}</span>
+                  {newsDraft.source ? <span>{newsDraft.source}</span> : null}
+                  {newsDraft.topicLinks.length > 0 ? (
+                    <span>{newsDraft.topicLinks.length} linked thread{newsDraft.topicLinks.length === 1 ? '' : 's'}</span>
+                  ) : null}
+                </div>
+                <label>
+                  Title
+                  <input
+                    value={newsDraft.title}
+                    onChange={(event) =>
+                      setNewsDraft({ ...newsDraft, title: event.target.value })
+                    }
+                  />
+                </label>
+                <div className="form-grid two-col">
+                  <label>
+                    Category
+                    <select
+                      value={newsDraft.category}
+                      onChange={(event) =>
+                        setNewsDraft({ ...newsDraft, category: event.target.value as NewsCategory })
+                      }
+                    >
+                      {Object.entries(categoryLabels).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Contributor
+                    <input
+                      value={newsDraft.capturedBy}
+                      onChange={(event) => setNewsDraft({ ...newsDraft, capturedBy: event.target.value })}
+                      placeholder="Who shared this?"
+                    />
+                  </label>
+                </div>
+                <label className="compact-field">
+                  Publication date <span className="optional-label">optional</span>
+                  <input
+                    type="date"
+                    value={newsDraft.publishedAt?.slice(0, 10) || ''}
+                    onChange={(event) => setNewsDraft({ ...newsDraft, publishedAt: event.target.value || undefined })}
+                  />
+                </label>
+              </section>
+              <section className="modal-section">
+                <h3>Editorial review</h3>
+                <p className="section-hint">Edit the source summary and the short takeaway shown on cards. System fields and raw article text stay hidden.</p>
+                <label>
+                  Source summary
+                  <textarea rows={4} value={newsDraft.summary} onChange={(event) => setNewsDraft({ ...newsDraft, summary: event.target.value })} />
+                </label>
+                <label>
+                  Editorial takeaway
+                  <textarea rows={3} value={newsDraft.takeaway} onChange={(event) => setNewsDraft({ ...newsDraft, takeaway: event.target.value })} placeholder="15–20 words: the consequence or strongest highlighted point" />
+                </label>
+                <NewsAnalysis metadata={newsDraft.metadata} />
+              </section>
+              <section className="modal-section workspace-section">
+                <h3>Workspace</h3>
+                {newsDraft.topicLinks.length > 0 ? (
+                  <div className="linked-topic-summary">
+                    {newsDraft.topicLinks.map((link) => <span key={link.topicId}>{link.topicTitle}</span>)}
+                  </div>
+                ) : <p className="section-hint">Not linked to an action thread yet.</p>}
+                <ActivityHistory events={activity} />
+              </section>
+            </div>
+            <div className="modal-actions split-actions sticky-footer news-editor-footer">
+              <label className="archive-control compact-archive">
               <input
                 type="checkbox"
                 checked={Boolean(newsDraft.archivedAt)}
@@ -2906,13 +2959,10 @@ function App() {
                 }
               />
               <span>
-                <strong>Read and archive</strong>
-                <small>
-                  Remove this item from the default Undiscussed review queue.
-                </small>
+                <strong>Archive</strong>
               </span>
-            </label>
-            <div className="modal-actions split-actions">
+              </label>
+              <div className="editor-button-group">
               <button
                 className="danger-button"
                 type="button"
@@ -2936,6 +2986,7 @@ function App() {
                 >
                   Save changes
                 </button>
+              </div>
               </div>
             </div>
           </section>
@@ -3073,7 +3124,7 @@ function App() {
             }}
           >
             <div className="modal-heading">
-              <h2 id="add-idea-title">Add an idea</h2>
+              <h2 id="add-idea-title">Add context</h2>
               <button
                 className="icon-button"
                 type="button"
@@ -3087,7 +3138,7 @@ function App() {
               </button>
             </div>
             <label>
-              <span className="sr-only">Idea</span>
+                <span className="sr-only">Context</span>
               <textarea
                 rows={4}
                 value={ideaText}
