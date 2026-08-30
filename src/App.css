@@ -4777,6 +4777,13 @@ label input:disabled {
   white-space: nowrap;
 }
 
+.meeting-queue-explainer {
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .discussion-toolbar {
   display: flex;
   align-items: center;
@@ -4887,6 +4894,17 @@ label input:disabled {
 .meeting-actions > div {
   display: flex;
   gap: var(--space-2);
+}
+
+.meeting-queue-note {
+  align-self: center;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.required-mark {
+  color: #a13f45;
+  font-weight: 800;
 }
 
 .meeting-complete {

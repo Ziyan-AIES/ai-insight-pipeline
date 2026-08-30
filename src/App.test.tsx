@@ -351,6 +351,45 @@ describe('dashboard pilot shell', () => {
     })
   })
 
+  it('keeps Meeting mode focused on nominated signals and resumes after thread creation', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+
+    expect(screen.getByRole('button', { name: 'Start meeting · 2' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Meeting queue' })).toBeInTheDocument()
+    expect(screen.getByText('Not nominated')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start meeting · 2' }))
+    const meeting = screen.getByRole('dialog', { name: 'Signal review' })
+    const firstSignal = within(meeting).getByRole('heading', { level: 3 }).textContent
+    expect(within(meeting).queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(within(meeting).getByText('Nominated by the team')).toBeInTheDocument()
+
+    fireEvent.click(within(meeting).getByRole('button', { name: 'Create thread' }))
+    const editor = screen.getByRole('dialog', { name: 'New Action Thread' })
+    const createButton = within(editor).getByRole('button', { name: 'Create Action Thread' })
+    expect(within(editor).getByText('Required. All other fields are optional or have defaults.')).toBeInTheDocument()
+    expect(createButton).toBeDisabled()
+
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('dialog', { name: 'Signal review' })).toHaveTextContent(firstSignal || '')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create thread' }))
+    const reopenedEditor = screen.getByRole('dialog', { name: 'New Action Thread' })
+    fireEvent.change(within(reopenedEditor).getByLabelText(/Thread title/), {
+      target: { value: 'Meeting-created direction' },
+    })
+    fireEvent.click(
+      within(reopenedEditor).getByRole('button', { name: 'Create Action Thread' }),
+    )
+
+    await waitFor(() => {
+      const resumedMeeting = screen.getByRole('dialog', { name: 'Signal review' })
+      expect(resumedMeeting).not.toHaveTextContent(firstSignal || '')
+      expect(resumedMeeting).toHaveTextContent('1 of 1')
+    })
+  })
+
   it('keeps review state off Live Signals and filters Synthesis by discussion state', () => {
     render(<App />)
     const live = screen.getByRole('region', { name: 'Live Signals' })

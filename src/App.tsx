@@ -346,6 +346,7 @@ function App() {
   const [searchContributor, setSearchContributor] = useState('all')
   const [meetingMode, setMeetingMode] = useState(false)
   const [meetingIndex, setMeetingIndex] = useState(0)
+  const [meetingThreadNewsId, setMeetingThreadNewsId] = useState('')
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
   const [showRecycleBin, setShowRecycleBin] = useState(false)
   const [showTeam, setShowTeam] = useState(false)
@@ -691,7 +692,10 @@ function App() {
           return item.discussionState === 'discussed'
         }
         if (newsScope === 'needs_discuss') {
-          return item.discussionState === 'needs_discussion'
+          return (
+            item.discussionState === 'needs_discussion' &&
+            (item.voteCount > 0 || item.ideaCount > 0)
+          )
         }
         return true
       })
@@ -706,7 +710,11 @@ function App() {
   const meetingQueue = useMemo(
     () =>
       visibleNews
-        .filter((item) => item.discussionState === 'needs_discussion')
+        .filter(
+          (item) =>
+            item.discussionState === 'needs_discussion' &&
+            (item.voteCount > 0 || item.ideaCount > 0),
+        )
         .slice()
         .sort(
           (a, b) =>
@@ -937,15 +945,19 @@ function App() {
     }
   }
 
-  async function linkNewsToTopic(newsId: string, topicId: string) {
-    const topic = topics.find((item) => item.id === topicId)
-    if (!topic || !news.some((item) => item.id === newsId)) return
-    if (topic.supportingNews.includes(newsId)) return
+  async function linkNewsToTopic(
+    newsId: string,
+    topicId: string,
+    topicOverride?: Topic,
+  ) {
+    const topic = topicOverride || topics.find((item) => item.id === topicId)
+    if (!topic || !news.some((item) => item.id === newsId)) return false
+    if (topic.supportingNews.includes(newsId)) return true
     try {
       if (cloudConfigured) await persistTopicNews(topicId, newsId)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not link news')
-      return
+      return false
     }
     setTopics((current) =>
       current.map((candidate) =>
@@ -1228,6 +1240,15 @@ function App() {
     setPendingThreadNewsId(newsId)
     const sourceCategory = news.find((item) => item.id === newsId)?.category
     openNewTopic(sourceCategory)
+  }
+
+  function closeTopicEditor() {
+    const shouldResumeMeeting = Boolean(meetingThreadNewsId)
+    setTopicDraft(null)
+    setCreatingTopic(false)
+    setPendingThreadNewsId('')
+    setMeetingThreadNewsId('')
+    if (shouldResumeMeeting) setMeetingMode(true)
   }
 
 
@@ -1682,7 +1703,11 @@ function App() {
       }
       setNotice('Action Thread created')
       if (pendingThreadNewsId) {
-        await moveNewsToTopic(pendingThreadNewsId, id, '')
+        await linkNewsToTopic(pendingThreadNewsId, id, {
+          ...topicDraft,
+          id,
+          title: topicDraft.title.trim(),
+        })
         setPendingThreadNewsId('')
       }
     } else {
@@ -1764,8 +1789,11 @@ function App() {
       }
       setNotice('Topic updated')
     }
+    const shouldResumeMeeting = Boolean(meetingThreadNewsId)
     setTopicDraft(null)
     setCreatingTopic(false)
+    setMeetingThreadNewsId('')
+    if (shouldResumeMeeting) setMeetingMode(true)
   }
 
   async function removeTopic(id: string) {
@@ -1995,7 +2023,9 @@ function App() {
                 ? 'In thread'
                 : item.discussionState === 'discussed'
                   ? 'Discussed'
-                  : 'Needs discuss'}
+                  : item.voteCount > 0 || item.ideaCount > 0
+                    ? 'Meeting queue'
+                    : 'Not nominated'}
             </span>
           ) : null}
           <div className="card-actions">
@@ -2360,7 +2390,7 @@ function App() {
       { value: 'all', label: 'All news' },
       { value: 'pipeline', label: 'In threads' },
       { value: 'discussed', label: 'Discussed' },
-      { value: 'needs_discuss', label: 'Needs discuss' },
+      { value: 'needs_discuss', label: 'Meeting queue' },
     ]
     return (
       <div className="signal-scope-filter" role="group" aria-label="Discussion state">
@@ -2659,6 +2689,7 @@ function App() {
                   <button
                     className="secondary-button meeting-start"
                     type="button"
+                    title="Includes undiscussed signals with a Discuss vote or team thought"
                     onClick={() => {
                       setQuery('')
                       setMeetingIndex(0)
@@ -2668,6 +2699,9 @@ function App() {
                     Start meeting · {meetingQueue.length}
                   </button>
                 </div>
+                <p className="meeting-queue-explainer">
+                  Meeting queue includes undiscussed signals nominated with a Discuss vote or team thought.
+                </p>
                 <div className="discussion-toolbar">{renderNewsScopeFilter()}</div>
                 <div className="news-list discussion-list">
                   {discussionCandidates.map((item) =>
@@ -3399,14 +3433,17 @@ function App() {
               </div>
             )}
             <footer className="meeting-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={meetingIndex === 0 || meetingQueue.length === 0}
-                onClick={() => setMeetingIndex((index) => Math.max(0, index - 1))}
-              >
-                Back
-              </button>
+              {meetingIndex > 0 && meetingQueue.length > 0 ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setMeetingIndex((index) => Math.max(0, index - 1))}
+                >
+                  Back
+                </button>
+              ) : (
+                <span className="meeting-queue-note">Nominated by the team</span>
+              )}
               <div>
                 {meetingItem ? (
                   <>
@@ -3425,6 +3462,7 @@ function App() {
                       className="secondary-button"
                       type="button"
                       onClick={() => {
+                        setMeetingThreadNewsId(meetingItem.id)
                         setMeetingMode(false)
                         openCreateThread(meetingItem.id)
                       }}
@@ -3532,10 +3570,7 @@ function App() {
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => {
-                  setTopicDraft(null)
-                  setCreatingTopic(false)
-                }}
+                onClick={closeTopicEditor}
                 aria-label="Close"
               >
                 ×
@@ -3545,7 +3580,9 @@ function App() {
               <section className="modal-section">
                 <h3>Thread basics</h3>
                 <label>
-                  Thread title
+                  <span>
+                    Thread title <span className="required-mark" aria-hidden="true">*</span>
+                  </span>
                   <input
                     value={topicDraft.title}
                     onChange={(event) =>
@@ -3553,7 +3590,12 @@ function App() {
                     }
                     placeholder="What decision or direction does this thread hold?"
                     autoFocus
+                    required
+                    aria-required="true"
                   />
+                  {creatingTopic ? (
+                    <small className="field-hint">Required. All other fields are optional or have defaults.</small>
+                  ) : null}
                 </label>
                 <div className="form-grid four-col">
                   <label>
@@ -3803,10 +3845,7 @@ function App() {
                 <button
                   className="secondary-button"
                   type="button"
-                  onClick={() => {
-                    setTopicDraft(null)
-                    setCreatingTopic(false)
-                  }}
+                  onClick={closeTopicEditor}
                 >
                   Cancel
                 </button>
@@ -3814,6 +3853,7 @@ function App() {
                   className="primary-button"
                   type="button"
                   onClick={() => void saveTopicDraft()}
+                  disabled={!topicDraft.title.trim()}
                 >
                   {creatingTopic ? 'Create Action Thread' : 'Save changes'}
                 </button>
