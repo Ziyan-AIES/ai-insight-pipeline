@@ -73,6 +73,10 @@
           color: #20242a;
           font-family: Aptos, "Helvetica Neue", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
         }
+        #${rootId}[hidden],
+        #${rootId} .bsw-toast[hidden] {
+          display: none !important;
+        }
         #${rootId} .bsw-dock {
           position: relative;
           width: 40px;

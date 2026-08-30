@@ -13,12 +13,20 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.3.0')
+    expect(manifest.version).toBe('0.3.1')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
     expect(contentSource).toMatch(/aria-label="AI Signals"/)
     expect(contentSource).not.toMatch(/>MI</)
+  })
+
+  it('does not render an empty toast or a disabled dock', () => {
+    expect(contentSource).toMatch(
+      /#\$\{rootId\}\[hidden\],[\s\S]*#\$\{rootId\} \.bsw-toast\[hidden\][\s\S]*display: none !important/,
+    )
+    expect(contentSource).toMatch(/<div class="bsw-toast" hidden><\/div>/)
+    expect(contentSource).toMatch(/toast\.hidden = true/)
   })
 
   it('keeps the official color mark on an unchanged white orb', () => {
