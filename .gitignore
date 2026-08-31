@@ -16,6 +16,7 @@ dist-ssr
 !.env.example
 .netlify
 .supabase
+supabase/.temp
 coverage
 playwright-report
 test-results
