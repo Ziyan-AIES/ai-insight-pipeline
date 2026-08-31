@@ -218,11 +218,15 @@ async function applyClaim(origin, body) {
 async function adoptDashboardSession(message) {
   const origin = normalizeWorkspaceUrl(message.apiBase || (await storedApiBase()))
   const accessToken = String(message.accessToken || '')
-  const refreshToken = String(message.refreshToken || '')
-  if (!accessToken || !refreshToken) return { ok: false, status: 401 }
+  if (!accessToken) return { ok: false, status: 401 }
   try {
-    const result = await fetch(`${origin}/api/extension-session`, {
-      headers: { authorization: `Bearer ${accessToken}` },
+    const result = await fetch(`${origin}/api/extension-auth`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ action: 'clone' }),
     })
     const body = await result.json().catch(() => ({}))
     if (!result.ok || body.authorized === false) {
@@ -230,8 +234,8 @@ async function adoptDashboardSession(message) {
     }
     await applyClaim(origin, {
       authorized: true,
-      access_token: accessToken,
-      refresh_token: refreshToken,
+      access_token: body.access_token || '',
+      refresh_token: body.refresh_token || '',
       identity: body.identity || null,
     })
     await chrome.alarms.create(REFRESH_ALARM, {
@@ -266,18 +270,52 @@ async function openDashboard(apiBase) {
   const origin = normalizeWorkspaceUrl(apiBase || (await storedApiBase()))
   const stored = await getStoredSession()
   if (!stored.authorized || !stored.accessToken || !stored.refreshToken) {
-    await chrome.tabs.create({ url: origin, active: true })
-    return { ok: false, signedIn: false, url: origin }
+    const url = `${origin}/#extension_auth_error=${encodeURIComponent('Extension session is not active. Sign in once with your work email.')}`
+    await chrome.tabs.create({ url, active: true })
+    return { ok: false, signedIn: false, url }
   }
   const state = randomState()
-  const completed = await completeDashboardSession({ state, apiBase: origin })
+  const completed = await createDashboardHandoff(origin, state)
   if (!completed.ok) {
-    await chrome.tabs.create({ url: origin, active: true })
-    return { ...completed, url: origin }
+    const error = completed.error || 'Extension session expired. Sign in again.'
+    const url = `${origin}/#extension_auth_error=${encodeURIComponent(error)}`
+    await chrome.tabs.create({ url, active: true })
+    return { ...completed, url }
   }
   const url = `${origin}/#dashboard_auth=1&state=${encodeURIComponent(state)}`
   await chrome.tabs.create({ url, active: true })
   return { ok: true, signedIn: true, url }
+}
+
+async function createDashboardHandoff(origin, state) {
+  let stored = await getStoredSession()
+  let result = await postDashboardHandoff(origin, state, stored.accessToken)
+  if (result.status === 401) {
+    const refreshed = await refreshSession()
+    if (!refreshed.ok) {
+      await signOut()
+      return {
+        ok: false,
+        status: refreshed.status || 401,
+        error: 'Extension session expired. Sign in again.',
+      }
+    }
+    stored = await getStoredSession()
+    result = await postDashboardHandoff(origin, state, stored.accessToken)
+  }
+  const body = await result.json().catch(() => ({}))
+  return { ok: result.ok, status: result.status, ...body }
+}
+
+function postDashboardHandoff(origin, state, accessToken) {
+  return fetch(`${origin}/api/extension-auth`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ action: 'dashboard', state }),
+  })
 }
 
 function postDashboardSession(origin, state, stored) {

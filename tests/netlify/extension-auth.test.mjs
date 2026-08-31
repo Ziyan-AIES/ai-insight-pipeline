@@ -36,6 +36,21 @@ function mockBackend({ user, member } = {}) {
       if (!user) return new Response('{}', { status: 401 })
       return new Response(JSON.stringify(user), { status: 200 })
     }
+    if (href.includes('/auth/v1/admin/generate_link')) {
+      return new Response(
+        JSON.stringify({ hashed_token: 'independent-token-hash' }),
+        { status: 200 },
+      )
+    }
+    if (href.includes('/auth/v1/verify')) {
+      return new Response(
+        JSON.stringify({
+          access_token: 'independent-access-token',
+          refresh_token: 'independent-refresh-token',
+        }),
+        { status: 200 },
+      )
+    }
     if (href.includes('team_members')) {
       return new Response(JSON.stringify(member ? [member] : []), { status: 200 })
     }
@@ -99,9 +114,57 @@ describe('extension auth handshake', () => {
     expect(claim.statusCode).toBe(200)
     expect(JSON.parse(claim.body)).toMatchObject({
       authorized: true,
-      access_token: 'access-token',
-      refresh_token: 'refresh-token',
+      access_token: 'independent-access-token',
+      refresh_token: 'independent-refresh-token',
       identity: { email: 'person@example.com', displayName: 'Pilot Person' },
+    })
+  })
+
+  it('creates a fresh dashboard session only when the handoff is claimed', async () => {
+    const backend = mockBackend({
+      user: { id: 'user-1', email: 'person@example.com' },
+      member,
+    })
+    const complete = await handler(
+      post(
+        { action: 'dashboard', state: 'dashboard-state-123456789' },
+        { authorization: 'Bearer extension-access-token' },
+      ),
+    )
+    expect(complete.statusCode).toBe(200)
+    expect(
+      backend.mock.calls.some(([url]) =>
+        String(url).includes('/auth/v1/admin/generate_link'),
+      ),
+    ).toBe(false)
+
+    const claim = await handler(
+      post({ action: 'claim', state: 'dashboard-state-123456789' }),
+    )
+    expect(claim.statusCode).toBe(200)
+    expect(JSON.parse(claim.body)).toMatchObject({
+      access_token: 'independent-access-token',
+      refresh_token: 'independent-refresh-token',
+    })
+  })
+
+  it('clones a dashboard identity into a separate extension session', async () => {
+    mockBackend({
+      user: { id: 'user-1', email: 'person@example.com' },
+      member,
+    })
+    const clone = await handler(
+      post(
+        { action: 'clone' },
+        { authorization: 'Bearer dashboard-access-token' },
+      ),
+    )
+    expect(clone.statusCode).toBe(200)
+    expect(JSON.parse(clone.body)).toMatchObject({
+      authorized: true,
+      access_token: 'independent-access-token',
+      refresh_token: 'independent-refresh-token',
+      identity: { userId: 'user-1' },
     })
   })
 

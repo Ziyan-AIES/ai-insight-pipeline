@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.4.2')
+    expect(manifest.version).toBe('0.4.3')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
@@ -64,7 +64,9 @@ describe('extension session UI', () => {
     expect(backgroundSource).toMatch(/bsw-complete-dashboard-session/)
     expect(backgroundSource).toMatch(/bsw-open-dashboard/)
     expect(backgroundSource).toMatch(/#dashboard_auth=1&state=/)
-    expect(backgroundSource).toMatch(/\/api\/extension-session/)
+    expect(backgroundSource).toMatch(/action: 'clone'/)
+    expect(backgroundSource).toMatch(/action: 'dashboard'/)
+    expect(backgroundSource).toMatch(/extension_auth_error=/)
     expect(contentSource).not.toMatch(/window\.open\(state\.apiBase/)
     expect(optionsSource).toMatch(/bsw-open-dashboard/)
     expect(contentSource).not.toMatch(/bswWriteToken/)

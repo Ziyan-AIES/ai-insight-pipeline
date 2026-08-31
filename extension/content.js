@@ -594,7 +594,6 @@
             type: 'bsw-adopt-dashboard-session',
             apiBase: origin,
             accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
           })
         }
         if (!pending) return

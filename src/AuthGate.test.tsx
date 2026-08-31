@@ -99,6 +99,23 @@ describe('membership gate', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the extension handoff error instead of silently dropping it', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/#extension_auth_error=Extension%20session%20expired.%20Sign%20in%20again.',
+    )
+    mocks.getSession.mockResolvedValue({ data: { session: null } })
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    expect(
+      await screen.findByText('Extension session expired. Sign in again.'),
+    ).toBeInTheDocument()
+  })
+
   it('restores the dashboard from an already signed-in extension', async () => {
     mocks.getSession.mockResolvedValue({ data: { session: null } })
     vi.stubGlobal(

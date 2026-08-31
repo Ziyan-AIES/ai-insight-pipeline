@@ -60,6 +60,12 @@ function dashboardSessionHandshake() {
   }
 }
 
+function extensionAuthError() {
+  if (typeof window === 'undefined') return ''
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  return params.get('extension_auth_error') || ''
+}
+
 function clearDashboardSessionHandshake() {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   if (params.get('dashboard_auth') !== '1') return
@@ -135,7 +141,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [identity, setIdentity] = useState<TeamIdentity | null>(null)
   const [loading, setLoading] = useState(cloudConfigured)
   const [email, setEmail] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(extensionAuthError)
   const [checkingExtension, setCheckingExtension] = useState(false)
   const extensionRestoreAttempted = useRef(false)
   const [extensionStatus, setExtensionStatus] = useState<
