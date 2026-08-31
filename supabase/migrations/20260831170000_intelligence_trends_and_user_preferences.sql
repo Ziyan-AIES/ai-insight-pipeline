@@ -156,18 +156,18 @@ with check (private.current_team_role() in ('editor', 'admin'));
 drop policy if exists "users can read own preferences" on public.user_preferences;
 create policy "users can read own preferences"
 on public.user_preferences for select to authenticated
-using (public.is_team_member() and user_id = auth.uid());
+using (private.current_team_role() is not null and user_id = auth.uid());
 
 drop policy if exists "users can insert own preferences" on public.user_preferences;
 create policy "users can insert own preferences"
 on public.user_preferences for insert to authenticated
-with check (public.is_team_member() and user_id = auth.uid());
+with check (private.current_team_role() is not null and user_id = auth.uid());
 
 drop policy if exists "users can update own preferences" on public.user_preferences;
 create policy "users can update own preferences"
 on public.user_preferences for update to authenticated
-using (public.is_team_member() and user_id = auth.uid())
-with check (public.is_team_member() and user_id = auth.uid());
+using (private.current_team_role() is not null and user_id = auth.uid())
+with check (private.current_team_role() is not null and user_id = auth.uid());
 
 create index if not exists trends_active_updated_idx
   on public.trends (status, updated_at desc) where deleted_at is null;

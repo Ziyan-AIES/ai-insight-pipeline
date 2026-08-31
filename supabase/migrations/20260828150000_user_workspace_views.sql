@@ -21,20 +21,20 @@ drop policy if exists "users can read own workspace views"
 on public.user_workspace_views;
 create policy "users can read own workspace views"
 on public.user_workspace_views for select to authenticated
-using (public.is_team_member() and user_id = auth.uid());
+using (private.current_team_role() is not null and user_id = auth.uid());
 
 drop policy if exists "users can insert own workspace views"
 on public.user_workspace_views;
 create policy "users can insert own workspace views"
 on public.user_workspace_views for insert to authenticated
-with check (public.is_team_member() and user_id = auth.uid());
+with check (private.current_team_role() is not null and user_id = auth.uid());
 
 drop policy if exists "users can update own workspace views"
 on public.user_workspace_views;
 create policy "users can update own workspace views"
 on public.user_workspace_views for update to authenticated
-using (public.is_team_member() and user_id = auth.uid())
-with check (public.is_team_member() and user_id = auth.uid());
+using (private.current_team_role() is not null and user_id = auth.uid())
+with check (private.current_team_role() is not null and user_id = auth.uid());
 
 comment on table public.user_workspace_views is
   'Per-user workspace read cursors used for session-stable New indicators.';
