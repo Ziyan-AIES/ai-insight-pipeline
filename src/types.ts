@@ -18,6 +18,10 @@ export type ThreadStatus = 'open' | 'in_progress' | 'parked' | 'closed'
 
 export type DiscussionStatus = 'not_discussed' | 'discussed' | 'dismissed'
 
+export type TrendStatus = 'draft' | 'active' | 'archived'
+
+export type TrendEvidenceRole = 'primary' | 'supporting' | 'counter'
+
 export type TopicKind = 'pov' | 'insight' | 'strategy' | 'roadmap' | 'poc'
 
 export type NoteSourceType = 'captured_news' | 'manual_note'
@@ -80,6 +84,40 @@ export interface NewsItem {
     topicTitle: string
     monthLabel: string
   }>
+  trendLinks: Array<{
+    trendId: string
+    trendTitle: string
+    role: TrendEvidenceRole
+  }>
+}
+
+export interface TrendEvidence {
+  newsId: string
+  role: TrendEvidenceRole
+  displayOrder: number
+  linkedAt: string
+}
+
+export interface Trend {
+  id: string
+  title: string
+  category: NewsCategory
+  observation: string
+  initialRead: string
+  discussionQuestion: string
+  status: TrendStatus
+  discussionStatus: DiscussionStatus
+  lastDiscussedAt?: string
+  lastDiscussedBy?: string
+  meetingNominatedAt?: string
+  meetingNominatedBy?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+  version: number
+  deletedAt?: string
+  evidence: TrendEvidence[]
+  actionThreadIds: string[]
 }
 
 export interface Topic {
@@ -108,6 +146,10 @@ export interface Topic {
   version?: number
   deletedAt?: string
   supportingNews: string[]
+  sourceTrends: Array<{
+    trendId: string
+    trendTitle: string
+  }>
 }
 
 export interface Thesis {

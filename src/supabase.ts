@@ -16,6 +16,10 @@ import type {
   TopicOutput,
   TopicStatus,
   ThreadStatus,
+  Trend,
+  TrendEvidenceRole,
+  TrendStatus,
+  WorkspacePage,
 } from './types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
@@ -191,18 +195,26 @@ export async function loadWorkspace(includeDeleted = false) {
     .select('*,topic_news(news_id,deleted_at)')
     .order('created_at', { ascending: false })
   let thesisQuery = supabase.from('theses').select('*').order('display_order')
+  let trendQuery = supabase
+    .from('trends')
+    .select(
+      '*,trend_news(news_id,evidence_role,display_order,linked_at,deleted_at),trend_topics(topic_id,deleted_at)',
+    )
+    .order('updated_at', { ascending: false })
   if (!includeDeleted) {
     newsQuery = newsQuery.is('deleted_at', null)
     topicQuery = topicQuery.is('deleted_at', null)
     thesisQuery = thesisQuery.is('deleted_at', null)
+    trendQuery = trendQuery.is('deleted_at', null)
   }
   const session = await supabase.auth.getSession()
   const userId = session.data.session?.user.id
-  const [newsResult, topicResult, thesisResult, memberResult, readoutResult, voteResult, ideaResult] =
+  const [newsResult, topicResult, thesisResult, trendResult, memberResult, readoutResult, voteResult, ideaResult] =
     await Promise.all([
       newsQuery,
       topicQuery,
       thesisQuery,
+      trendQuery,
       supabase.from('team_members').select('user_id,display_name,email'),
       supabase
         .from('editorial_readouts')
@@ -235,6 +247,7 @@ export async function loadWorkspace(includeDeleted = false) {
     effectiveNewsError ||
     topicResult.error ||
     thesisResult.error ||
+    (missingTrendSchema(trendResult.error) ? null : trendResult.error) ||
     memberResult.error ||
     readoutResult.error ||
     voteResult.error ||
@@ -336,6 +349,7 @@ export async function loadWorkspace(includeDeleted = false) {
               monthLabel: topicMonthLabel(monthKey),
             }
           }),
+        trendLinks: [],
       }
     },
   )
@@ -375,7 +389,65 @@ export async function loadWorkspace(includeDeleted = false) {
       supportingNews: (row.topic_news || [])
         .filter((link: { deleted_at?: string | null }) => !link.deleted_at)
         .map((link: { news_id: string }) => link.news_id),
+      sourceTrends: [],
     }
+  })
+
+  const trends: Trend[] = ((trendResult.data || []) as TrendRow[]).map((row) => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    observation: row.observation || '',
+    initialRead: row.initial_read || '',
+    discussionQuestion: row.discussion_question || '',
+    status: row.status || 'draft',
+    discussionStatus: row.discussion_status || 'not_discussed',
+    lastDiscussedAt: row.last_discussed_at || undefined,
+    lastDiscussedBy: row.last_discussed_by
+      ? memberNames.get(row.last_discussed_by) || 'Team member'
+      : undefined,
+    meetingNominatedAt: row.meeting_nominated_at || undefined,
+    meetingNominatedBy: row.meeting_nominated_by
+      ? memberNames.get(row.meeting_nominated_by) || 'Team member'
+      : undefined,
+    createdBy: row.created_by
+      ? memberNames.get(row.created_by) || 'Team member'
+      : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    version: row.version || 1,
+    deletedAt: row.deleted_at || undefined,
+    evidence: (row.trend_news || [])
+      .filter((link) => !link.deleted_at)
+      .map((link) => ({
+        newsId: link.news_id,
+        role: link.evidence_role || 'supporting',
+        displayOrder: link.display_order || 1,
+        linkedAt: link.linked_at,
+      })),
+    actionThreadIds: (row.trend_topics || [])
+      .filter((link) => !link.deleted_at)
+      .map((link) => link.topic_id),
+  }))
+
+  trends.forEach((trend) => {
+    trend.evidence.forEach((evidence) => {
+      const item = news.find((candidate) => candidate.id === evidence.newsId)
+      if (!item) return
+      item.trendLinks.push({
+        trendId: trend.id,
+        trendTitle: trend.title,
+        role: evidence.role,
+      })
+    })
+    trend.actionThreadIds.forEach((topicId) => {
+      const topic = topics.find((candidate) => candidate.id === topicId)
+      if (!topic) return
+      topic.sourceTrends.push({
+        trendId: trend.id,
+        trendTitle: trend.title,
+      })
+    })
   })
 
   const theses: Thesis[] = (thesisResult.data || []).map((row) => ({
@@ -404,7 +476,102 @@ export async function loadWorkspace(includeDeleted = false) {
         generatedAt: latestReadout.generated_at,
       }
     : null
-  return { news, topics, theses, readout }
+  return { news, topics, trends, theses, readout }
+}
+
+type TrendRow = {
+  id: string
+  title: string
+  category: NewsCategory
+  observation: string
+  initial_read: string
+  discussion_question: string
+  status: TrendStatus
+  discussion_status: DiscussionStatus
+  last_discussed_at?: string | null
+  last_discussed_by?: string | null
+  meeting_nominated_at?: string | null
+  meeting_nominated_by?: string | null
+  created_by?: string | null
+  created_at: string
+  updated_at: string
+  version?: number
+  deleted_at?: string | null
+  trend_news?: Array<{
+    news_id: string
+    evidence_role: TrendEvidenceRole
+    display_order: number
+    linked_at: string
+    deleted_at?: string | null
+  }>
+  trend_topics?: Array<{
+    topic_id: string
+    deleted_at?: string | null
+  }>
+}
+
+function missingTrendSchema(error: { message?: string; code?: string } | null) {
+  if (!error) return false
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    /relation .*?(trends|trend_news|trend_topics).*? does not exist|could not find .*?(trends|trend_news|trend_topics).*?schema cache/i.test(
+      error.message || '',
+    )
+  )
+}
+
+export async function loadLastWorkspacePage(): Promise<WorkspacePage | null> {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id
+  if (!userId) return null
+  const { data, error } = await supabase
+    .from('user_preferences')
+    .select('last_workspace_page')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) {
+    if (
+      error.code === '42P01' ||
+      error.code === 'PGRST205' ||
+      /relation .*?user_preferences.*? does not exist|could not find .*?user_preferences.*?schema cache/i.test(
+        error.message,
+      )
+    ) {
+      return null
+    }
+    throw error
+  }
+  const page = data?.last_workspace_page
+  return page === 'signals' || page === 'synthesis' || page === 'threads'
+    ? page
+    : null
+}
+
+export async function saveLastWorkspacePage(page: WorkspacePage) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id
+  if (!userId) return
+  const { error } = await supabase.from('user_preferences').upsert(
+    {
+      user_id: userId,
+      last_workspace_page: page,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  )
+  if (
+    error &&
+    error.code !== '42P01' &&
+    error.code !== 'PGRST205' &&
+    !/relation .*?user_preferences.*? does not exist|could not find .*?user_preferences.*?schema cache/i.test(
+      error.message,
+    )
+  ) {
+    throw error
+  }
 }
 
 export async function recordWorkspaceView(
@@ -696,6 +863,141 @@ export async function deleteNewsItem(id: string) {
   if (error) throw error
 }
 
+export async function createTrend(input: {
+  title: string
+  category: NewsCategory
+  observation: string
+  initialRead: string
+  discussionQuestion: string
+  status?: TrendStatus
+}) {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id || null
+  const { data, error } = await supabase
+    .from('trends')
+    .insert({
+      title: input.title.trim(),
+      category: input.category,
+      observation: input.observation.trim(),
+      initial_read: input.initialRead.trim(),
+      discussion_question: input.discussionQuestion.trim(),
+      status: input.status || 'active',
+      created_by: userId,
+      updated_by: userId,
+    })
+    .select('id,created_at,updated_at,version')
+    .single()
+  if (error) throw error
+  return data as {
+    id: string
+    created_at: string
+    updated_at: string
+    version: number
+  }
+}
+
+export async function updateTrendItem(
+  id: string,
+  patch: {
+    title?: string
+    category?: NewsCategory
+    observation?: string
+    initial_read?: string
+    discussion_question?: string
+    status?: TrendStatus
+    discussion_status?: DiscussionStatus
+    last_discussed_at?: string | null
+    last_discussed_by?: string | null
+    meeting_nominated_at?: string | null
+    meeting_nominated_by?: string | null
+  },
+  expectedVersion?: number,
+) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  let query = supabase
+    .from('trends')
+    .update({
+      ...patch,
+      updated_by: session.data.session?.user.id || null,
+    })
+    .eq('id', id)
+  if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
+  const { data, error } = await query.select('version,updated_at').maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('This Trend changed elsewhere. Reload and try again.')
+  return { version: data.version as number, updatedAt: data.updated_at as string }
+}
+
+export async function deleteTrendItem(id: string) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('trends')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function persistTrendNews(
+  trendId: string,
+  newsId: string,
+  role: TrendEvidenceRole = 'supporting',
+  displayOrder = 1,
+) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase.from('trend_news').upsert(
+    {
+      trend_id: trendId,
+      news_id: newsId,
+      evidence_role: role,
+      display_order: displayOrder,
+      linked_by: session.data.session?.user.id || null,
+      linked_at: new Date().toISOString(),
+      deleted_at: null,
+      deleted_by: null,
+    },
+    { onConflict: 'trend_id,news_id' },
+  )
+  if (error) throw error
+}
+
+export async function unlinkTrendNews(trendId: string, newsId: string) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('trend_news')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
+    .eq('trend_id', trendId)
+    .eq('news_id', newsId)
+  if (error) throw error
+}
+
+export async function persistTrendTopic(trendId: string, topicId: string) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase.from('trend_topics').upsert(
+    {
+      trend_id: trendId,
+      topic_id: topicId,
+      linked_by: session.data.session?.user.id || null,
+      linked_at: new Date().toISOString(),
+      deleted_at: null,
+      deleted_by: null,
+    },
+    { onConflict: 'trend_id,topic_id' },
+  )
+  if (error) throw error
+}
+
 export async function createTopic(input: {
   title: string
   notes: string
@@ -944,6 +1246,9 @@ export function subscribeToWorkspace(
     'editorial_readouts',
     'editorial_job_runs',
     'news_votes',
+    'trends',
+    'trend_news',
+    'trend_topics',
   ]) {
     channel.on(
       'postgres_changes',

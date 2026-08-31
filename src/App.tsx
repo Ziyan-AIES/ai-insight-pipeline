@@ -1,25 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { CategoryLabel } from './components/CategoryLabel'
-import { demoNews, demoTheses, demoTopics } from './demoData'
+import { demoNews, demoTheses, demoTopics, demoTrends } from './demoData'
 import { useTeamAuth } from './auth-context'
 import {
   canonicalizeUrl,
   cloudConfigured,
   createThesis,
   createTopic,
+  createTrend,
+  deleteTrendItem,
   deleteNewsItem,
   deleteThesisItem,
   deleteTopicItem,
   loadActivityEvents,
   loadTeamMembers,
   loadWorkspace,
+  loadLastWorkspacePage,
   persistDiscussionOrder,
   persistManualNote,
   persistNewsLink,
   persistTeamIdea,
   persistTopicNews,
+  persistTrendNews,
+  persistTrendTopic,
   recordWorkspaceView,
+  saveLastWorkspacePage,
   restoreContent,
   purgeContent,
   purgeRecycleBin,
@@ -27,11 +33,13 @@ import {
   toggleNewsVote,
   topicMonthLabel,
   unlinkTopicNews,
+  unlinkTrendNews,
   updateNewsItem,
   updateNewsCategory,
   updateTeamMemberRole,
   updateThesisItem,
   updateTopicItem,
+  updateTrendItem,
 } from './supabase'
 import {
   categoryLabels,
@@ -62,11 +70,10 @@ import type {
   ThreadStatus,
   TeamMemberSummary,
   ActivityEvent,
+  Trend,
   WorkspacePage,
 } from './types'
 
-type NewsScope = 'all' | 'to_discuss' | 'discussed'
-type NewsThreadScope = 'all' | 'in_thread' | 'no_thread'
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
 type ThreadGroupMode = 'timeline' | 'category' | 'recent'
@@ -80,16 +87,22 @@ type AddLinkDraft = {
 const addLinkDraftKey = 'signal-intelligence:add-link-draft'
 const liveSignalsViewStoragePrefix =
   'signal-intelligence:last-viewed:live-signals'
+const workspacePageStoragePrefix = 'signal-intelligence:workspace-page'
 
-function workspaceFromLocation(): WorkspacePage {
+function explicitWorkspaceFromLocation(): WorkspacePage | null {
   try {
     const page = new URLSearchParams(window.location.search).get('workspace')
     if (page === 'synthesis' || page === 'weekly') return 'synthesis'
     if (page === 'threads') return 'threads'
-    return 'signals'
+    if (page === 'signals') return 'signals'
+    return null
   } catch {
-    return 'signals'
+    return null
   }
+}
+
+function workspaceFromLocation(): WorkspacePage {
+  return explicitWorkspaceFromLocation() || 'synthesis'
 }
 
 function clearStoredAddLinkDraft() {
@@ -174,6 +187,24 @@ function hasMeetingReason(item: NewsItem) {
 
 function isToDiscuss(item: NewsItem) {
   return item.discussionStatus === 'not_discussed' && hasMeetingReason(item)
+}
+
+function trendNewEvidenceCount(trend: Trend) {
+  if (!trend.lastDiscussedAt) return trend.evidence.length
+  return trend.evidence.filter(
+    (evidence) => evidence.linkedAt > (trend.lastDiscussedAt || ''),
+  ).length
+}
+
+function isTrendToDiscuss(trend: Trend) {
+  if (trend.status !== 'active' || trend.discussionStatus === 'dismissed') {
+    return false
+  }
+  return Boolean(
+    trend.discussionStatus === 'not_discussed' ||
+      trend.meetingNominatedAt ||
+      trendNewEvidenceCount(trend) > 0,
+  )
 }
 
 function compactWords(value: string, limit = 24) {
@@ -319,6 +350,7 @@ function App() {
   const initialAddLinkDraft = useMemo(loadAddLinkDraft, [])
   const [news, setNews] = useState(cloudConfigured ? [] : demoNews)
   const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
+  const [trends, setTrends] = useState(cloudConfigured ? [] : demoTrends)
   const [theses, setTheses] = useState(cloudConfigured ? [] : demoTheses)
   const [activity, setActivity] = useState<ActivityEvent[]>([])
   const [syncState, setSyncState] = useState<'connecting' | 'synced' | 'error'>(
@@ -330,6 +362,7 @@ function App() {
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     workspaceFromLocation,
   )
+  const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(false)
   const [timeMode, setTimeMode] = useState<DashboardTimeMode>('month')
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
@@ -338,9 +371,10 @@ function App() {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false)
   const [pickerYear, setPickerYear] = useState(() => new Date().getUTCFullYear())
   const [dropHighlight, setDropHighlight] = useState<NewsCategory | ''>('')
-  const [newsScope, setNewsScope] = useState<NewsScope>('all')
-  const [newsThreadScope, setNewsThreadScope] =
-    useState<NewsThreadScope>('all')
+  const [trendCategory, setTrendCategory] =
+    useState<NewsCategory | 'all'>('all')
+  const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
+  const [curatingTrendId, setCuratingTrendId] = useState('')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -364,6 +398,11 @@ function App() {
   const [meetingMode, setMeetingMode] = useState(false)
   const [meetingIndex, setMeetingIndex] = useState(0)
   const [meetingThreadNewsId, setMeetingThreadNewsId] = useState('')
+  const [trendMeetingMode, setTrendMeetingMode] = useState(false)
+  const [trendMeetingIndex, setTrendMeetingIndex] = useState(0)
+  const [pendingThreadTrendId, setPendingThreadTrendId] = useState('')
+  const [meetingThreadTrendId, setMeetingThreadTrendId] = useState('')
+  const [pendingTrendNewsId, setPendingTrendNewsId] = useState('')
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
   const [showRecycleBin, setShowRecycleBin] = useState(false)
   const [showTeam, setShowTeam] = useState(false)
@@ -386,13 +425,16 @@ function App() {
   const [noteCategory, setNoteCategory] = useState<NewsCategory>('interaction')
   const [newsDraft, setNewsDraft] = useState<NewsItem | null>(null)
   const [topicDraft, setTopicDraft] = useState<Topic | null>(null)
+  const [trendDraft, setTrendDraft] = useState<Trend | null>(null)
   const [thesisDraft, setThesisDraft] = useState<Thesis | null>(null)
   const [creatingTopic, setCreatingTopic] = useState(false)
+  const [creatingTrend, setCreatingTrend] = useState(false)
   const [creatingThesis, setCreatingThesis] = useState(false)
   const [selectedThesisId, setSelectedThesisId] = useState('')
   const [notice, setNotice] = useState('')
   const [headerHidden, setHeaderHidden] = useState(false)
   const recordedSignalViewFor = useRef('')
+  const restoredWorkspaceFor = useRef('')
   const selectedActivityType = newsDraft
     ? ('news_items' as const)
     : topicDraft && !creatingTopic
@@ -421,6 +463,7 @@ function App() {
       if (!workspace) return
       setNews(workspace.news)
       setTopics(workspace.topics)
+      setTrends(workspace.trends)
       setTheses(workspace.theses)
       setSyncState('synced')
     } catch (error: unknown) {
@@ -513,6 +556,56 @@ function App() {
     window.addEventListener('click', close)
     return () => window.removeEventListener('click', close)
   }, [openNewsMenuId])
+
+  useEffect(() => {
+    const viewerKey = identity?.userId || 'demo'
+    if (restoredWorkspaceFor.current === viewerKey) return
+    restoredWorkspaceFor.current = viewerKey
+    const explicitPage = explicitWorkspaceFromLocation()
+    const storageKey = `${workspacePageStoragePrefix}:${viewerKey}`
+    const localPage = (() => {
+      try {
+        const stored = window.localStorage.getItem(storageKey)
+        return stored === 'signals' || stored === 'synthesis' || stored === 'threads'
+          ? stored
+          : null
+      } catch {
+        return null
+      }
+    })()
+
+    if (explicitPage) {
+      setWorkspacePage(explicitPage)
+      setWorkspacePreferenceReady(true)
+      return
+    }
+    if (!cloudConfigured || !identity?.userId) {
+      setWorkspacePage(localPage || 'synthesis')
+      setWorkspacePreferenceReady(true)
+      return
+    }
+
+    void loadLastWorkspacePage()
+      .then((remotePage) => setWorkspacePage(remotePage || localPage || 'synthesis'))
+      .catch(() => setWorkspacePage(localPage || 'synthesis'))
+      .finally(() => setWorkspacePreferenceReady(true))
+  }, [identity?.userId])
+
+  useEffect(() => {
+    if (!workspacePreferenceReady) return
+    const viewerKey = identity?.userId || 'demo'
+    try {
+      window.localStorage.setItem(
+        `${workspacePageStoragePrefix}:${viewerKey}`,
+        workspacePage,
+      )
+    } catch {
+      // Local preference persistence is best-effort.
+    }
+    if (cloudConfigured && identity?.userId) {
+      void saveLastWorkspacePage(workspacePage).catch(() => undefined)
+    }
+  }, [identity?.userId, workspacePage, workspacePreferenceReady])
 
   useEffect(() => {
     if (workspacePage === 'signals') setFocus('news')
@@ -674,6 +767,85 @@ function App() {
       .slice(0, 6)
   }, [query, searchCategory, topics])
 
+  const globalTrendResults = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return []
+    return trends
+      .filter((trend) => !trend.deletedAt && trend.status !== 'archived')
+      .filter(
+        (trend) =>
+          searchCategory === 'all' || trend.category === searchCategory,
+      )
+      .filter((trend) =>
+        `${trend.title} ${trend.observation} ${trend.initialRead} ${trend.discussionQuestion} ${categoryLabels[trend.category]}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .slice(0, 6)
+  }, [query, searchCategory, trends])
+
+  const activeTrendCategories = useMemo(
+    () =>
+      liveSignalCategories.filter((category) =>
+        trends.some(
+          (trend) =>
+            !trend.deletedAt &&
+            trend.status !== 'archived' &&
+            trend.category === category,
+        ),
+      ),
+    [trends],
+  )
+
+  const briefingTrends = useMemo(() => {
+    const visibleIds = new Set(visibleNews.map((item) => item.id))
+    return trends
+      .filter((trend) => !trend.deletedAt && trend.status !== 'archived')
+      .filter(
+        (trend) => trendCategory === 'all' || trend.category === trendCategory,
+      )
+      .filter(
+        (trend) =>
+          timeMode === 'all' ||
+          trend.evidence.length === 0 ||
+          trend.evidence.some((evidence) => visibleIds.has(evidence.newsId)),
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          Number(isTrendToDiscuss(b)) - Number(isTrendToDiscuss(a)) ||
+          b.updatedAt.localeCompare(a.updatedAt),
+      )
+  }, [timeMode, trendCategory, trends, visibleNews])
+
+  const evidenceInbox = useMemo(
+    () =>
+      visibleNews
+        .filter(
+          (item) =>
+            !item.deletedAt &&
+            !item.archivedAt &&
+            item.editorialStatus === 'processed' &&
+            item.trendLinks.length === 0,
+        )
+        .slice()
+        .sort(
+          (a, b) =>
+            discussionPriorityScore(b) - discussionPriorityScore(a) ||
+            signalTime(b).localeCompare(signalTime(a)),
+        ),
+    [visibleNews],
+  )
+
+  const trendMeetingQueue = useMemo(
+    () => briefingTrends.filter(isTrendToDiscuss),
+    [briefingTrends],
+  )
+  const trendMeetingItem =
+    trendMeetingQueue[
+      Math.min(trendMeetingIndex, trendMeetingQueue.length - 1)
+    ]
+
   const discussionNotes = useMemo(
     () =>
       sortDiscussionNotes(
@@ -700,28 +872,6 @@ function App() {
       Boolean(signalViewBaseline && item.capturedAt > signalViewBaseline),
     [signalViewBaseline],
   )
-
-  const discussionCandidates = useMemo(() => {
-    return visibleNews
-      .filter((item) => {
-        if (newsScope === 'discussed') {
-          return item.discussionStatus === 'discussed'
-        }
-        if (newsScope === 'to_discuss') return isToDiscuss(item)
-        return true
-      })
-      .filter((item) => {
-        if (newsThreadScope === 'in_thread') return item.topicLinks.length > 0
-        if (newsThreadScope === 'no_thread') return item.topicLinks.length === 0
-        return true
-      })
-      .slice()
-      .sort(
-        (a, b) =>
-          discussionPriorityScore(b) - discussionPriorityScore(a) ||
-          signalTime(b).localeCompare(signalTime(a)),
-      )
-  }, [newsScope, newsThreadScope, visibleNews])
 
   const meetingQueue = useMemo(
     () =>
@@ -1243,11 +1393,15 @@ function App() {
 
   function closeTopicEditor() {
     const shouldResumeMeeting = Boolean(meetingThreadNewsId)
+    const shouldResumeTrendMeeting = Boolean(meetingThreadTrendId)
     setTopicDraft(null)
     setCreatingTopic(false)
     setPendingThreadNewsId('')
+    setPendingThreadTrendId('')
     setMeetingThreadNewsId('')
+    setMeetingThreadTrendId('')
     if (shouldResumeMeeting) setMeetingMode(true)
+    if (shouldResumeTrendMeeting) setTrendMeetingMode(true)
   }
 
 
@@ -1311,6 +1465,7 @@ function App() {
       voteCount: 0,
       version: 1,
       topicLinks: [],
+      trendLinks: [],
     }
     setNews((current) => [item, ...current])
     setShowAddNote(false)
@@ -1503,6 +1658,333 @@ function App() {
     }
   }
 
+  function openNewTrend(newsId = '') {
+    const source = news.find((item) => item.id === newsId)
+    const now = new Date().toISOString()
+    setPendingTrendNewsId(newsId)
+    setCreatingTrend(true)
+    setTrendDraft({
+      id: '',
+      title: '',
+      category: source?.category || 'interaction',
+      observation: source ? firstSentences(noteTakeaway(source) || source.summary, 1) : '',
+      initialRead: '',
+      discussionQuestion: '',
+      status: 'active',
+      discussionStatus: 'not_discussed',
+      createdBy: identity?.displayName,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      evidence: [],
+      actionThreadIds: [],
+    })
+  }
+
+  async function saveTrendDraft() {
+    if (!trendDraft || !trendDraft.title.trim()) return
+    if (creatingTrend) {
+      let saved = {
+        id: `trend-${Date.now()}`,
+        created_at: trendDraft.createdAt,
+        updated_at: trendDraft.updatedAt,
+        version: 1,
+      }
+      try {
+        if (cloudConfigured) {
+          const result = await createTrend({
+            title: trendDraft.title,
+            category: trendDraft.category,
+            observation: trendDraft.observation,
+            initialRead: trendDraft.initialRead,
+            discussionQuestion: trendDraft.discussionQuestion,
+            status: trendDraft.status,
+          })
+          if (result) saved = result
+        }
+        const evidence = pendingTrendNewsId
+          ? [
+              {
+                newsId: pendingTrendNewsId,
+                role: 'primary' as const,
+                displayOrder: 1,
+                linkedAt: new Date().toISOString(),
+              },
+            ]
+          : []
+        if (cloudConfigured && pendingTrendNewsId) {
+          await persistTrendNews(saved.id, pendingTrendNewsId, 'primary', 1)
+        }
+        const created: Trend = {
+          ...trendDraft,
+          id: saved.id,
+          title: trendDraft.title.trim(),
+          createdAt: saved.created_at,
+          updatedAt: saved.updated_at,
+          version: saved.version,
+          evidence,
+        }
+        setTrends((current) => [created, ...current])
+        if (pendingTrendNewsId) {
+          setNews((current) =>
+            current.map((item) =>
+              item.id === pendingTrendNewsId
+                ? {
+                    ...item,
+                    trendLinks: [
+                      ...item.trendLinks,
+                      {
+                        trendId: created.id,
+                        trendTitle: created.title,
+                        role: 'primary',
+                      },
+                    ],
+                  }
+                : item,
+            ),
+          )
+        }
+        setNotice('Trend created')
+      } catch (error) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : 'Could not create Trend. Apply the latest database migration.',
+        )
+        return
+      }
+    } else {
+      try {
+        let version = trendDraft.version
+        let updatedAt = trendDraft.updatedAt
+        if (cloudConfigured) {
+          const result = await updateTrendItem(
+            trendDraft.id,
+            {
+              title: trendDraft.title.trim(),
+              category: trendDraft.category,
+              observation: trendDraft.observation,
+              initial_read: trendDraft.initialRead,
+              discussion_question: trendDraft.discussionQuestion,
+              status: trendDraft.status,
+            },
+            trendDraft.version,
+          )
+          version = result?.version || version
+          updatedAt = result?.updatedAt || updatedAt
+        }
+        const saved = {
+          ...trendDraft,
+          title: trendDraft.title.trim(),
+          version,
+          updatedAt,
+        }
+        setTrends((current) =>
+          current.map((trend) => (trend.id === saved.id ? saved : trend)),
+        )
+        setNews((current) =>
+          current.map((item) => ({
+            ...item,
+            trendLinks: item.trendLinks.map((link) =>
+              link.trendId === saved.id
+                ? { ...link, trendTitle: saved.title }
+                : link,
+            ),
+          })),
+        )
+        setNotice('Trend updated')
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not update Trend')
+        return
+      }
+    }
+    setTrendDraft(null)
+    setCreatingTrend(false)
+    setPendingTrendNewsId('')
+  }
+
+  async function removeTrend(id: string) {
+    if (!window.confirm('Archive this Trend? Its evidence and Action Threads will remain.')) {
+      return
+    }
+    try {
+      if (cloudConfigured) await deleteTrendItem(id)
+      setTrends((current) => current.filter((trend) => trend.id !== id))
+      setNews((current) =>
+        current.map((item) => ({
+          ...item,
+          trendLinks: item.trendLinks.filter((link) => link.trendId !== id),
+        })),
+      )
+      setTrendDraft(null)
+      setCreatingTrend(false)
+      setNotice('Trend archived')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not archive Trend')
+    }
+  }
+
+  async function linkNewsToTrend(trendId: string, newsId: string) {
+    const trend = trends.find((candidate) => candidate.id === trendId)
+    const item = news.find((candidate) => candidate.id === newsId)
+    if (!trend || !item || trend.evidence.some((link) => link.newsId === newsId)) {
+      return
+    }
+    const role = trend.evidence.length === 0 ? 'primary' : 'supporting'
+    const linkedAt = new Date().toISOString()
+    try {
+      if (cloudConfigured) {
+        await persistTrendNews(
+          trendId,
+          newsId,
+          role,
+          trend.evidence.length + 1,
+        )
+      }
+      setTrends((current) =>
+        current.map((candidate) =>
+          candidate.id === trendId
+            ? {
+                ...candidate,
+                updatedAt: linkedAt,
+                evidence: [
+                  ...candidate.evidence,
+                  {
+                    newsId,
+                    role,
+                    displayOrder: candidate.evidence.length + 1,
+                    linkedAt,
+                  },
+                ],
+              }
+            : candidate,
+        ),
+      )
+      setNews((current) =>
+        current.map((candidate) =>
+          candidate.id === newsId
+            ? {
+                ...candidate,
+                trendLinks: [
+                  ...candidate.trendLinks,
+                  { trendId, trendTitle: trend.title, role },
+                ],
+              }
+            : candidate,
+        ),
+      )
+      setNotice(`Added as evidence to “${trend.title}”.`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not add evidence')
+    }
+  }
+
+  async function unlinkSignalFromTrend(trendId: string, newsId: string) {
+    try {
+      if (cloudConfigured) await unlinkTrendNews(trendId, newsId)
+      setTrends((current) =>
+        current.map((trend) =>
+          trend.id === trendId
+            ? {
+                ...trend,
+                evidence: trend.evidence.filter((link) => link.newsId !== newsId),
+              }
+            : trend,
+        ),
+      )
+      setNews((current) =>
+        current.map((item) =>
+          item.id === newsId
+            ? {
+                ...item,
+                trendLinks: item.trendLinks.filter(
+                  (link) => link.trendId !== trendId,
+                ),
+              }
+            : item,
+        ),
+      )
+      setTrendDraft((current) =>
+        current?.id === trendId
+          ? {
+              ...current,
+              evidence: current.evidence.filter((link) => link.newsId !== newsId),
+            }
+          : current,
+      )
+      setNotice('Evidence removed from Trend')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not remove evidence')
+    }
+  }
+
+  async function setTrendDiscussionOutcome(
+    trend: Trend,
+    discussionStatus: DiscussionStatus,
+  ) {
+    const discussedAt =
+      discussionStatus === 'discussed' ? new Date().toISOString() : undefined
+    try {
+      let version = trend.version
+      let updatedAt = trend.updatedAt
+      if (cloudConfigured) {
+        const result = await updateTrendItem(
+          trend.id,
+          {
+            discussion_status: discussionStatus,
+            last_discussed_at: discussedAt || null,
+            last_discussed_by:
+              discussionStatus === 'discussed' ? identity?.userId || null : null,
+          },
+          trend.version,
+        )
+        version = result?.version || version
+        updatedAt = result?.updatedAt || updatedAt
+      }
+      setTrends((current) =>
+        current.map((candidate) =>
+          candidate.id === trend.id
+            ? {
+                ...candidate,
+                discussionStatus,
+                lastDiscussedAt: discussedAt,
+                lastDiscussedBy:
+                  discussionStatus === 'discussed'
+                    ? identity?.displayName
+                    : undefined,
+                version,
+                updatedAt,
+              }
+            : candidate,
+        ),
+      )
+      setNotice(
+        discussionStatus === 'discussed'
+          ? 'Trend discussion recorded.'
+          : discussionStatus === 'dismissed'
+            ? 'Trend dismissed from discussion.'
+            : 'Trend reopened for discussion.',
+      )
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not update Trend')
+    }
+  }
+
+  function openCreateThreadFromTrend(trend: Trend, resumeMeeting = false) {
+    setPendingThreadTrendId(trend.id)
+    setMeetingThreadTrendId(resumeMeeting ? trend.id : '')
+    openNewTopic(trend.category, {
+      title: trend.title,
+      notes: trend.initialRead || trend.observation,
+      analysis: {
+        ...emptyTopicAnalysis,
+        keyQuestion: trend.discussionQuestion,
+        observed: trend.observation,
+        currentView: trend.initialRead,
+      },
+    })
+  }
+
   async function reassignTopicCategory(
     topicId: string,
     category: NewsCategory,
@@ -1611,6 +2093,12 @@ function App() {
         supportingNews: topic.supportingNews.filter((newsId) => newsId !== id),
       })),
     )
+    setTrends((current) =>
+      current.map((trend) => ({
+        ...trend,
+        actionThreadIds: trend.actionThreadIds.filter((topicId) => topicId !== id),
+      })),
+    )
     setNewsDraft(null)
     setNotice('News card deleted')
   }
@@ -1685,19 +2173,22 @@ function App() {
     setNotice('Thesis deleted')
   }
 
-  function openNewTopic(category: NewsCategory = 'ai_capability') {
+  function openNewTopic(
+    category: NewsCategory = 'ai_capability',
+    seed: Partial<Pick<Topic, 'title' | 'notes' | 'analysis'>> = {},
+  ) {
     setCreatingTopic(true)
     setTopicDraft({
       id: '',
-      title: '',
+      title: seed.title || '',
       monthKey: '',
       monthLabel: monthName(''),
       category,
       status: 'idea',
       threadStatus: 'open',
       kind: 'insight',
-      notes: '',
-      analysis: { ...emptyTopicAnalysis },
+      notes: seed.notes || '',
+      analysis: seed.analysis || { ...emptyTopicAnalysis },
       outputs: [],
       ownerId: identity?.userId,
       ownerName: identity?.displayName,
@@ -1707,6 +2198,7 @@ function App() {
       createdAt: new Date().toISOString(),
       displayOrder: 1,
       supportingNews: [],
+      sourceTrends: [],
     })
   }
 
@@ -1773,6 +2265,45 @@ function App() {
           await setDiscussionOutcome(meetingSource, 'discussed')
         }
         setPendingThreadNewsId('')
+      }
+      if (pendingThreadTrendId) {
+        const sourceTrend = trends.find(
+          (trend) => trend.id === pendingThreadTrendId,
+        )
+        try {
+          if (cloudConfigured) await persistTrendTopic(pendingThreadTrendId, id)
+          setTrends((current) =>
+            current.map((trend) =>
+              trend.id === pendingThreadTrendId
+                ? {
+                    ...trend,
+                    actionThreadIds: [...trend.actionThreadIds, id],
+                  }
+                : trend,
+            ),
+          )
+          setTopics((current) =>
+            current.map((topic) =>
+              topic.id === id && sourceTrend
+                ? {
+                    ...topic,
+                    sourceTrends: [
+                      ...topic.sourceTrends,
+                      { trendId: sourceTrend.id, trendTitle: sourceTrend.title },
+                    ],
+                  }
+                : topic,
+            ),
+          )
+          if (sourceTrend) await setTrendDiscussionOutcome(sourceTrend, 'discussed')
+          setPendingThreadTrendId('')
+        } catch (error) {
+          setNotice(
+            error instanceof Error
+              ? error.message
+              : 'Action Thread was created, but its Trend link could not be saved.',
+          )
+        }
       }
     } else {
       const previous = topics.find((item) => item.id === topicDraft.id)
@@ -1854,10 +2385,13 @@ function App() {
       setNotice('Topic updated')
     }
     const shouldResumeMeeting = Boolean(meetingThreadNewsId)
+    const shouldResumeTrendMeeting = Boolean(meetingThreadTrendId)
     setTopicDraft(null)
     setCreatingTopic(false)
     setMeetingThreadNewsId('')
+    setMeetingThreadTrendId('')
     if (shouldResumeMeeting) setMeetingMode(true)
+    if (shouldResumeTrendMeeting) setTrendMeetingMode(true)
   }
 
   async function removeTopic(id: string) {
@@ -1953,6 +2487,7 @@ function App() {
             },
           ]
         : [],
+      trendLinks: [],
     }
     setNews((current) => [item, ...current])
     if (topic) {
@@ -1979,7 +2514,19 @@ function App() {
     return (
       <div className="linked-signal-row" key={item.id}>
         <div>
-          <span>{item.title}</span>
+          {item.url && item.sourceType !== 'manual_note' ? (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              title="Open original article"
+            >
+              {item.title} <span aria-hidden="true">↗</span>
+            </a>
+          ) : (
+            <span>{item.title}</span>
+          )}
         </div>
         <button
           type="button"
@@ -2287,6 +2834,292 @@ function App() {
     )
   }
 
+  function renderTrendCard(trend: Trend) {
+    const evidence = trend.evidence
+      .slice()
+      .sort(
+        (a, b) =>
+          Number(b.role === 'primary') - Number(a.role === 'primary') ||
+          a.displayOrder - b.displayOrder,
+      )
+      .map((link) => ({
+        link,
+        item: news.find((candidate) => candidate.id === link.newsId),
+      }))
+      .filter(
+        (entry): entry is { link: Trend['evidence'][number]; item: NewsItem } =>
+          Boolean(entry.item && !entry.item.deletedAt),
+      )
+    const linkedThreads = trend.actionThreadIds
+      .map((id) => topics.find((topic) => topic.id === id && !topic.deletedAt))
+      .filter((topic): topic is Topic => Boolean(topic))
+    const newEvidence = trendNewEvidenceCount(trend)
+    return (
+      <article
+        className={`trend-card cat-${trend.category} ${
+          draggedNewsId ? 'accepting-news' : ''
+        }`}
+        key={trend.id}
+        onDragOver={(event) => {
+          if (!draggedNewsId) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'copy'
+        }}
+        onDrop={(event) => {
+          const newsId =
+            event.dataTransfer.getData('application/x-news-id') || draggedNewsId
+          if (!newsId) return
+          event.preventDefault()
+          void linkNewsToTrend(trend.id, newsId)
+          setDraggedNewsId('')
+        }}
+      >
+        <header className="trend-card-head">
+          <CategoryLabel category={trend.category} className="category-token" />
+          <div className="trend-card-state">
+            {isTrendToDiscuss(trend) ? (
+              <span className="pipeline-state state-to-discuss">To discuss</span>
+            ) : trend.discussionStatus === 'discussed' ? (
+              <span className="pipeline-state state-discussed">Discussed</span>
+            ) : trend.discussionStatus === 'dismissed' ? (
+              <span className="pipeline-state state-dismissed">Dismissed</span>
+            ) : null}
+            <span className="trend-signal-count">
+              {evidence.length} signal{evidence.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        </header>
+        <button
+          className="trend-title-button"
+          type="button"
+          onClick={() => {
+            setCreatingTrend(false)
+            setTrendDraft({ ...trend })
+          }}
+        >
+          {trend.title}
+        </button>
+        {trend.observation ? (
+          <p className="trend-observation">{trend.observation}</p>
+        ) : null}
+        {trend.initialRead ? (
+          <div className="trend-initial-read">
+            <strong>Initial read</strong>
+            <p>{trend.initialRead}</p>
+          </div>
+        ) : null}
+        {trend.discussionQuestion ? (
+          <p className="trend-question">
+            <strong>Question</strong> {trend.discussionQuestion}
+          </p>
+        ) : null}
+        {newEvidence > 0 && trend.lastDiscussedAt ? (
+          <p className="trend-new-evidence">
+            {newEvidence} new since last discussion
+          </p>
+        ) : null}
+        <div className="trend-evidence" aria-label="Supporting signals">
+          {evidence.slice(0, 3).map(({ item, link }) => (
+            <div className="trend-evidence-row" key={item.id}>
+              <span className={`evidence-role role-${link.role}`}>
+                {link.role === 'primary' ? 'Primary' : link.role}
+              </span>
+              {item.url && item.sourceType !== 'manual_note' ? (
+                <a href={item.url} target="_blank" rel="noreferrer">
+                  {item.title} <span aria-hidden="true">↗</span>
+                </a>
+              ) : (
+                <span>{item.title}</span>
+              )}
+            </div>
+          ))}
+          {evidence.length === 0 ? (
+            <p className="trend-empty-evidence">
+              Add reviewed signals before taking this Trend into discussion.
+            </p>
+          ) : null}
+        </div>
+        {linkedThreads.length > 0 ? (
+          <div className="trend-thread-links">
+            {linkedThreads.map((topic) => (
+              <button
+                type="button"
+                key={topic.id}
+                onClick={() => {
+                  setWorkspacePage('threads')
+                  setCreatingTopic(false)
+                  setTopicDraft({ ...topic })
+                }}
+              >
+                Action Thread · {topic.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <footer className="trend-card-actions">
+          <button
+            className="text-action"
+            type="button"
+            onClick={() => {
+              setCreatingTrend(false)
+              setTrendDraft({ ...trend })
+            }}
+          >
+            Open trend
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              setCuratingTrendId(trend.id)
+              setEvidenceInboxOpen(true)
+            }}
+            hidden={!canEdit}
+          >
+            Curate evidence
+          </button>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => {
+              const index = trendMeetingQueue.findIndex(
+                (candidate) => candidate.id === trend.id,
+              )
+              if (index >= 0) {
+                setTrendMeetingIndex(index)
+                setTrendMeetingMode(true)
+              } else {
+                void setTrendDiscussionOutcome(trend, 'not_discussed')
+              }
+            }}
+          >
+            {isTrendToDiscuss(trend) ? 'Discuss' : 'Reopen discussion'}
+          </button>
+        </footer>
+      </article>
+    )
+  }
+
+  function renderEvidenceInbox() {
+    const targetTrend = trends.find((trend) => trend.id === curatingTrendId)
+    return (
+      <section className={`evidence-inbox ${evidenceInboxOpen ? 'open' : ''}`}>
+        <button
+          className="evidence-inbox-summary"
+          type="button"
+          aria-expanded={evidenceInboxOpen}
+          onClick={() => setEvidenceInboxOpen((open) => !open)}
+        >
+          <span>
+            <strong>Evidence Inbox · {evidenceInbox.length}</strong>
+            <small>Reviewed signals not yet supporting an active Trend</small>
+          </span>
+          <span>{evidenceInboxOpen ? 'Close' : 'Curate evidence'} →</span>
+        </button>
+        {evidenceInboxOpen ? (
+          <div className="evidence-inbox-body">
+            <div className="evidence-target-row">
+              <label>
+                Add evidence to
+                <select
+                  aria-label="Evidence target Trend"
+                  value={curatingTrendId}
+                  onChange={(event) => setCuratingTrendId(event.target.value)}
+                >
+                  <option value="">Select a Trend</option>
+                  {trends
+                    .filter(
+                      (trend) => !trend.deletedAt && trend.status !== 'archived',
+                    )
+                    .map((trend) => (
+                      <option value={trend.id} key={trend.id}>
+                        {trend.title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => openNewTrend()}
+                hidden={!canEdit}
+              >
+                + New Trend
+              </button>
+              <button
+                className="text-action"
+                type="button"
+                onClick={() => {
+                  setMeetingIndex(0)
+                  setMeetingMode(true)
+                }}
+              >
+                Signal triage · {meetingQueue.length}
+              </button>
+            </div>
+            <div className="evidence-inbox-list">
+              {evidenceInbox.map((item) => (
+                <article
+                  className="evidence-inbox-row"
+                  key={item.id}
+                  draggable
+                  onDragStart={(event) => {
+                    setDraggedNewsId(item.id)
+                    event.dataTransfer.setData('application/x-news-id', item.id)
+                  }}
+                  onDragEnd={() => setDraggedNewsId('')}
+                >
+                  <div>
+                    <div className="evidence-inbox-meta">
+                      <CategoryLabel category={item.category} />
+                      <span>{item.capturedBy}</span>
+                    </div>
+                    {item.url && item.sourceType !== 'manual_note' ? (
+                      <a href={item.url} target="_blank" rel="noreferrer">
+                        {item.title} <span aria-hidden="true">↗</span>
+                      </a>
+                    ) : (
+                      <strong>{item.title}</strong>
+                    )}
+                    {noteTakeaway(item) ? (
+                      <p>{compactWords(noteTakeaway(item), 22)}</p>
+                    ) : null}
+                  </div>
+                  <div className="evidence-inbox-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={!targetTrend}
+                      onClick={() => {
+                        if (targetTrend) void linkNewsToTrend(targetTrend.id, item.id)
+                      }}
+                      hidden={!canEdit}
+                    >
+                      {targetTrend ? 'Add evidence' : 'Select a Trend'}
+                    </button>
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={() => openNewTrend(item.id)}
+                      hidden={!canEdit}
+                    >
+                      Start Trend
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {evidenceInbox.length === 0 ? (
+                <div className="month-empty">
+                  Every reviewed signal in this period already supports a Trend.
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    )
+  }
+
   function renderTopicCard(topic: Topic) {
     const linked = topic.supportingNews
       .map((id) => news.find((item) => item.id === id && !item.deletedAt))
@@ -2364,6 +3197,27 @@ function App() {
         ) : null}
         {topic.decisionSummary ? (
           <p className="thread-decision">Decision · {topic.decisionSummary}</p>
+        ) : null}
+        {topic.sourceTrends.length > 0 ? (
+          <div className="thread-source-trends">
+            {topic.sourceTrends.map((source) => (
+              <button
+                type="button"
+                key={source.trendId}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  const trend = trends.find((item) => item.id === source.trendId)
+                  if (trend) {
+                    setWorkspacePage('synthesis')
+                    setCreatingTrend(false)
+                    setTrendDraft({ ...trend })
+                  }
+                }}
+              >
+                From trend · {source.trendTitle}
+              </button>
+            ))}
+          </div>
         ) : null}
         {linked.length > 0 ? (
           <div className="linked-signals" aria-label="Linked signals">
@@ -2502,49 +3356,6 @@ function App() {
     )
   }
 
-  function renderNewsScopeFilter() {
-    const options: Array<{ value: NewsScope; label: string }> = [
-      { value: 'all', label: 'All news' },
-      { value: 'to_discuss', label: `To discuss · ${meetingQueue.length}` },
-      { value: 'discussed', label: 'Discussed' },
-    ]
-    const threadOptions: Array<{ value: NewsThreadScope; label: string }> = [
-      { value: 'all', label: 'All threads' },
-      { value: 'in_thread', label: 'In a thread' },
-      { value: 'no_thread', label: 'No thread' },
-    ]
-    return (
-      <div className="news-scope-controls">
-        <div className="signal-scope-filter" role="group" aria-label="Discussion stage">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={newsScope === option.value ? 'active' : ''}
-              aria-pressed={newsScope === option.value}
-              onClick={() => setNewsScope(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <div className="thread-scope-filter" role="group" aria-label="Thread relationship">
-          {threadOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={newsThreadScope === option.value ? 'active' : ''}
-              aria-pressed={newsThreadScope === option.value}
-              onClick={() => setNewsThreadScope(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div
       className={`app-shell focus-${focus} page-${workspacePage} ${
@@ -2574,7 +3385,7 @@ function App() {
             type="button"
             onClick={() => setWorkspacePage('synthesis')}
           >
-            Intelligence Synthesis
+            Intelligence Briefing
           </button>
         </nav>
         <div className="sidebar-user">
@@ -2643,7 +3454,7 @@ function App() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search all news and threads..."
+                placeholder="Search signals, Trends, evidence, and Action Threads..."
               />
             </label>
             {query.trim() ? (
@@ -2675,16 +3486,33 @@ function App() {
                 <div className="search-result-section">
                   <strong>News</strong>
                   {globalNewsResults.map((item) => (
+                    <a
+                      href={item.url || undefined}
+                      target={item.url ? '_blank' : undefined}
+                      rel={item.url ? 'noreferrer' : undefined}
+                      key={item.id}
+                      onClick={() => setQuery('')}
+                    >
+                      <span>{item.title}{item.url ? ' ↗' : ''}</span>
+                      <small>{categoryLabels[item.category]} · {item.capturedBy}</small>
+                    </a>
+                  ))}
+                </div>
+                <div className="search-result-section">
+                  <strong>Trends</strong>
+                  {globalTrendResults.map((trend) => (
                     <button
                       type="button"
-                      key={item.id}
+                      key={trend.id}
                       onClick={() => {
-                        setNewsDraft({ ...item })
+                        setWorkspacePage('synthesis')
+                        setCreatingTrend(false)
+                        setTrendDraft({ ...trend })
                         setQuery('')
                       }}
                     >
-                      <span>{item.title}</span>
-                      <small>{categoryLabels[item.category]} · {item.capturedBy}</small>
+                      <span>{trend.title}</span>
+                      <small>{categoryLabels[trend.category]} · {trend.evidence.length} signals</small>
                     </button>
                   ))}
                 </div>
@@ -2705,8 +3533,8 @@ function App() {
                     </button>
                   ))}
                 </div>
-                {globalNewsResults.length + globalTopicResults.length === 0 ? (
-                  <p className="search-empty">No matching news or threads.</p>
+                {globalNewsResults.length + globalTrendResults.length + globalTopicResults.length === 0 ? (
+                  <p className="search-empty">No matching signals, Trends, or Action Threads.</p>
                 ) : null}
               </div>
             ) : null}
@@ -2814,42 +3642,81 @@ function App() {
           <>
             {workspacePage === 'synthesis' && (
               <section
-                className="news-pane"
-                aria-label="Discussion Candidates"
+                className="news-pane trend-briefing-pane"
+                aria-label="Intelligence Briefing"
               >
                 <div className="pane-heading">
                   <div>
-                    <span className="eyebrow">What actually matters</span>
-                    <h1>Discussion Candidates</h1>
+                    <span className="eyebrow">What changed and why it matters</span>
+                    <h1>Emerging Trends</h1>
                   </div>
-                  <button
-                    className="secondary-button meeting-start"
-                    type="button"
-                    title="Undiscussed signals recommended, annotated, manually added, or linked to a Thread"
-                    onClick={() => {
-                      setQuery('')
-                      setMeetingIndex(0)
-                      setMeetingMode(true)
-                    }}
-                  >
-                    Start meeting · {meetingQueue.length}
-                  </button>
+                  <div className="heading-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => openNewTrend()}
+                      hidden={!canEdit}
+                    >
+                      + New Trend
+                    </button>
+                    <button
+                      className="primary-button meeting-start"
+                      type="button"
+                      onClick={() => {
+                        setQuery('')
+                        setTrendMeetingIndex(0)
+                        setTrendMeetingMode(true)
+                      }}
+                    >
+                      Start trend meeting · {trendMeetingQueue.length}
+                    </button>
+                  </div>
                 </div>
                 <p className="meeting-queue-explainer">
-                  To discuss includes undiscussed signals with a recommendation,
-                  team thought, manual nomination, or linked Thread.
+                  Trends turn related signals into an evidence-backed view of what
+                  is changing, what it may mean, and what the team should discuss.
                 </p>
-                <div className="discussion-toolbar">{renderNewsScopeFilter()}</div>
-                <div className="news-list discussion-list">
-                  {discussionCandidates.map((item) =>
-                    renderNoteCard(item, { variant: 'candidate' }),
-                  )}
-                  {discussionCandidates.length === 0 && (
+                <div className="trend-category-filter" role="group" aria-label="Trend category">
+                  <button
+                    type="button"
+                    className={trendCategory === 'all' ? 'active' : ''}
+                    aria-pressed={trendCategory === 'all'}
+                    onClick={() => setTrendCategory('all')}
+                  >
+                    Active trends
+                  </button>
+                  {activeTrendCategories.map((category) => (
+                    <button
+                      type="button"
+                      key={category}
+                      className={trendCategory === category ? 'active' : ''}
+                      aria-pressed={trendCategory === category}
+                      onClick={() => setTrendCategory(category)}
+                    >
+                      {categoryLabels[category]}
+                    </button>
+                  ))}
+                </div>
+                <div className="trend-grid">
+                  {briefingTrends.map((trend) => renderTrendCard(trend))}
+                  {briefingTrends.length === 0 && (
                     <div className="month-empty">
-                      No news matches these discussion and Thread filters.
+                      <strong>No Trends in this view yet.</strong>
+                      <p>Create a Trend from reviewed evidence instead of reviewing news one by one.</p>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => {
+                          setEvidenceInboxOpen(true)
+                          setCuratingTrendId('')
+                        }}
+                      >
+                        Open Evidence Inbox
+                      </button>
                     </div>
                   )}
                 </div>
+                {renderEvidenceInbox()}
               </section>
             )}
             <section
@@ -2879,7 +3746,7 @@ function App() {
                       type="button"
                       onClick={() => setWorkspacePage('synthesis')}
                     >
-                      ← Intelligence Synthesis
+                      ← Intelligence Briefing
                     </button>
                   )}
                   <button
@@ -2998,24 +3865,10 @@ function App() {
                 </div>
               )}
               {workspacePage === 'synthesis' && (
-              <div
-                className={`drop-create ${draggedNewsId ? 'hot' : ''}`}
-                onDragOver={(event) => {
-                  if (!draggedNewsId) return
-                  event.preventDefault()
-                }}
-                onDrop={(event) => {
-                  const newsId =
-                    event.dataTransfer.getData('application/x-news-id') ||
-                    draggedNewsId
-                  if (!newsId) return
-                  event.preventDefault()
-                  openCreateThread(newsId)
-                  setDraggedNewsId('')
-                }}
-              >
-                + Drop a signal to create a thread
-              </div>
+                <p className="thread-source-hint">
+                  Action Threads record what the team decided to do. Create one
+                  from a Trend discussion to preserve its evidence and rationale.
+                </p>
               )}
               {workspacePage === 'threads' && threadGroupMode === 'timeline' ? (
                 <div
@@ -3506,6 +4359,384 @@ function App() {
         </div>
       )}
 
+      {trendDraft && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="link-modal editor-modal trend-editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-trend-title"
+          >
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">Intelligence layer</span>
+                <h2 id="edit-trend-title">
+                  {creatingTrend ? 'Create Trend' : 'Edit Trend'}
+                </h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Close"
+                onClick={() => {
+                  setTrendDraft(null)
+                  setCreatingTrend(false)
+                  setPendingTrendNewsId('')
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <section className="modal-section">
+                <h3>Trend framing</h3>
+                <label>
+                  <span>
+                    Trend title <span className="required-mark" aria-hidden="true">*</span>
+                  </span>
+                  <input
+                    value={trendDraft.title}
+                    onChange={(event) =>
+                      setTrendDraft({ ...trendDraft, title: event.target.value })
+                    }
+                    placeholder="Name the emerging change, not an individual article"
+                    autoFocus
+                    required
+                  />
+                  <small className="field-hint">
+                    Required. Write the pattern the team should recognize.
+                  </small>
+                </label>
+                <div className="form-grid two-col">
+                  <label>
+                    Primary category
+                    <select
+                      value={trendDraft.category}
+                      onChange={(event) =>
+                        setTrendDraft({
+                          ...trendDraft,
+                          category: event.target.value as NewsCategory,
+                        })
+                      }
+                    >
+                      {Object.entries(categoryLabels).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Visibility
+                    <select
+                      value={trendDraft.status}
+                      onChange={(event) =>
+                        setTrendDraft({
+                          ...trendDraft,
+                          status: event.target.value as Trend['status'],
+                        })
+                      }
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="active">Active</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  What changed
+                  <textarea
+                    rows={3}
+                    value={trendDraft.observation}
+                    onChange={(event) =>
+                      setTrendDraft({ ...trendDraft, observation: event.target.value })
+                    }
+                    placeholder="Describe the repeated market or product movement supported by the evidence."
+                  />
+                </label>
+                <label>
+                  Initial read
+                  <textarea
+                    rows={3}
+                    value={trendDraft.initialRead}
+                    onChange={(event) =>
+                      setTrendDraft({ ...trendDraft, initialRead: event.target.value })
+                    }
+                    placeholder="What might this mean? Keep it provisional until the team discusses it."
+                  />
+                </label>
+                <label>
+                  Discussion question
+                  <textarea
+                    rows={2}
+                    value={trendDraft.discussionQuestion}
+                    onChange={(event) =>
+                      setTrendDraft({
+                        ...trendDraft,
+                        discussionQuestion: event.target.value,
+                      })
+                    }
+                    placeholder="What judgment or decision should the team make?"
+                  />
+                </label>
+              </section>
+              <section className="modal-section">
+                <h3>Supporting evidence</h3>
+                <p className="modal-note">
+                  Article titles open the original source. Evidence can also be curated from the Evidence Inbox.
+                </p>
+                <div className="trend-editor-evidence">
+                  {trendDraft.evidence
+                    .slice()
+                    .sort((a, b) => a.displayOrder - b.displayOrder)
+                    .map((link) => {
+                      const item = news.find((candidate) => candidate.id === link.newsId)
+                      if (!item || item.deletedAt) return null
+                      return (
+                        <div key={item.id}>
+                          <span className={`evidence-role role-${link.role}`}>
+                            {link.role}
+                          </span>
+                          {item.url && item.sourceType !== 'manual_note' ? (
+                            <a href={item.url} target="_blank" rel="noreferrer">
+                              {item.title} <span aria-hidden="true">↗</span>
+                            </a>
+                          ) : (
+                            <span>{item.title}</span>
+                          )}
+                          <button
+                            className="text-action"
+                            type="button"
+                            onClick={() => void unlinkSignalFromTrend(trendDraft.id, item.id)}
+                            hidden={!canEdit || creatingTrend}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )
+                    })}
+                  {pendingTrendNewsId ? (
+                    <p className="pending-evidence-note">
+                      This Trend will start with the selected signal as primary evidence.
+                    </p>
+                  ) : null}
+                  {trendDraft.evidence.length === 0 && !pendingTrendNewsId ? (
+                    <p className="linked-empty">No evidence linked yet.</p>
+                  ) : null}
+                </div>
+              </section>
+            </div>
+            <div className="modal-actions split-actions sticky-footer">
+              {!creatingTrend ? (
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => void removeTrend(trendDraft.id)}
+                  hidden={!canEdit}
+                >
+                  Archive Trend
+                </button>
+              ) : (
+                <span />
+              )}
+              <div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    setTrendDraft(null)
+                    setCreatingTrend(false)
+                    setPendingTrendNewsId('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void saveTrendDraft()}
+                  disabled={!trendDraft.title.trim()}
+                >
+                  {creatingTrend ? 'Create Trend' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {trendMeetingMode && (
+        <div className="modal-backdrop meeting-backdrop" role="presentation">
+          <section
+            className="meeting-modal trend-meeting-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trend-meeting-title"
+          >
+            <header className="meeting-header">
+              <div>
+                <span className="eyebrow">Team discussion</span>
+                <h2 id="trend-meeting-title">Trend review</h2>
+              </div>
+              <div className="meeting-progress">
+                {trendMeetingQueue.length > 0
+                  ? `${Math.min(trendMeetingIndex + 1, trendMeetingQueue.length)} of ${trendMeetingQueue.length}`
+                  : 'Complete'}
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Close meeting"
+                onClick={() => setTrendMeetingMode(false)}
+              >
+                ×
+              </button>
+            </header>
+            {trendMeetingItem ? (
+              <div className="meeting-content trend-meeting-content">
+                <div className="meeting-signal-meta">
+                  <CategoryLabel category={trendMeetingItem.category} />
+                  <span>{trendMeetingItem.evidence.length} supporting signals</span>
+                  {trendMeetingItem.actionThreadIds.length > 0 ? (
+                    <span className="state-in-thread">
+                      Already in {trendMeetingItem.actionThreadIds.length} Action Thread{trendMeetingItem.actionThreadIds.length === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                </div>
+                <h3>{trendMeetingItem.title}</h3>
+                <div className="trend-meeting-framing">
+                  <div>
+                    <strong>What changed</strong>
+                    <p>{trendMeetingItem.observation || 'No observation recorded yet.'}</p>
+                  </div>
+                  <div>
+                    <strong>Initial read</strong>
+                    <p>{trendMeetingItem.initialRead || 'No initial read recorded yet.'}</p>
+                  </div>
+                  <div>
+                    <strong>Question for the team</strong>
+                    <p>{trendMeetingItem.discussionQuestion || 'What should the team conclude or do next?'}</p>
+                  </div>
+                </div>
+                <div className="trend-meeting-evidence">
+                  <strong>Supporting evidence</strong>
+                  {trendMeetingItem.evidence
+                    .slice()
+                    .sort((a, b) => a.displayOrder - b.displayOrder)
+                    .map((link) => news.find((item) => item.id === link.newsId))
+                    .filter((item): item is NewsItem => Boolean(item && !item.deletedAt))
+                    .map((item) =>
+                      item.url && item.sourceType !== 'manual_note' ? (
+                        <a href={item.url} target="_blank" rel="noreferrer" key={item.id}>
+                          {item.title} <span aria-hidden="true">↗</span>
+                        </a>
+                      ) : (
+                        <span key={item.id}>{item.title}</span>
+                      ),
+                    )}
+                </div>
+              </div>
+            ) : (
+              <div className="meeting-complete">
+                <span aria-hidden="true">✓</span>
+                <h3>Trend discussion complete</h3>
+                <p>Every visible Trend has a recorded discussion outcome.</p>
+              </div>
+            )}
+            <footer className="meeting-actions">
+              {trendMeetingIndex > 0 && trendMeetingQueue.length > 0 ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setTrendMeetingIndex((index) => Math.max(0, index - 1))}
+                >
+                  Back
+                </button>
+              ) : (
+                <span className="meeting-queue-note">Trend discussion queue</span>
+              )}
+              <div>
+                {trendMeetingItem ? (
+                  <>
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={() =>
+                        setTrendMeetingIndex((index) =>
+                          trendMeetingQueue.length
+                            ? (index + 1) % trendMeetingQueue.length
+                            : 0,
+                        )
+                      }
+                    >
+                      Defer
+                    </button>
+                    {trendMeetingItem.actionThreadIds.length > 0 ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => {
+                          const topic = topics.find(
+                            (candidate) =>
+                              candidate.id === trendMeetingItem.actionThreadIds[0],
+                          )
+                          if (!topic) return
+                          setMeetingThreadTrendId(trendMeetingItem.id)
+                          setTrendMeetingMode(false)
+                          setCreatingTopic(false)
+                          setTopicDraft({ ...topic })
+                        }}
+                      >
+                        Open Action Thread
+                      </button>
+                    ) : (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => {
+                          setTrendMeetingMode(false)
+                          openCreateThreadFromTrend(trendMeetingItem, true)
+                        }}
+                      >
+                        Create Action Thread
+                      </button>
+                    )}
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() =>
+                        void setTrendDiscussionOutcome(trendMeetingItem, 'dismissed')
+                      }
+                    >
+                      Dismiss from discussion
+                    </button>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() =>
+                        void setTrendDiscussionOutcome(trendMeetingItem, 'discussed')
+                      }
+                    >
+                      {trendMeetingItem.actionThreadIds.length > 0
+                        ? 'Discussed · keep linked'
+                        : 'Discussed · keep watching'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => setTrendMeetingMode(false)}
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
+
       {meetingMode && (
         <div className="modal-backdrop meeting-backdrop" role="presentation">
           <section
@@ -3545,7 +4776,9 @@ function App() {
                     <span>{meetingItem.ideaCount} team thought{meetingItem.ideaCount === 1 ? '' : 's'}</span>
                   ) : null}
                   {meetingItem.topicLinks.length > 0 ? (
-                    <span>In thread · {meetingItem.topicLinks[0].topicTitle}</span>
+                    <span className="state-in-thread">
+                      In Action Thread · {meetingItem.topicLinks[0].topicTitle}
+                    </span>
                   ) : null}
                   {meetingItem.meetingNominatedAt ? (
                     <span>
@@ -3553,7 +4786,15 @@ function App() {
                     </span>
                   ) : null}
                 </div>
-                <h3>{meetingItem.title}</h3>
+                <h3>
+                  {meetingItem.url && meetingItem.sourceType !== 'manual_note' ? (
+                    <a href={meetingItem.url} target="_blank" rel="noreferrer">
+                      {meetingItem.title} <span aria-hidden="true">↗</span>
+                    </a>
+                  ) : (
+                    meetingItem.title
+                  )}
+                </h3>
                 {meetingItem.teamSynthesis ? (
                   <div className="meeting-takeaway team">
                     <strong>Team synthesis</strong>
@@ -3605,30 +4846,52 @@ function App() {
                     >
                       Defer
                     </button>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={() => {
-                        setMeetingThreadNewsId(meetingItem.id)
-                        setMeetingMode(false)
-                        openCreateThread(meetingItem.id)
-                      }}
-                    >
-                      Create thread &amp; complete
-                    </button>
+                    {meetingItem.topicLinks.length > 0 ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => {
+                          const topic = topics.find(
+                            (candidate) =>
+                              candidate.id === meetingItem.topicLinks[0].topicId,
+                          )
+                          if (!topic) return
+                          setMeetingThreadNewsId(meetingItem.id)
+                          setMeetingMode(false)
+                          setCreatingTopic(false)
+                          setTopicDraft({ ...topic })
+                        }}
+                      >
+                        Open Action Thread
+                      </button>
+                    ) : (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => {
+                          setMeetingThreadNewsId(meetingItem.id)
+                          setMeetingMode(false)
+                          openCreateThread(meetingItem.id)
+                        }}
+                      >
+                        Create Action Thread
+                      </button>
+                    )}
                     <button
                       className="secondary-button"
                       type="button"
                       onClick={() => void setDiscussionOutcome(meetingItem, 'dismissed')}
                     >
-                      Dismiss
+                      Dismiss from discussion
                     </button>
                     <button
                       className="primary-button"
                       type="button"
                       onClick={() => void setDiscussionOutcome(meetingItem, 'discussed')}
                     >
-                      Discussed, no thread
+                      {meetingItem.topicLinks.length > 0
+                        ? 'Discussed · keep linked'
+                        : 'Discussed · no Action Thread'}
                     </button>
                   </>
                 ) : (

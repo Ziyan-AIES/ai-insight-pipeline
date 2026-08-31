@@ -1,5 +1,5 @@
 import { emptyTopicAnalysis } from './labels'
-import type { NewsItem, Thesis, Topic } from './types'
+import type { NewsItem, Thesis, Topic, Trend } from './types'
 
 export const demoNews: NewsItem[] = [
   {
@@ -34,6 +34,13 @@ export const demoNews: NewsItem[] = [
         monthLabel: 'November 2026',
       },
     ],
+    trendLinks: [
+      {
+        trendId: 'trend-agent-reliability',
+        trendTitle: 'Agent reliability is becoming a product layer',
+        role: 'primary',
+      },
+    ],
   },
   {
     id: 'news-granola',
@@ -60,6 +67,13 @@ export const demoNews: NewsItem[] = [
     discussionStatus: 'not_discussed',
     voteCount: 1,
     topicLinks: [],
+    trendLinks: [
+      {
+        trendId: 'trend-ambient-control',
+        trendTitle: 'Wearables are becoming ambient control layers',
+        role: 'primary',
+      },
+    ],
   },
   {
     id: 'news-pocket',
@@ -83,6 +97,7 @@ export const demoNews: NewsItem[] = [
     discussionStatus: 'not_discussed',
     voteCount: 0,
     topicLinks: [],
+    trendLinks: [],
   },
   {
     id: 'news-browser-agent',
@@ -108,6 +123,13 @@ export const demoNews: NewsItem[] = [
     voteCount: 4,
     votedByMe: true,
     topicLinks: [],
+    trendLinks: [
+      {
+        trendId: 'trend-cross-app-agents',
+        trendTitle: 'Assistants are moving into persistent cross-app workflows',
+        role: 'primary',
+      },
+    ],
   },
   {
     id: 'news-platform-runtime',
@@ -131,6 +153,13 @@ export const demoNews: NewsItem[] = [
     discussionStatus: 'not_discussed',
     voteCount: 3,
     topicLinks: [],
+    trendLinks: [
+      {
+        trendId: 'trend-cross-app-agents',
+        trendTitle: 'Assistants are moving into persistent cross-app workflows',
+        role: 'supporting',
+      },
+    ],
   },
   {
     id: 'news-earnings-ai',
@@ -154,6 +183,98 @@ export const demoNews: NewsItem[] = [
     discussionStatus: 'not_discussed',
     voteCount: 1,
     topicLinks: [],
+    trendLinks: [],
+  },
+]
+
+export const demoTrends: Trend[] = [
+  {
+    id: 'trend-cross-app-agents',
+    title: 'Assistants are moving into persistent cross-app workflows',
+    category: 'interaction',
+    observation:
+      'Browser, desktop, and platform agents increasingly preserve identity, context, and permissions across surfaces.',
+    initialRead:
+      'Continuity is becoming part of the product contract, while permission handoffs are emerging as the main trust bottleneck.',
+    discussionQuestion:
+      'What continuity and permission model should Qira establish before this becomes a baseline expectation?',
+    status: 'active',
+    discussionStatus: 'not_discussed',
+    meetingNominatedAt: '2026-08-29T09:00:00Z',
+    meetingNominatedBy: 'Nicole',
+    createdBy: 'Nicole',
+    createdAt: '2026-08-26T09:00:00Z',
+    updatedAt: '2026-08-29T09:00:00Z',
+    version: 1,
+    evidence: [
+      {
+        newsId: 'news-browser-agent',
+        role: 'primary',
+        displayOrder: 1,
+        linkedAt: '2026-08-26T10:00:00Z',
+      },
+      {
+        newsId: 'news-platform-runtime',
+        role: 'supporting',
+        displayOrder: 2,
+        linkedAt: '2026-08-27T10:00:00Z',
+      },
+    ],
+    actionThreadIds: ['topic-ambient'],
+  },
+  {
+    id: 'trend-ambient-control',
+    title: 'Wearables are becoming ambient control layers',
+    category: 'ai_hardware',
+    observation:
+      'Rings, glasses, and watches are converging on private, always-available input across devices.',
+    initialRead:
+      'The durable opportunity may be lightweight control and context capture rather than shrinking full assistant interfaces onto wearables.',
+    discussionQuestion:
+      'Which interaction primitives are mature enough to influence Qira’s device strategy?',
+    status: 'active',
+    discussionStatus: 'not_discussed',
+    createdBy: 'Ziyan',
+    createdAt: '2026-08-24T09:00:00Z',
+    updatedAt: '2026-08-30T09:00:00Z',
+    version: 1,
+    evidence: [
+      {
+        newsId: 'news-granola',
+        role: 'primary',
+        displayOrder: 1,
+        linkedAt: '2026-08-30T09:00:00Z',
+      },
+    ],
+    actionThreadIds: [],
+  },
+  {
+    id: 'trend-agent-reliability',
+    title: 'Agent reliability is becoming a product layer',
+    category: 'ai_capability',
+    observation:
+      'Evaluation harnesses, traces, and recovery paths are moving from internal tooling into repeatable product infrastructure.',
+    initialRead:
+      'The competitive unit is shifting from model accuracy toward observable system behavior and graceful recovery.',
+    discussionQuestion:
+      'Which reliability primitives should Qira expose as part of the user experience?',
+    status: 'active',
+    discussionStatus: 'discussed',
+    lastDiscussedAt: '2026-08-28T11:00:00Z',
+    lastDiscussedBy: 'Team',
+    createdBy: 'Ziyan',
+    createdAt: '2026-08-22T09:00:00Z',
+    updatedAt: '2026-08-28T11:00:00Z',
+    version: 1,
+    evidence: [
+      {
+        newsId: 'news-dataflow',
+        role: 'primary',
+        displayOrder: 1,
+        linkedAt: '2026-08-22T09:00:00Z',
+      },
+    ],
+    actionThreadIds: ['topic-harness'],
   },
 ]
 
@@ -182,6 +303,12 @@ export const demoTopics: Topic[] = [
     createdAt: '2026-07-20T09:00:00Z',
     displayOrder: 1,
     supportingNews: ['news-dataflow'],
+    sourceTrends: [
+      {
+        trendId: 'trend-agent-reliability',
+        trendTitle: 'Agent reliability is becoming a product layer',
+      },
+    ],
   },
   {
     id: 'topic-ambient',
@@ -204,6 +331,12 @@ export const demoTopics: Topic[] = [
     createdAt: '2026-07-22T09:00:00Z',
     displayOrder: 1,
     supportingNews: [],
+    sourceTrends: [
+      {
+        trendId: 'trend-cross-app-agents',
+        trendTitle: 'Assistants are moving into persistent cross-app workflows',
+      },
+    ],
   },
   {
     id: 'topic-genui',
@@ -225,6 +358,7 @@ export const demoTopics: Topic[] = [
     createdAt: '2026-07-24T09:00:00Z',
     displayOrder: 1,
     supportingNews: [],
+    sourceTrends: [],
   },
   {
     id: 'topic-pool-idea',
@@ -244,6 +378,7 @@ export const demoTopics: Topic[] = [
     createdAt: '2026-08-01T09:00:00Z',
     displayOrder: 1,
     supportingNews: ['news-granola'],
+    sourceTrends: [],
   },
 ]
 

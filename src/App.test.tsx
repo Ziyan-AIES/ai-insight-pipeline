@@ -7,6 +7,14 @@ function selectJuly2026() {
   fireEvent.click(screen.getByRole('button', { name: /^Jul 2026:/ }))
 }
 
+function openLiveSignals() {
+  fireEvent.click(screen.getByRole('button', { name: 'Live Signals' }))
+}
+
+function openBriefing() {
+  fireEvent.click(screen.getByRole('button', { name: 'Intelligence Briefing' }))
+}
+
 describe('dashboard pilot shell', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
@@ -14,42 +22,31 @@ describe('dashboard pilot shell', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  it('defaults to Live Signals with a 2x3 category layout', () => {
+  it('defaults a first-time user to the Intelligence Briefing', () => {
     render(<App />)
     expect(screen.getByText(/Demo workspace/)).toBeInTheDocument()
     expect(
-      screen.getByRole('region', { name: 'Live Signals' }),
+      screen.getByRole('region', { name: 'Intelligence Briefing' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('region', { name: 'Action Threads' }),
-    ).toBeNull()
-    expect(screen.getByText('Entry & Interaction')).toBeInTheDocument()
-    expect(screen.getByText('Industry & Market')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Recommend/ }).length).toBeGreaterThan(0)
+      screen.getByRole('region', { name: 'Action Threads' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Emerging Trends' })).toBeInTheDocument()
+    expect(screen.getByText('Evidence Inbox · 1')).toBeInTheDocument()
     expect(screen.getByText(/Qira Strategic/)).toBeInTheDocument()
     expect(screen.getByText(/Market Intelligence/)).toBeInTheDocument()
-    expect(screen.queryByText('AI Daily Review')).toBeNull()
-    expect(screen.getAllByRole('button', { name: /View all/ }).length).toBeGreaterThan(0)
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Past week' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /20\d{2}/ })).toBeInTheDocument()
-    expect(screen.queryByPlaceholderText(/What are you noticing/)).toBeNull()
   })
 
-  it('opens Live Signals at the root even if another workspace was stored', () => {
-    window.localStorage.setItem('signal-intelligence:workspace-page', 'synthesis')
+  it('restores the last workspace separately for this viewer', async () => {
+    window.localStorage.setItem('signal-intelligence:workspace-page:demo', 'signals')
     render(<App />)
-    expect(
-      screen.getByRole('region', { name: 'Live Signals' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('region', { name: 'Discussion Candidates' }),
-    ).toBeNull()
+    expect(await screen.findByRole('region', { name: 'Live Signals' })).toBeInTheDocument()
   })
 
   it('shows up to three Live Signals per category with a stationary View all footer', () => {
     render(<App />)
+    openLiveSignals()
     const live = screen.getByRole('region', { name: 'Live Signals' })
     const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
@@ -62,31 +59,23 @@ describe('dashboard pilot shell', () => {
     ).not.toBe(scroll)
   })
 
-  it('scrolls Discussion Candidates instead of compressing cards', () => {
+  it('shows evidence-backed Trend cards instead of a news-first synthesis list', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
-    const pane = screen.getByRole('region', { name: 'Discussion Candidates' })
-    const list = pane.querySelector('.discussion-list')
-    const threads = screen
-      .getByRole('region', { name: 'Action Threads' })
-      .querySelector('.topic-list')
-    expect(list).toBeTruthy()
-    expect(threads).toBeTruthy()
-    expect(list!.className).toContain('discussion-list')
-    expect(list!.querySelectorAll('article.candidate-card').length).toBeGreaterThan(0)
+    const pane = screen.getByRole('region', { name: 'Intelligence Briefing' })
+    expect(pane.querySelectorAll('article.trend-card').length).toBeGreaterThan(0)
+    expect(within(pane).getByText('Initial read')).toBeInTheDocument()
+    expect(within(pane).getByText('Question')).toBeInTheDocument()
     expect(
-      Array.from(list!.querySelectorAll('article.candidate-card')).every((card) =>
-        card.classList.contains('candidate-card'),
-      ),
-    ).toBe(true)
+      within(pane).getByRole('link', {
+        name: /Browser agents turn the address bar into an invocation layer/,
+      }),
+    ).toHaveAttribute('href', 'https://example.com/browser-agent-entry')
     expect(within(pane).queryByText('AI')).toBeNull()
-    expect(
-      within(pane).getAllByText(/Team synthesis|Editorial takeaway/).length,
-    ).toBeGreaterThan(0)
   })
 
   it('opens a category drawer from View all', () => {
     render(<App />)
+    openLiveSignals()
     const live = screen.getByRole('region', { name: 'Live Signals' })
     const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
@@ -96,26 +85,20 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('keeps Action Threads beside Discussion Candidates', () => {
+  it('keeps Action Threads beside the Intelligence Briefing', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
     selectJuly2026()
     expect(
-      screen.getByRole('region', { name: 'Discussion Candidates' }),
+      screen.getByRole('region', { name: 'Intelligence Briefing' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('region', { name: 'Action Threads' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ New' })).toBeInTheDocument()
     expect(screen.getByText('Harness engineering')).toBeInTheDocument()
-    expect(
-      screen.getAllByText(
-        'DataFlow-Harness turns agent reliability into an engineering discipline',
-      ).length,
-    ).toBeGreaterThan(1)
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
     expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
-    expect(screen.getByText('+ Drop a signal to create a thread')).toBeInTheDocument()
+    expect(screen.getByText(/Create one from a Trend discussion/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
   })
 
@@ -131,6 +114,7 @@ describe('dashboard pilot shell', () => {
 
   it('lets All show historical signals in the page and View all drawer', () => {
     render(<App />)
+    openLiveSignals()
     expect(
       screen.queryByRole('link', { name: /DataFlow-Harness turns agent reliability/ }),
     ).toBeNull()
@@ -164,12 +148,14 @@ describe('dashboard pilot shell', () => {
       '2026-01-01T00:00:00.000Z',
     )
     render(<App />)
+    openLiveSignals()
     const live = screen.getByRole('region', { name: 'Live Signals' })
     expect(within(live).getAllByText('New').length).toBeGreaterThan(0)
   })
 
   it('reassigns a Live Signal category by dragging between modules', () => {
     render(<App />)
+    openLiveSignals()
     selectJuly2026()
     const heading = screen.getByRole('link', {
       name: /Granola brings ambient meeting memory/,
@@ -189,7 +175,6 @@ describe('dashboard pilot shell', () => {
 
   it('removes drag chrome from the full Action Threads dashboard', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
     fireEvent.click(
       screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
     )
@@ -197,15 +182,12 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
     expect(
-      screen.getByRole('button', { name: '← Intelligence Synthesis' }),
+      screen.getByRole('button', { name: '← Intelligence Briefing' }),
     ).toBeInTheDocument()
   })
 
   it('defaults full Action Threads to a clear month and backlog board', () => {
     render(<App />)
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Intelligence Synthesis' }),
-    )
     fireEvent.click(
       screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
     )
@@ -251,7 +233,6 @@ describe('dashboard pilot shell', () => {
 
   it('moves an Action Thread to another category by drag and drop', async () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
     fireEvent.click(
       screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
     )
@@ -272,7 +253,6 @@ describe('dashboard pilot shell', () => {
 
   it('moves Action Threads between a month and the Unscheduled backlog', async () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
     fireEvent.click(
       screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
     )
@@ -304,7 +284,6 @@ describe('dashboard pilot shell', () => {
 
   it('redesigns the Action Thread editor into three sections', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
     fireEvent.click(screen.getByText('Harness engineering'))
     expect(
       screen.getByRole('dialog', { name: 'Edit Action Thread' }),
@@ -328,12 +307,14 @@ describe('dashboard pilot shell', () => {
 
   it('opens a team thought popover bound to a signal', () => {
     render(<App />)
+    openLiveSignals()
     fireEvent.click(screen.getAllByRole('button', { name: /Add thought/ })[0])
     expect(screen.getByRole('dialog', { name: 'Add a thought' })).toBeInTheDocument()
   })
 
   it('adds a thought to the discussion queue automatically', async () => {
     render(<App />)
+    openLiveSignals()
     const heading = screen.getByRole('link', {
       name: /Meta quietly launches vibe-coded gaming app Pocket/,
     })
@@ -351,70 +332,36 @@ describe('dashboard pilot shell', () => {
     })
   })
 
-  it('keeps Meeting mode focused on nominated signals and resumes after thread creation', async () => {
+  it('recognizes an existing Action Thread during Trend meeting and resumes after editing it', async () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
+    fireEvent.click(screen.getByRole('button', { name: /Start trend meeting/ }))
+    const meeting = screen.getByRole('dialog', { name: 'Trend review' })
+    expect(within(meeting).getByText(/Already in 1 Action Thread/)).toBeInTheDocument()
+    expect(within(meeting).getByRole('button', { name: 'Open Action Thread' })).toBeInTheDocument()
+    expect(within(meeting).queryByRole('button', { name: 'Create Action Thread' })).toBeNull()
+    expect(within(meeting).getByRole('link', {
+      name: /Browser agents turn the address bar into an invocation layer/,
+    })).toHaveAttribute('href', 'https://example.com/browser-agent-entry')
 
-    expect(screen.getByRole('button', { name: 'Start meeting · 2' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'To discuss · 2' })).toBeInTheDocument()
-    expect(screen.queryByText('Not nominated')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start meeting · 2' }))
-    const meeting = screen.getByRole('dialog', { name: 'Signal review' })
-    const firstSignal = within(meeting).getByRole('heading', { level: 3 }).textContent
-    expect(within(meeting).queryByRole('button', { name: 'Back' })).toBeNull()
-    expect(within(meeting).getByText(/recommend/)).toBeInTheDocument()
-
-    fireEvent.click(within(meeting).getByRole('button', { name: 'Create thread & complete' }))
-    const editor = screen.getByRole('dialog', { name: 'New Action Thread' })
-    const createButton = within(editor).getByRole('button', { name: 'Create Action Thread' })
-    expect(within(editor).getByText('Required. All other fields are optional or have defaults.')).toBeInTheDocument()
-    expect(createButton).toBeDisabled()
-
-    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
-    expect(screen.getByRole('dialog', { name: 'Signal review' })).toHaveTextContent(firstSignal || '')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create thread & complete' }))
-    const reopenedEditor = screen.getByRole('dialog', { name: 'New Action Thread' })
-    fireEvent.change(within(reopenedEditor).getByLabelText(/Thread title/), {
-      target: { value: 'Meeting-created direction' },
-    })
-    fireEvent.click(
-      within(reopenedEditor).getByRole('button', { name: 'Create Action Thread' }),
-    )
-
-    await waitFor(() => {
-      const resumedMeeting = screen.getByRole('dialog', { name: 'Signal review' })
-      expect(resumedMeeting).not.toHaveTextContent(firstSignal || '')
-      expect(resumedMeeting).toHaveTextContent('1 of 1')
-    })
+    fireEvent.click(within(meeting).getByRole('button', { name: 'Open Action Thread' }))
+    expect(screen.getByRole('dialog', { name: 'Edit Action Thread' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('dialog', { name: 'Trend review' })).toBeInTheDocument()
   })
 
-  it('keeps review state off Live Signals and filters Synthesis by discussion state', () => {
+  it('keeps editorial review state off Live Signals and exposes reviewed unassigned evidence in the Briefing', () => {
     render(<App />)
+    openLiveSignals()
     const live = screen.getByRole('region', { name: 'Live Signals' })
     expect(within(live).queryByRole('group', { name: 'Discussion state' })).toBeNull()
     expect(within(live).queryByText('Awaiting review')).toBeNull()
     expect(within(live).queryByText('Reviewed')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
-    expect(screen.getByRole('group', { name: 'Discussion stage' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Add thought/ }).length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole('button', { name: 'Discussed' }))
-    expect(screen.getByText('Browser agents turn the address bar into an invocation layer')).toBeInTheDocument()
-    fireEvent.click(
-      within(screen.getByRole('group', { name: 'Time range' })).getByRole('button', {
-        name: 'All',
-      }),
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'All news' }))
-    fireEvent.click(screen.getByRole('button', { name: 'In a thread' }))
-    expect(
-      within(screen.getByRole('region', { name: 'Discussion Candidates' })).getByRole(
-        'link',
-        { name: 'DataFlow-Harness turns agent reliability into an engineering discipline' },
-      ),
-    ).toBeInTheDocument()
+    openBriefing()
+    fireEvent.click(screen.getByRole('button', { name: /Evidence Inbox/ }))
+    expect(screen.getByLabelText('Evidence target Trend')).toBeInTheDocument()
+    expect(screen.getByText('Earnings calls treat AI attach rate as a core KPI')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Signal triage/ })).toBeInTheDocument()
   })
 
   it('exposes a link capture action', () => {
@@ -426,8 +373,10 @@ describe('dashboard pilot shell', () => {
 
   it('lets an editor set the article publication date separately', async () => {
     render(<App />)
+    openLiveSignals()
     selectJuly2026()
-    const heading = screen.getByRole('link', {
+    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const heading = within(live).getByRole('link', {
       name: /Granola brings ambient meeting memory/,
     })
     const card = heading.closest('article')
