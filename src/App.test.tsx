@@ -32,7 +32,7 @@ describe('dashboard pilot shell', () => {
       screen.getByRole('region', { name: 'Action Threads' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Emerging Trends' })).toBeInTheDocument()
-    expect(screen.getByText('Evidence Inbox · 1')).toBeInTheDocument()
+    expect(screen.getByText(/Evidence Inbox · \d+/)).toBeInTheDocument()
     expect(screen.getByText(/Qira Strategic/)).toBeInTheDocument()
     expect(screen.getByText(/Market Intelligence/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
@@ -95,10 +95,10 @@ describe('dashboard pilot shell', () => {
       screen.getByRole('region', { name: 'Action Threads' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ New' })).toBeInTheDocument()
-    expect(screen.getByText('Harness engineering')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Harness engineering' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
-    expect(screen.getByText(/Create one from a Trend discussion/)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Add signals' }).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Drop a Trend here to upgrade it/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Time range' })).toBeInTheDocument()
   })
 
@@ -284,7 +284,7 @@ describe('dashboard pilot shell', () => {
 
   it('redesigns the Action Thread editor into three sections', () => {
     render(<App />)
-    fireEvent.click(screen.getByText('Harness engineering'))
+    fireEvent.click(screen.getByRole('heading', { name: 'Harness engineering' }))
     expect(
       screen.getByRole('dialog', { name: 'Edit Action Thread' }),
     ).toBeInTheDocument()
@@ -296,11 +296,21 @@ describe('dashboard pilot shell', () => {
       target: { value: 'closed' },
     })
     expect(screen.getByLabelText('Completed month')).toBeInTheDocument()
-    expect(screen.getByLabelText('Category')).toHaveValue('ai_capability')
-    fireEvent.change(screen.getByLabelText('Category'), {
-      target: { value: 'interaction' },
-    })
-    expect(screen.getByLabelText('Category')).toHaveValue('interaction')
+    expect(
+      within(screen.getByRole('group', { name: 'Category' })).getByRole('button', {
+        name: 'AI Capability & Tech',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Category' })).getByRole('button', {
+        name: 'Entry & Interaction',
+      }),
+    )
+    expect(
+      within(screen.getByRole('group', { name: 'Category' })).getByRole('button', {
+        name: 'Entry & Interaction',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByLabelText('Description')).toBeNull()
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
   })
@@ -358,10 +368,40 @@ describe('dashboard pilot shell', () => {
     expect(within(live).queryByText('Reviewed')).toBeNull()
 
     openBriefing()
-    fireEvent.click(screen.getByRole('button', { name: /Evidence Inbox/ }))
-    expect(screen.getByLabelText('Evidence target Trend')).toBeInTheDocument()
+    expect(screen.getByLabelText('Evidence destination')).toBeInTheDocument()
     expect(screen.getByText('Earnings calls treat AI attach rate as a core KPI')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Signal triage/ })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Keep watching' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'New Action Thread' }).length).toBeGreaterThan(0)
+  })
+
+  it('triages Inbox evidence directly into an existing Action Thread', async () => {
+    render(<App />)
+    const inbox = document.querySelector('.evidence-inbox-list') as HTMLElement
+    const signal = within(inbox).getByText(
+      'Earnings calls treat AI attach rate as a core KPI',
+    )
+    fireEvent.change(screen.getByLabelText('Evidence destination'), {
+      target: { value: 'topic:topic-harness' },
+    })
+    fireEvent.click(
+      within(signal.closest('article') as HTMLElement).getByRole('button', {
+        name: /Add to Harness engineering/,
+      }),
+    )
+    expect(
+      await within(inbox).queryByText('Earnings calls treat AI attach rate as a core KPI'),
+    ).toBeNull()
+  })
+
+  it('uses plain linked article titles without decorative arrows', () => {
+    render(<App />)
+    const article = screen.getByRole('link', {
+      name: 'Browser agents turn the address bar into an invocation layer',
+    })
+    expect(article).toHaveTextContent(
+      'Browser agents turn the address bar into an invocation layer',
+    )
+    expect(article).not.toHaveTextContent('↗')
   })
 
   it('exposes a link capture action', () => {

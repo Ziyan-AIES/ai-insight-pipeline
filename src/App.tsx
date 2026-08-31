@@ -9,7 +9,6 @@ import {
   createThesis,
   createTopic,
   createTrend,
-  deleteTrendItem,
   deleteNewsItem,
   deleteThesisItem,
   deleteTopicItem,
@@ -373,8 +372,8 @@ function App() {
   const [dropHighlight, setDropHighlight] = useState<NewsCategory | ''>('')
   const [trendCategory, setTrendCategory] =
     useState<NewsCategory | 'all'>('all')
-  const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
-  const [curatingTrendId, setCuratingTrendId] = useState('')
+  const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(true)
+  const [evidenceDestination, setEvidenceDestination] = useState('')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -418,6 +417,7 @@ function App() {
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedNewsSourceTopicId, setDraggedNewsSourceTopicId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
+  const [draggedTrendId, setDraggedTrendId] = useState('')
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteTitle, setNoteTitle] = useState('')
   const [noteBody, setNoteBody] = useState('')
@@ -771,7 +771,12 @@ function App() {
     const needle = query.trim().toLowerCase()
     if (!needle) return []
     return trends
-      .filter((trend) => !trend.deletedAt && trend.status !== 'archived')
+      .filter(
+        (trend) =>
+          !trend.deletedAt &&
+          trend.status !== 'archived' &&
+          trend.actionThreadIds.length === 0,
+      )
       .filter(
         (trend) =>
           searchCategory === 'all' || trend.category === searchCategory,
@@ -811,11 +816,7 @@ function App() {
           trend.evidence.some((evidence) => visibleIds.has(evidence.newsId)),
       )
       .slice()
-      .sort(
-        (a, b) =>
-          Number(isTrendToDiscuss(b)) - Number(isTrendToDiscuss(a)) ||
-          b.updatedAt.localeCompare(a.updatedAt),
-      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [timeMode, trendCategory, trends, visibleNews])
 
   const evidenceInbox = useMemo(
@@ -825,8 +826,9 @@ function App() {
           (item) =>
             !item.deletedAt &&
             !item.archivedAt &&
-            item.editorialStatus === 'processed' &&
-            item.trendLinks.length === 0,
+            item.discussionStatus === 'not_discussed' &&
+            item.trendLinks.length === 0 &&
+            item.topicLinks.length === 0,
         )
         .slice()
         .sort(
@@ -1613,6 +1615,43 @@ function App() {
     }
   }
 
+  async function archiveSignalFromInbox(item: NewsItem) {
+    const archivedAt = new Date().toISOString()
+    const metadata = { ...item.metadata, archived_at: archivedAt }
+    try {
+      let version = item.version
+      if (cloudConfigured) {
+        const result = await updateNewsItem(
+          item.id,
+          {
+            discussion_status: 'dismissed',
+            discussed_at: null,
+            discussed_by: null,
+            metadata,
+          },
+          item.version,
+        )
+        version = result?.version || version
+      }
+      setNews((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id
+            ? {
+                ...candidate,
+                archivedAt,
+                discussionStatus: 'dismissed',
+                metadata,
+                version,
+              }
+            : candidate,
+        ),
+      )
+      setNotice('Signal archived.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not archive signal')
+    }
+  }
+
   async function toggleMeetingNomination(item: NewsItem) {
     const nominatedAt = item.meetingNominatedAt
       ? undefined
@@ -1706,14 +1745,14 @@ function App() {
           ? [
               {
                 newsId: pendingTrendNewsId,
-                role: 'primary' as const,
+                role: 'supporting' as const,
                 displayOrder: 1,
                 linkedAt: new Date().toISOString(),
               },
             ]
           : []
         if (cloudConfigured && pendingTrendNewsId) {
-          await persistTrendNews(saved.id, pendingTrendNewsId, 'primary', 1)
+          await persistTrendNews(saved.id, pendingTrendNewsId, 'supporting', 1)
         }
         const created: Trend = {
           ...trendDraft,
@@ -1736,7 +1775,7 @@ function App() {
                       {
                         trendId: created.id,
                         trendTitle: created.title,
-                        role: 'primary',
+                        role: 'supporting',
                       },
                     ],
                   }
@@ -1803,22 +1842,40 @@ function App() {
     setPendingTrendNewsId('')
   }
 
-  async function removeTrend(id: string) {
-    if (!window.confirm('Archive this Trend? Its evidence and Action Threads will remain.')) {
+  async function removeTrend(id: string, skipConfirmation = false) {
+    const trend = trends.find((candidate) => candidate.id === id)
+    if (!trend) return
+    if (
+      !skipConfirmation &&
+      !window.confirm('Dismiss and archive this Trend? Its news will remain processed.')
+    ) {
       return
     }
     try {
-      if (cloudConfigured) await deleteTrendItem(id)
-      setTrends((current) => current.filter((trend) => trend.id !== id))
-      setNews((current) =>
-        current.map((item) => ({
-          ...item,
-          trendLinks: item.trendLinks.filter((link) => link.trendId !== id),
-        })),
+      let version = trend.version
+      if (cloudConfigured) {
+        const result = await updateTrendItem(
+          id,
+          { status: 'archived', discussion_status: 'dismissed' },
+          trend.version,
+        )
+        version = result?.version || version
+      }
+      setTrends((current) =>
+        current.map((candidate) =>
+          candidate.id === id
+            ? {
+                ...candidate,
+                status: 'archived',
+                discussionStatus: 'dismissed',
+                version,
+              }
+            : candidate,
+        ),
       )
       setTrendDraft(null)
       setCreatingTrend(false)
-      setNotice('Trend archived')
+      setNotice('Trend dismissed and archived')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not archive Trend')
     }
@@ -1830,7 +1887,7 @@ function App() {
     if (!trend || !item || trend.evidence.some((link) => link.newsId === newsId)) {
       return
     }
-    const role = trend.evidence.length === 0 ? 'primary' : 'supporting'
+    const role = 'supporting' as const
     const linkedAt = new Date().toISOString()
     try {
       if (cloudConfigured) {
@@ -1967,6 +2024,56 @@ function App() {
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not update Trend')
+    }
+  }
+
+  async function linkTrendToTopic(
+    trend: Trend,
+    topic: Topic,
+  ) {
+    try {
+      if (cloudConfigured && !trend.actionThreadIds.includes(topic.id)) {
+        await persistTrendTopic(trend.id, topic.id)
+      }
+      for (const evidence of trend.evidence) {
+        await linkNewsToTopic(evidence.newsId, topic.id, topic)
+      }
+      setTrends((current) =>
+        current.map((candidate) =>
+          candidate.id === trend.id
+            ? {
+                ...candidate,
+                actionThreadIds: candidate.actionThreadIds.includes(topic.id)
+                  ? candidate.actionThreadIds
+                  : [...candidate.actionThreadIds, topic.id],
+              }
+            : candidate,
+        ),
+      )
+      setTopics((current) =>
+        current.map((candidate) =>
+          candidate.id === topic.id &&
+          !candidate.sourceTrends.some((source) => source.trendId === trend.id)
+            ? {
+                ...candidate,
+                sourceTrends: [
+                  ...candidate.sourceTrends,
+                  { trendId: trend.id, trendTitle: trend.title },
+                ],
+              }
+            : candidate,
+        ),
+      )
+      await setTrendDiscussionOutcome(trend, 'discussed')
+      setNotice(`“${trend.title}” is now part of “${topic.title}”.`)
+      return true
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not upgrade this Trend to an Action Thread.',
+      )
+      return false
     }
   }
 
@@ -2270,40 +2377,14 @@ function App() {
         const sourceTrend = trends.find(
           (trend) => trend.id === pendingThreadTrendId,
         )
-        try {
-          if (cloudConfigured) await persistTrendTopic(pendingThreadTrendId, id)
-          setTrends((current) =>
-            current.map((trend) =>
-              trend.id === pendingThreadTrendId
-                ? {
-                    ...trend,
-                    actionThreadIds: [...trend.actionThreadIds, id],
-                  }
-                : trend,
-            ),
-          )
-          setTopics((current) =>
-            current.map((topic) =>
-              topic.id === id && sourceTrend
-                ? {
-                    ...topic,
-                    sourceTrends: [
-                      ...topic.sourceTrends,
-                      { trendId: sourceTrend.id, trendTitle: sourceTrend.title },
-                    ],
-                  }
-                : topic,
-            ),
-          )
-          if (sourceTrend) await setTrendDiscussionOutcome(sourceTrend, 'discussed')
-          setPendingThreadTrendId('')
-        } catch (error) {
-          setNotice(
-            error instanceof Error
-              ? error.message
-              : 'Action Thread was created, but its Trend link could not be saved.',
-          )
+        if (sourceTrend) {
+          await linkTrendToTopic(sourceTrend, {
+            ...topicDraft,
+            id,
+            title: topicDraft.title.trim(),
+          })
         }
+        setPendingThreadTrendId('')
       }
     } else {
       const previous = topics.find((item) => item.id === topicDraft.id)
@@ -2522,7 +2603,7 @@ function App() {
               onClick={(event) => event.stopPropagation()}
               title="Open original article"
             >
-              {item.title} <span aria-hidden="true">↗</span>
+              {item.title}
             </a>
           ) : (
             <span>{item.title}</span>
@@ -2837,11 +2918,7 @@ function App() {
   function renderTrendCard(trend: Trend) {
     const evidence = trend.evidence
       .slice()
-      .sort(
-        (a, b) =>
-          Number(b.role === 'primary') - Number(a.role === 'primary') ||
-          a.displayOrder - b.displayOrder,
-      )
+      .sort((a, b) => a.displayOrder - b.displayOrder)
       .map((link) => ({
         link,
         item: news.find((candidate) => candidate.id === link.newsId),
@@ -2858,8 +2935,16 @@ function App() {
       <article
         className={`trend-card cat-${trend.category} ${
           draggedNewsId ? 'accepting-news' : ''
-        }`}
+        } ${draggedTrendId === trend.id ? 'dragging-trend' : ''}`}
         key={trend.id}
+        draggable={canEdit}
+        onDragStart={(event) => {
+          if (!canEdit) return
+          setDraggedTrendId(trend.id)
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('application/x-trend-id', trend.id)
+        }}
+        onDragEnd={() => setDraggedTrendId('')}
         onDragOver={(event) => {
           if (!draggedNewsId) return
           event.preventDefault()
@@ -2877,13 +2962,7 @@ function App() {
         <header className="trend-card-head">
           <CategoryLabel category={trend.category} className="category-token" />
           <div className="trend-card-state">
-            {isTrendToDiscuss(trend) ? (
-              <span className="pipeline-state state-to-discuss">To discuss</span>
-            ) : trend.discussionStatus === 'discussed' ? (
-              <span className="pipeline-state state-discussed">Discussed</span>
-            ) : trend.discussionStatus === 'dismissed' ? (
-              <span className="pipeline-state state-dismissed">Dismissed</span>
-            ) : null}
+            <span className="trend-created">Created {formatShortDate(trend.createdAt)}</span>
             <span className="trend-signal-count">
               {evidence.length} signal{evidence.length === 1 ? '' : 's'}
             </span>
@@ -2919,18 +2998,46 @@ function App() {
           </p>
         ) : null}
         <div className="trend-evidence" aria-label="Supporting signals">
-          {evidence.slice(0, 3).map(({ item, link }) => (
-            <div className="trend-evidence-row" key={item.id}>
-              <span className={`evidence-role role-${link.role}`}>
-                {link.role === 'primary' ? 'Primary' : link.role}
-              </span>
+          {evidence.slice(0, 3).map(({ item }) => (
+            <div
+              className="trend-evidence-row"
+              key={item.id}
+              draggable={canEdit}
+              onDragStart={(event) => {
+                event.stopPropagation()
+                setDraggedNewsId(item.id)
+                event.dataTransfer.setData('application/x-news-id', item.id)
+              }}
+              onDragEnd={(event) => {
+                event.stopPropagation()
+                setDraggedNewsId('')
+              }}
+            >
               {item.url && item.sourceType !== 'manual_note' ? (
-                <a href={item.url} target="_blank" rel="noreferrer">
-                  {item.title} <span aria-hidden="true">↗</span>
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {item.title}
                 </a>
               ) : (
                 <span>{item.title}</span>
               )}
+              <button
+                className="unlink-button"
+                type="button"
+                title="Remove signal from Trend"
+                aria-label="Remove signal from Trend"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void unlinkSignalFromTrend(trend.id, item.id)
+                }}
+                hidden={!canEdit}
+              >
+                ×
+              </button>
             </div>
           ))}
           {evidence.length === 0 ? (
@@ -2971,29 +3078,26 @@ function App() {
             className="secondary-button"
             type="button"
             onClick={() => {
-              setCuratingTrendId(trend.id)
+              setEvidenceDestination(`trend:${trend.id}`)
               setEvidenceInboxOpen(true)
+              setTimeout(
+                () =>
+                  document
+                    .querySelector('.evidence-inbox')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+                0,
+              )
             }}
             hidden={!canEdit}
           >
-            Curate evidence
+            Add signals
           </button>
           <button
             className="primary-button"
             type="button"
-            onClick={() => {
-              const index = trendMeetingQueue.findIndex(
-                (candidate) => candidate.id === trend.id,
-              )
-              if (index >= 0) {
-                setTrendMeetingIndex(index)
-                setTrendMeetingMode(true)
-              } else {
-                void setTrendDiscussionOutcome(trend, 'not_discussed')
-              }
-            }}
+            onClick={() => openCreateThreadFromTrend(trend)}
           >
-            {isTrendToDiscuss(trend) ? 'Discuss' : 'Reopen discussion'}
+            Upgrade to Action Thread
           </button>
         </footer>
       </article>
@@ -3001,7 +3105,13 @@ function App() {
   }
 
   function renderEvidenceInbox() {
-    const targetTrend = trends.find((trend) => trend.id === curatingTrendId)
+    const targetTrend = evidenceDestination.startsWith('trend:')
+      ? trends.find((trend) => trend.id === evidenceDestination.slice(6))
+      : undefined
+    const targetTopic = evidenceDestination.startsWith('topic:')
+      ? topics.find((topic) => topic.id === evidenceDestination.slice(6))
+      : undefined
+    const targetName = targetTrend?.title || targetTopic?.title
     return (
       <section className={`evidence-inbox ${evidenceInboxOpen ? 'open' : ''}`}>
         <button
@@ -3012,50 +3122,40 @@ function App() {
         >
           <span>
             <strong>Evidence Inbox · {evidenceInbox.length}</strong>
-            <small>Reviewed signals not yet supporting an active Trend</small>
+            <small>Untriaged signals with no Trend or Action Thread</small>
           </span>
-          <span>{evidenceInboxOpen ? 'Close' : 'Curate evidence'} →</span>
+          <span>{evidenceInboxOpen ? 'Close' : 'Open'}</span>
         </button>
         {evidenceInboxOpen ? (
           <div className="evidence-inbox-body">
             <div className="evidence-target-row">
               <label>
-                Add evidence to
+                Add to
                 <select
-                  aria-label="Evidence target Trend"
-                  value={curatingTrendId}
-                  onChange={(event) => setCuratingTrendId(event.target.value)}
+                  aria-label="Evidence destination"
+                  value={evidenceDestination}
+                  onChange={(event) => setEvidenceDestination(event.target.value)}
                 >
-                  <option value="">Select a Trend</option>
-                  {trends
-                    .filter(
-                      (trend) => !trend.deletedAt && trend.status !== 'archived',
-                    )
-                    .map((trend) => (
-                      <option value={trend.id} key={trend.id}>
+                  <option value="">Choose a destination</option>
+                  <optgroup label="Watching Trends">
+                    {briefingTrends.map((trend) => (
+                      <option value={`trend:${trend.id}`} key={trend.id}>
                         {trend.title}
                       </option>
                     ))}
+                  </optgroup>
+                  <optgroup label="Action Threads">
+                    {topics
+                      .filter((topic) => !topic.deletedAt)
+                      .map((topic) => (
+                        <option value={`topic:${topic.id}`} key={topic.id}>
+                          {topic.title}
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
               </label>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => openNewTrend()}
-                hidden={!canEdit}
-              >
-                + New Trend
-              </button>
-              <button
-                className="text-action"
-                type="button"
-                onClick={() => {
-                  setMeetingIndex(0)
-                  setMeetingMode(true)
-                }}
-              >
-                Signal triage · {meetingQueue.length}
-              </button>
+              <p>Select once, then process the queue one signal at a time.</p>
             </div>
             <div className="evidence-inbox-list">
               {evidenceInbox.map((item) => (
@@ -3076,7 +3176,7 @@ function App() {
                     </div>
                     {item.url && item.sourceType !== 'manual_note' ? (
                       <a href={item.url} target="_blank" rel="noreferrer">
-                        {item.title} <span aria-hidden="true">↗</span>
+                        {item.title}
                       </a>
                     ) : (
                       <strong>{item.title}</strong>
@@ -3089,13 +3189,14 @@ function App() {
                     <button
                       className="secondary-button"
                       type="button"
-                      disabled={!targetTrend}
+                      disabled={!targetTrend && !targetTopic}
                       onClick={() => {
                         if (targetTrend) void linkNewsToTrend(targetTrend.id, item.id)
+                        if (targetTopic) void linkNewsToTopic(item.id, targetTopic.id, targetTopic)
                       }}
                       hidden={!canEdit}
                     >
-                      {targetTrend ? 'Add evidence' : 'Select a Trend'}
+                      {targetName ? `Add to ${compactWords(targetName, 5)}` : 'Choose destination'}
                     </button>
                     <button
                       className="text-action"
@@ -3103,14 +3204,36 @@ function App() {
                       onClick={() => openNewTrend(item.id)}
                       hidden={!canEdit}
                     >
-                      Start Trend
+                      New Trend
+                    </button>
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={() => openCreateThread(item.id)}
+                      hidden={!canEdit}
+                    >
+                      New Action Thread
+                    </button>
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={() => void setDiscussionOutcome(item, 'discussed')}
+                    >
+                      Keep watching
+                    </button>
+                    <button
+                      className="text-action danger-text"
+                      type="button"
+                      onClick={() => void archiveSignalFromInbox(item)}
+                    >
+                      Archive
                     </button>
                   </div>
                 </article>
               ))}
               {evidenceInbox.length === 0 ? (
                 <div className="month-empty">
-                  Every reviewed signal in this period already supports a Trend.
+                  Inbox clear. Every signal has a home or a recorded outcome.
                 </div>
               ) : null}
             </div>
@@ -3132,7 +3255,7 @@ function App() {
     return (
       <article
         className={`topic-card kind-${topic.kind} ${
-          draggedNewsId ? 'accepting-news' : ''
+          draggedNewsId || draggedTrendId ? 'accepting-news' : ''
         } ${draggedTopicId === topic.id ? 'dragging-topic' : ''}`}
         key={topic.id}
         draggable={workspacePage === 'threads' && canEdit}
@@ -3151,12 +3274,24 @@ function App() {
           setTopicDraft({ ...topic })
         }}
         onDragOver={(event) => {
-          if (!draggedNewsId) return
+          if (!draggedNewsId && !draggedTrendId) return
           event.preventDefault()
           event.stopPropagation()
           event.dataTransfer.dropEffect = 'copy'
         }}
         onDrop={(event) => {
+          const trendId =
+            event.dataTransfer.getData('application/x-trend-id') ||
+            draggedTrendId
+          if (trendId) {
+            const sourceTrend = trends.find((trend) => trend.id === trendId)
+            if (!sourceTrend) return
+            event.preventDefault()
+            event.stopPropagation()
+            void linkTrendToTopic(sourceTrend, topic)
+            setDraggedTrendId('')
+            return
+          }
           const newsId =
             event.dataTransfer.getData('application/x-news-id') ||
             draggedNewsId
@@ -3493,7 +3628,7 @@ function App() {
                       key={item.id}
                       onClick={() => setQuery('')}
                     >
-                      <span>{item.title}{item.url ? ' ↗' : ''}</span>
+                      <span>{item.title}</span>
                       <small>{categoryLabels[item.category]} · {item.capturedBy}</small>
                     </a>
                   ))}
@@ -3708,7 +3843,7 @@ function App() {
                         type="button"
                         onClick={() => {
                           setEvidenceInboxOpen(true)
-                          setCuratingTrendId('')
+                          setEvidenceDestination('')
                         }}
                       >
                         Open Evidence Inbox
@@ -3720,8 +3855,21 @@ function App() {
               </section>
             )}
             <section
-              className="topic-pane"
+              className={`topic-pane ${draggedTrendId ? 'accepting-trend' : ''}`}
               aria-label="Action Threads"
+              onDragOver={(event) => {
+                if (!draggedTrendId || workspacePage !== 'synthesis') return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+              }}
+              onDrop={(event) => {
+                if (!draggedTrendId || workspacePage !== 'synthesis') return
+                const trend = trends.find((item) => item.id === draggedTrendId)
+                if (!trend) return
+                event.preventDefault()
+                openCreateThreadFromTrend(trend)
+                setDraggedTrendId('')
+              }}
             >
               <div className="pane-heading">
                 <div>
@@ -3866,8 +4014,8 @@ function App() {
               )}
               {workspacePage === 'synthesis' && (
                 <p className="thread-source-hint">
-                  Action Threads record what the team decided to do. Create one
-                  from a Trend discussion to preserve its evidence and rationale.
+                  Drop a Trend here to upgrade it, or onto an existing Action
+                  Thread to merge its evidence and rationale.
                 </p>
               )}
               {workspacePage === 'threads' && threadGroupMode === 'timeline' ? (
@@ -4407,7 +4555,7 @@ function App() {
                     Required. Write the pattern the team should recognize.
                   </small>
                 </label>
-                <div className="form-grid two-col">
+                <div className="form-grid one-col">
                   <label>
                     Primary category
                     <select
@@ -4426,23 +4574,10 @@ function App() {
                       ))}
                     </select>
                   </label>
-                  <label>
-                    Visibility
-                    <select
-                      value={trendDraft.status}
-                      onChange={(event) =>
-                        setTrendDraft({
-                          ...trendDraft,
-                          status: event.target.value as Trend['status'],
-                        })
-                      }
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="active">Active</option>
-                      <option value="archived">Archived</option>
-                    </select>
-                  </label>
                 </div>
+                <p className="workflow-note">
+                  A Trend stays in Watching until it is upgraded to an Action Thread or dismissed.
+                </p>
                 <label>
                   What changed
                   <textarea
@@ -4494,12 +4629,9 @@ function App() {
                       if (!item || item.deletedAt) return null
                       return (
                         <div key={item.id}>
-                          <span className={`evidence-role role-${link.role}`}>
-                            {link.role}
-                          </span>
                           {item.url && item.sourceType !== 'manual_note' ? (
                             <a href={item.url} target="_blank" rel="noreferrer">
-                              {item.title} <span aria-hidden="true">↗</span>
+                              {item.title}
                             </a>
                           ) : (
                             <span>{item.title}</span>
@@ -4517,7 +4649,7 @@ function App() {
                     })}
                   {pendingTrendNewsId ? (
                     <p className="pending-evidence-note">
-                      This Trend will start with the selected signal as primary evidence.
+                      This Trend will start with the selected signal as evidence.
                     </p>
                   ) : null}
                   {trendDraft.evidence.length === 0 && !pendingTrendNewsId ? (
@@ -4628,7 +4760,7 @@ function App() {
                     .map((item) =>
                       item.url && item.sourceType !== 'manual_note' ? (
                         <a href={item.url} target="_blank" rel="noreferrer" key={item.id}>
-                          {item.title} <span aria-hidden="true">↗</span>
+                          {item.title}
                         </a>
                       ) : (
                         <span key={item.id}>{item.title}</span>
@@ -4658,19 +4790,6 @@ function App() {
               <div>
                 {trendMeetingItem ? (
                   <>
-                    <button
-                      className="text-action"
-                      type="button"
-                      onClick={() =>
-                        setTrendMeetingIndex((index) =>
-                          trendMeetingQueue.length
-                            ? (index + 1) % trendMeetingQueue.length
-                            : 0,
-                        )
-                      }
-                    >
-                      Defer
-                    </button>
                     {trendMeetingItem.actionThreadIds.length > 0 ? (
                       <button
                         className="secondary-button"
@@ -4704,11 +4823,9 @@ function App() {
                     <button
                       className="secondary-button"
                       type="button"
-                      onClick={() =>
-                        void setTrendDiscussionOutcome(trendMeetingItem, 'dismissed')
-                      }
+                      onClick={() => void removeTrend(trendMeetingItem.id, true)}
                     >
-                      Dismiss from discussion
+                      Dismiss Trend
                     </button>
                     <button
                       className="primary-button"
@@ -4717,9 +4834,7 @@ function App() {
                         void setTrendDiscussionOutcome(trendMeetingItem, 'discussed')
                       }
                     >
-                      {trendMeetingItem.actionThreadIds.length > 0
-                        ? 'Discussed · keep linked'
-                        : 'Discussed · keep watching'}
+                      Keep watching
                     </button>
                   </>
                 ) : (
@@ -4789,7 +4904,7 @@ function App() {
                 <h3>
                   {meetingItem.url && meetingItem.sourceType !== 'manual_note' ? (
                     <a href={meetingItem.url} target="_blank" rel="noreferrer">
-                      {meetingItem.title} <span aria-hidden="true">↗</span>
+                      {meetingItem.title}
                     </a>
                   ) : (
                     meetingItem.title
@@ -5014,43 +5129,48 @@ function App() {
                     <small className="field-hint">Required. All other fields are optional or have defaults.</small>
                   ) : null}
                 </label>
-                <div className="form-grid four-col">
-                  <label>
-                    Destination
-                    <select
-                      value={topicDraft.kind}
-                      onChange={(event) =>
-                        setTopicDraft({
-                          ...topicDraft,
-                          kind: event.target.value as TopicKind,
-                        })
-                      }
-                    >
+                <div className="thread-classification-grid">
+                  <fieldset className="choice-field">
+                    <legend>Destination</legend>
+                    <div className="option-pills" aria-label="Destination">
                       {Object.entries(topicKindLabels).map(([value, label]) => (
-                        <option value={value} key={value}>
+                        <button
+                          type="button"
+                          className={topicDraft.kind === value ? 'active' : ''}
+                          aria-pressed={topicDraft.kind === value}
+                          key={value}
+                          onClick={() =>
+                            setTopicDraft({ ...topicDraft, kind: value as TopicKind })
+                          }
+                        >
                           {label}
-                        </option>
+                        </button>
                       ))}
-                    </select>
-                  </label>
-                  <label>
-                    Category
-                    <select
-                      value={topicDraft.category}
-                      onChange={(event) =>
-                        setTopicDraft({
-                          ...topicDraft,
-                          category: event.target.value as NewsCategory,
-                        })
-                      }
-                    >
+                    </div>
+                  </fieldset>
+                  <fieldset className="choice-field">
+                    <legend>Category</legend>
+                    <div className="option-pills category-option-pills" aria-label="Category">
                       {Object.entries(categoryLabels).map(([value, label]) => (
-                        <option value={value} key={value}>
+                        <button
+                          type="button"
+                          className={`cat-${value} ${topicDraft.category === value ? 'active' : ''}`}
+                          aria-pressed={topicDraft.category === value}
+                          key={value}
+                          onClick={() =>
+                            setTopicDraft({
+                              ...topicDraft,
+                              category: value as NewsCategory,
+                            })
+                          }
+                        >
                           {label}
-                        </option>
+                        </button>
                       ))}
-                    </select>
-                  </label>
+                    </div>
+                  </fieldset>
+                </div>
+                <div className="form-grid two-col thread-schedule-grid">
                   <label>
                     Status
                     <select
@@ -5086,6 +5206,8 @@ function App() {
                       }
                       type="month"
                       value={topicDraft.monthKey}
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      onFocus={(event) => event.currentTarget.showPicker?.()}
                       onChange={(event) =>
                         setTopicDraft({
                           ...topicDraft,

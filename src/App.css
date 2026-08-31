@@ -5221,6 +5221,177 @@ label input:disabled {
   margin-top: 8px;
 }
 
+/* Unified intelligence workflow: Signals -> Watching Trends -> Action Threads */
+.trend-card[draggable='true'] {
+  cursor: grab;
+}
+
+.trend-card.dragging-trend {
+  opacity: 0.52;
+}
+
+.topic-pane.accepting-trend {
+  outline: 2px dashed #8b7ac2;
+  outline-offset: -7px;
+}
+
+.trend-created {
+  white-space: nowrap;
+}
+
+.trend-evidence-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.trend-evidence-row a,
+.trend-evidence-row > span:first-child,
+.trend-editor-evidence a,
+.trend-meeting-evidence a,
+.linked-signal-row a,
+.linked-signal-row span {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.trend-evidence-row .unlink-button {
+  opacity: 0;
+}
+
+.trend-evidence-row:hover .unlink-button {
+  opacity: 1;
+}
+
+.evidence-target-row {
+  align-items: center;
+}
+
+.evidence-target-row > p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.evidence-inbox-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 430px;
+}
+
+.danger-text {
+  color: #9f3b35 !important;
+}
+
+.trend-editor-modal {
+  display: flex;
+  flex-direction: column;
+}
+
+.trend-editor-modal .modal-heading {
+  flex: 0 0 auto;
+  padding: 22px 28px 14px;
+}
+
+.trend-editor-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.trend-editor-modal .sticky-footer {
+  flex: 0 0 auto;
+}
+
+.workflow-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f1eee8;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.thread-classification-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.choice-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-field legend {
+  margin-bottom: 8px;
+  color: #3d3854;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.option-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.option-pills button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--color-ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.option-pills button:hover,
+.option-pills button.active {
+  border-color: #a996da;
+  background: #eee9f8;
+  color: #433764;
+}
+
+.category-option-pills button {
+  border-color: color-mix(in srgb, var(--cat-accent) 28%, var(--color-line));
+}
+
+.category-option-pills button.active {
+  border-color: color-mix(in srgb, var(--cat-accent) 65%, #80748f);
+  background: color-mix(in srgb, var(--cat-accent) 12%, #fff);
+}
+
+.thread-schedule-grid {
+  margin-top: 18px;
+}
+
+.thread-schedule-grid input[type='month'] {
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .evidence-inbox-row {
+    grid-template-columns: 1fr;
+  }
+
+  .evidence-inbox-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .evidence-target-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .thread-toolbar .status-filter,
 .thread-toolbar .group-view-filter,
 .thread-toolbar select {

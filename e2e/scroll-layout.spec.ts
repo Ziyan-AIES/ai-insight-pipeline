@@ -7,11 +7,12 @@ const artifactDir = existsSync('/opt/cursor/artifacts')
 
 mkdirSync(artifactDir, { recursive: true })
 
-test('shows expanded Live Signal previews and scrollable Discussion Candidates', async ({
+test('shows expanded Live Signal previews and a scrollable Trend editor', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
+  await page.getByRole('button', { name: 'Live Signals' }).click()
 
   for (const [url, title] of [
     ['https://example.com/ecosystem-two', 'Partner marketplace adds agent reviews'],
@@ -36,12 +37,15 @@ test('shows expanded Live Signal previews and scrollable Discussion Candidates',
   expect(liveCount).toBeGreaterThan(0)
   for (let index = 0; index < liveCount; index += 1) {
     const box = await liveCards.nth(index).boundingBox()
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(160)
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(110)
   }
 
   for (let index = 0; index < 6; index += 1) {
     const panel = panels.nth(index)
     const panelBox = await panel.boundingBox()
+    const cardCount = await panel.locator('article.live-card').count()
+    expect(cardCount).toBeLessThanOrEqual(3)
+    if (cardCount === 0) continue
     const firstCardBox = await panel
       .locator('article.live-card')
       .first()
@@ -49,7 +53,6 @@ test('shows expanded Live Signal previews and scrollable Discussion Candidates',
     expect(firstCardBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(
       (panelBox?.y ?? 0) + (panelBox?.height ?? 0),
     )
-    expect(await panel.locator('article.live-card').count()).toBeLessThanOrEqual(3)
   }
 
   const ecosystem = page
@@ -81,25 +84,21 @@ test('shows expanded Live Signal previews and scrollable Discussion Candidates',
   }
   await page.getByRole('button', { name: 'Close', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Intelligence Synthesis' }).click()
-  const candidates = page.locator('article.candidate-card')
-  await expect(candidates.first()).toBeVisible()
-  const candidateCount = await candidates.count()
-  expect(candidateCount).toBeGreaterThan(3)
-  for (let index = 0; index < candidateCount; index += 1) {
-    const box = await candidates.nth(index).boundingBox()
-    const height = box?.height ?? 0
-    expect(height).toBeGreaterThanOrEqual(160)
-  }
+  await page.getByRole('button', { name: 'Intelligence Briefing' }).click()
+  await expect(page.locator('article.trend-card').first()).toBeVisible()
+  await expect(page.getByLabel('Evidence destination')).toBeVisible()
 
-  const list = page.locator('.discussion-list')
-  await expect(list).toHaveCSS('overflow-y', /auto|scroll/)
-  const scrollHeight = await list.evaluate((node) => node.scrollHeight)
-  const clientHeight = await list.evaluate((node) => node.clientHeight)
-  expect(scrollHeight).toBeGreaterThan(clientHeight)
+  await page.setViewportSize({ width: 900, height: 620 })
+  await page.getByRole('button', { name: '+ New Trend' }).click()
+  const trendDialog = page.getByRole('dialog', { name: 'Create Trend' })
+  await expect(trendDialog).toBeVisible()
+  await expect(trendDialog.locator('.modal-body')).toHaveCSS('overflow-y', 'auto')
+  await expect(trendDialog.getByRole('button', { name: 'Create Trend' })).toBeVisible()
+  const dialogBox = await trendDialog.boundingBox()
+  expect((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0)).toBeLessThanOrEqual(620)
 
   await page.screenshot({
-    path: `${artifactDir}/synthesis_scrollable_candidate_cards.png`,
+    path: `${artifactDir}/briefing_scrollable_trend_editor.png`,
     fullPage: false,
   })
 })
@@ -112,16 +111,15 @@ test('keeps workspace content visible in non-maximized and mobile windows', asyn
 
   const mediumSidebar = await page.locator('.qira-sidebar').boundingBox()
   const mediumMain = await page.locator('.workspace-main').boundingBox()
-  const liveHeading = await page
-    .getByRole('heading', { name: 'Live Signals' })
+  const briefingHeading = await page
+    .getByRole('heading', { name: 'Emerging Trends' })
     .boundingBox()
   expect(mediumSidebar?.width ?? 0).toBeLessThanOrEqual(170)
   expect(mediumMain?.x ?? 0).toBeGreaterThanOrEqual(
     (mediumSidebar?.x ?? 0) + (mediumSidebar?.width ?? 0) - 1,
   )
-  expect(liveHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(150)
+  expect(briefingHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(180)
 
-  await page.getByRole('button', { name: 'Intelligence Synthesis' }).click()
   await page
     .getByRole('button', { name: 'Open Action Threads dashboard' })
     .click()
