@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   maybeSingle: vi.fn(),
   onAuthStateChange: vi.fn(),
   signOut: vi.fn(),
+  setSession: vi.fn(),
   signInWithOtp: vi.fn(),
 }))
 
@@ -16,6 +17,7 @@ vi.mock('./supabase', () => ({
       getSession: mocks.getSession,
       onAuthStateChange: mocks.onAuthStateChange,
       signOut: mocks.signOut,
+      setSession: mocks.setSession,
       signInWithOtp: mocks.signInWithOtp,
     },
     from: () => ({
@@ -58,12 +60,21 @@ describe('membership gate', () => {
     mocks.maybeSingle.mockReset()
     mocks.onAuthStateChange.mockReset()
     mocks.signInWithOtp.mockReset()
+    mocks.setSession.mockReset()
+    mocks.setSession.mockResolvedValue({ data: { session }, error: null })
     mocks.getSession.mockResolvedValue({ data: { session } })
     mocks.onAuthStateChange.mockImplementation(() => ({
       data: { subscription: { unsubscribe: vi.fn() } },
     }))
     window.history.replaceState({}, '', '/')
-    vi.stubGlobal('fetch', vi.fn())
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+      }),
+    )
   })
 
   it('renders the workspace only for a team member', async () => {
@@ -86,6 +97,46 @@ describe('membership gate', () => {
     expect(
       await screen.findByRole('button', { name: 'Send sign-in link' }),
     ).toBeInTheDocument()
+  })
+
+  it('restores the dashboard from an already signed-in extension', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          authorized: true,
+          access_token: 'extension-access-token',
+          refresh_token: 'extension-refresh-token',
+        }),
+      }),
+    )
+    const requestListener = vi.fn()
+    window.addEventListener(
+      'ai-signals:request-dashboard-session',
+      requestListener,
+    )
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    await waitFor(() => expect(mocks.setSession).toHaveBeenCalledWith({
+      access_token: 'extension-access-token',
+      refresh_token: 'extension-refresh-token',
+    }))
+    expect(requestListener).toHaveBeenCalled()
+    const body = JSON.parse(
+      String(vi.mocked(fetch).mock.calls[0]?.[1]?.body),
+    ) as { action?: string; state?: string }
+    expect(body.action).toBe('claim')
+    expect(body.state).toMatch(/^[a-f0-9]{48}$/)
+    window.removeEventListener(
+      'ai-signals:request-dashboard-session',
+      requestListener,
+    )
   })
 
   it('shows a clear denial instead of demo data to non-members', async () => {
@@ -133,6 +184,7 @@ describe('extension handshake', () => {
     mocks.getSession.mockReset()
     mocks.maybeSingle.mockReset()
     mocks.onAuthStateChange.mockReset()
+    mocks.setSession.mockReset()
     mocks.getSession.mockResolvedValue({ data: { session } })
     mocks.onAuthStateChange.mockImplementation(() => ({
       data: { subscription: { unsubscribe: vi.fn() } },

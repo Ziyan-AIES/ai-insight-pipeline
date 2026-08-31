@@ -48,6 +48,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void getStoredSession().then(sendResponse)
     return true
   }
+  if (message.type === 'bsw-adopt-dashboard-session') {
+    void adoptDashboardSession(message).then(sendResponse)
+    return true
+  }
+  if (message.type === 'bsw-complete-dashboard-session') {
+    void completeDashboardSession(message).then(sendResponse)
+    return true
+  }
   if (message.type === 'bsw-capture') {
     void captureFromPage(message.payload).then(sendResponse)
     return true
@@ -200,6 +208,68 @@ async function applyClaim(origin, body) {
     [STORAGE_KEYS.authorized]: true,
     [STORAGE_KEYS.email]: body.identity?.email || '',
     [STORAGE_KEYS.pendingState]: '',
+  })
+}
+
+async function adoptDashboardSession(message) {
+  const origin = normalizeWorkspaceUrl(message.apiBase || (await storedApiBase()))
+  const accessToken = String(message.accessToken || '')
+  const refreshToken = String(message.refreshToken || '')
+  if (!accessToken || !refreshToken) return { ok: false, status: 401 }
+  try {
+    const result = await fetch(`${origin}/api/extension-session`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    })
+    const body = await result.json().catch(() => ({}))
+    if (!result.ok || body.authorized === false) {
+      return { ok: false, status: result.status, authorized: false }
+    }
+    await applyClaim(origin, {
+      authorized: true,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      identity: body.identity || null,
+    })
+    await chrome.alarms.create(REFRESH_ALARM, {
+      periodInMinutes: REFRESH_PERIOD_MINUTES,
+    })
+    return { ok: true, authorized: true, identity: body.identity || null }
+  } catch {
+    return { ok: false, status: 0 }
+  }
+}
+
+async function completeDashboardSession(message) {
+  const state = String(message.state || '')
+  const origin = normalizeWorkspaceUrl(message.apiBase || (await storedApiBase()))
+  if (!/^[a-f0-9]{32,}$/i.test(state)) return { ok: false, status: 400 }
+  let stored = await getStoredSession()
+  if (!stored.authorized || !stored.accessToken || !stored.refreshToken) {
+    return { ok: false, status: 401 }
+  }
+  let result = await postDashboardSession(origin, state, stored)
+  if (result.status === 401) {
+    const refreshed = await refreshSession()
+    if (!refreshed.ok) return refreshed
+    stored = await getStoredSession()
+    result = await postDashboardSession(origin, state, stored)
+  }
+  const body = await result.json().catch(() => ({}))
+  return { ok: result.ok, status: result.status, ...body }
+}
+
+function postDashboardSession(origin, state, stored) {
+  return fetch(`${origin}/api/extension-auth`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${stored.accessToken}`,
+    },
+    body: JSON.stringify({
+      action: 'complete',
+      state,
+      refresh_token: stored.refreshToken,
+    }),
   })
 }
 

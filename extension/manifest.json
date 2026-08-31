@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Signals",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Save AI industry signals to the team workspace with the same sign-in used by the dashboard.",
   "permissions": ["storage", "tabs", "alarms"],
   "host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],

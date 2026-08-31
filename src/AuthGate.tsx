@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useCallback,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -15,6 +17,20 @@ import { cloudConfigured, supabase } from './supabase'
 
 const HANDSHAKE_STORAGE_KEY = 'bsw-extension-auth-state'
 const HANDSHAKE_TTL_MS = 24 * 60 * 60 * 1000
+const EXTENSION_SESSION_REQUEST_EVENT = 'ai-signals:request-dashboard-session'
+const DASHBOARD_SIGN_OUT_EVENT = 'ai-signals:dashboard-sign-out'
+const EXTENSION_RESTORE_ATTEMPTS = 6
+const EXTENSION_RESTORE_INTERVAL_MS = 300
+
+function randomHandshakeState() {
+  const bytes = new Uint8Array(24)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+}
 
 function extensionHandshake() {
   if (typeof window === 'undefined') {
@@ -97,6 +113,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(cloudConfigured)
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [checkingExtension, setCheckingExtension] = useState(false)
+  const extensionRestoreAttempted = useRef(false)
   const [extensionStatus, setExtensionStatus] = useState<
     'idle' | 'connecting' | 'connected' | 'denied' | 'error'
   >('idle')
@@ -117,6 +135,68 @@ export function AuthGate({ children }: { children: ReactNode }) {
     })
     return () => data.subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (
+      !supabase ||
+      loading ||
+      session ||
+      extensionRestoreAttempted.current
+    ) {
+      return
+    }
+    extensionRestoreAttempted.current = true
+    let cancelled = false
+    const state = randomHandshakeState()
+    setCheckingExtension(true)
+
+    void (async () => {
+      for (let attempt = 0; attempt < EXTENSION_RESTORE_ATTEMPTS; attempt += 1) {
+        if (cancelled) return
+        window.dispatchEvent(
+          new CustomEvent(EXTENSION_SESSION_REQUEST_EVENT, {
+            detail: { state },
+          }),
+        )
+        try {
+          const result = await fetch('/api/extension-auth', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action: 'claim', state }),
+          })
+          if (result.ok) {
+            const body = (await result.json().catch(() => ({}))) as {
+              authorized?: boolean
+              access_token?: string
+              refresh_token?: string
+            }
+            if (
+              body.authorized !== false &&
+              body.access_token &&
+              body.refresh_token
+            ) {
+              const { error } = await supabase.auth.setSession({
+                access_token: body.access_token,
+                refresh_token: body.refresh_token,
+              })
+              if (!error || cancelled) return
+            }
+          }
+        } catch {
+          // The extension is optional; work-email sign-in remains available.
+        }
+        if (attempt < EXTENSION_RESTORE_ATTEMPTS - 1) {
+          await wait(EXTENSION_RESTORE_INTERVAL_MS)
+        }
+      }
+    })().finally(() => {
+      if (!cancelled) setCheckingExtension(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [loading, session])
 
   useEffect(() => {
     if (!supabase || !sessionUserId) return
@@ -220,16 +300,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [handshake.enabled, handshake.state, session])
 
+  const signOutEverywhere = useCallback(async () => {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_SIGN_OUT_EVENT))
+    if (supabase) await supabase.auth.signOut()
+  }, [])
+
   const context = useMemo<AuthContextValue>(
     () => ({
       identity,
       canEdit: !cloudConfigured || identity?.role !== 'member',
       canAdmin: !cloudConfigured || identity?.role === 'admin',
-      signOut: async () => {
-        if (supabase) await supabase.auth.signOut()
-      },
+      signOut: signOutEverywhere,
     }),
-    [identity],
+    [identity, signOutEverywhere],
   )
 
   async function requestLink() {
@@ -255,7 +338,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <button
       className="secondary-button"
       type="button"
-      onClick={() => void supabase?.auth.signOut()}
+      onClick={() => void signOutEverywhere()}
     >
       Sign out and use another account
     </button>
@@ -361,6 +444,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </>
       )}
       {!session && message && <small>{message}</small>}
+      {!session && checkingExtension && (
+        <small>Checking your installed AI Signals extension…</small>
+      )}
     </AuthCard>
   )
 }

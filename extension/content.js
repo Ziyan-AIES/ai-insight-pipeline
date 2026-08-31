@@ -582,13 +582,21 @@
           'bswApiBase',
         ])
         const pending = values.bswPendingAuthState
-        if (!pending) return
-        chrome.runtime.sendMessage({ type: 'bsw-claim-now' })
         const tokens = readSupabaseSession()
-        if (!tokens?.access_token) return
         const origin = normalizeWorkspaceUrl(
           values.bswApiBase || DEFAULT_WORKSPACE_URL,
         )
+        if (tokens?.access_token && tokens.refresh_token) {
+          chrome.runtime.sendMessage({
+            type: 'bsw-adopt-dashboard-session',
+            apiBase: origin,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+          })
+        }
+        if (!pending) return
+        chrome.runtime.sendMessage({ type: 'bsw-claim-now' })
+        if (!tokens?.access_token) return
         await fetch(`${origin}/api/extension-auth`, {
           method: 'POST',
           headers: {
@@ -608,6 +616,18 @@
         inFlight = false
       }
     }
+    window.addEventListener('ai-signals:request-dashboard-session', (event) => {
+      const state = String(event.detail?.state || '')
+      if (!/^[a-f0-9]{32,}$/i.test(state)) return
+      chrome.runtime.sendMessage({
+        type: 'bsw-complete-dashboard-session',
+        state,
+        apiBase: window.location.origin,
+      })
+    })
+    window.addEventListener('ai-signals:dashboard-sign-out', () => {
+      chrome.runtime.sendMessage({ type: 'bsw-sign-out' })
+    })
     void syncHandoff()
     const timer = window.setInterval(() => {
       chrome.storage.local.get('bswPendingAuthState', (values) => {
