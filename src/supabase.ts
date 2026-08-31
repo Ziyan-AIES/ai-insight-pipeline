@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
 import type {
   ActivityEvent,
-  DiscussionState,
+  DiscussionStatus,
   EditorialReadout,
   EditorialHealth,
   NewsCategory,
@@ -53,9 +53,12 @@ type NewsRow = {
   image_url: string
   editorial_status: 'pending' | 'processed' | 'failed'
   last_reviewed_at?: string | null
-  discussion_state?: DiscussionState | null
+  discussion_state?: 'needs_discussion' | 'discussed' | 'in_thread' | null
+  discussion_status?: DiscussionStatus | null
   discussed_at?: string | null
   discussed_by?: string | null
+  meeting_nominated_at?: string | null
+  meeting_nominated_by?: string | null
   metadata: Record<string, unknown> | null
   updated_at: string
   version?: number
@@ -179,7 +182,7 @@ export async function loadWorkspace(includeDeleted = false) {
     .select(
       legacyNewsSelect.replace(
         'last_reviewed_at,metadata',
-        'last_reviewed_at,discussion_state,discussed_at,discussed_by,metadata',
+        'last_reviewed_at,discussion_state,discussion_status,discussed_at,discussed_by,meeting_nominated_at,meeting_nominated_by,metadata',
       ),
     )
     .order('captured_at', { ascending: false })
@@ -215,7 +218,9 @@ export async function loadWorkspace(includeDeleted = false) {
   let effectiveNewsError = newsResult.error
   if (
     effectiveNewsError &&
-    /discussion_(state|at|by)/i.test(effectiveNewsError.message)
+    /discussion_(state|status|at|by)|meeting_nominated/i.test(
+      effectiveNewsError.message,
+    )
   ) {
     let legacyQuery = supabase
       .from('news_items')
@@ -292,13 +297,13 @@ export async function loadWorkspace(includeDeleted = false) {
         editorialStatus: row.editorial_status,
         lastReviewedAt: row.last_reviewed_at || undefined,
         ideaCount: ideaCounts.get(row.id) || 0,
-        discussionState:
-          row.discussion_state ||
-          ((row.topic_news || []).some((link) => !link.deleted_at)
-            ? 'in_thread'
-            : typeof metadata.discussion_completed_at === 'string'
-              ? 'discussed'
-              : 'needs_discussion'),
+        discussionStatus:
+          row.discussion_status ||
+          (row.discussed_at ||
+          row.discussion_state === 'discussed' ||
+          typeof metadata.discussion_completed_at === 'string'
+            ? 'discussed'
+            : 'not_discussed'),
         discussedAt:
           row.discussed_at ||
           (typeof metadata.discussion_completed_at === 'string'
@@ -306,6 +311,10 @@ export async function loadWorkspace(includeDeleted = false) {
             : undefined),
         discussedBy: row.discussed_by
           ? memberNames.get(row.discussed_by) || 'Team member'
+          : undefined,
+        meetingNominatedAt: row.meeting_nominated_at || undefined,
+        meetingNominatedBy: row.meeting_nominated_by
+          ? memberNames.get(row.meeting_nominated_by) || 'Team member'
           : undefined,
         updatedAt: row.updated_at,
         version: row.version,
@@ -607,9 +616,11 @@ export async function updateNewsItem(
     category?: NewsCategory
     published_at?: string | null
     discussion_order?: number | null
-    discussion_state?: DiscussionState
+    discussion_status?: DiscussionStatus
     discussed_at?: string | null
     discussed_by?: string | null
+    meeting_nominated_at?: string | null
+    meeting_nominated_by?: string | null
     metadata?: Record<string, unknown>
   },
   expectedVersion?: number,

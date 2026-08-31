@@ -25,7 +25,7 @@ describe('dashboard pilot shell', () => {
     ).toBeNull()
     expect(screen.getByText('Entry & Interaction')).toBeInTheDocument()
     expect(screen.getByText('Industry & Market')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Discuss/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /Recommend/ }).length).toBeGreaterThan(0)
     expect(screen.getByText(/Qira Strategic/)).toBeInTheDocument()
     expect(screen.getByText(/Market Intelligence/)).toBeInTheDocument()
     expect(screen.queryByText('AI Daily Review')).toBeNull()
@@ -339,14 +339,14 @@ describe('dashboard pilot shell', () => {
     })
     const card = heading.closest('article')
     expect(card).toBeTruthy()
-    expect(within(card as HTMLElement).getByRole('button', { name: '↑ 0 Discuss' })).toBeInTheDocument()
+    expect(within(card as HTMLElement).getByRole('button', { name: '↑ 0 Recommend' })).toBeInTheDocument()
     fireEvent.click(within(card as HTMLElement).getByRole('button', { name: 'Add thought' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Thought' }), {
       target: { value: 'Discuss the product implications with the team.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => {
-      expect(within(card as HTMLElement).getByRole('button', { name: '↑ 1 Discuss' })).toBeInTheDocument()
+      expect(within(card as HTMLElement).getByRole('button', { name: '↑ 0 Recommend' })).toBeInTheDocument()
       expect(within(card as HTMLElement).getByText('1 team thought')).toBeInTheDocument()
     })
   })
@@ -356,16 +356,16 @@ describe('dashboard pilot shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
 
     expect(screen.getByRole('button', { name: 'Start meeting · 2' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Meeting queue' })).toBeInTheDocument()
-    expect(screen.getByText('Not nominated')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'To discuss · 2' })).toBeInTheDocument()
+    expect(screen.queryByText('Not nominated')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Start meeting · 2' }))
     const meeting = screen.getByRole('dialog', { name: 'Signal review' })
     const firstSignal = within(meeting).getByRole('heading', { level: 3 }).textContent
     expect(within(meeting).queryByRole('button', { name: 'Back' })).toBeNull()
-    expect(within(meeting).getByText('Nominated by the team')).toBeInTheDocument()
+    expect(within(meeting).getByText(/recommend/)).toBeInTheDocument()
 
-    fireEvent.click(within(meeting).getByRole('button', { name: 'Create thread' }))
+    fireEvent.click(within(meeting).getByRole('button', { name: 'Create thread & complete' }))
     const editor = screen.getByRole('dialog', { name: 'New Action Thread' })
     const createButton = within(editor).getByRole('button', { name: 'Create Action Thread' })
     expect(within(editor).getByText('Required. All other fields are optional or have defaults.')).toBeInTheDocument()
@@ -374,7 +374,7 @@ describe('dashboard pilot shell', () => {
     fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
     expect(screen.getByRole('dialog', { name: 'Signal review' })).toHaveTextContent(firstSignal || '')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create thread' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create thread & complete' }))
     const reopenedEditor = screen.getByRole('dialog', { name: 'New Action Thread' })
     fireEvent.change(within(reopenedEditor).getByLabelText(/Thread title/), {
       target: { value: 'Meeting-created direction' },
@@ -398,8 +398,8 @@ describe('dashboard pilot shell', () => {
     expect(within(live).queryByText('Reviewed')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Intelligence Synthesis' }))
-    expect(screen.getByRole('group', { name: 'Discussion state' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Add thought/ })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Discussion stage' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Add thought/ }).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Discussed' }))
     expect(screen.getByText('Browser agents turn the address bar into an invocation layer')).toBeInTheDocument()
     fireEvent.click(
@@ -407,7 +407,8 @@ describe('dashboard pilot shell', () => {
         name: 'All',
       }),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'In threads' }))
+    fireEvent.click(screen.getByRole('button', { name: 'All news' }))
+    fireEvent.click(screen.getByRole('button', { name: 'In a thread' }))
     expect(
       within(screen.getByRole('region', { name: 'Discussion Candidates' })).getByRole(
         'link',

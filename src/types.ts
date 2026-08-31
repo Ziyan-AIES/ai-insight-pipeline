@@ -16,7 +16,7 @@ export type TopicStatus =
 
 export type ThreadStatus = 'open' | 'in_progress' | 'parked' | 'closed'
 
-export type DiscussionState = 'needs_discussion' | 'discussed' | 'in_thread'
+export type DiscussionStatus = 'not_discussed' | 'discussed' | 'dismissed'
 
 export type TopicKind = 'pov' | 'insight' | 'strategy' | 'roadmap' | 'poc'
 
@@ -64,9 +64,11 @@ export interface NewsItem {
   editorialStatus: 'pending' | 'processed' | 'failed'
   lastReviewedAt?: string
   ideaCount: number
-  discussionState: DiscussionState
+  discussionStatus: DiscussionStatus
   discussedAt?: string
   discussedBy?: string
+  meetingNominatedAt?: string
+  meetingNominatedBy?: string
   voteCount: number
   votedByMe?: boolean
   discussionOrder?: number

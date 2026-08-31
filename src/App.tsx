@@ -53,6 +53,7 @@ import {
 } from './intelligence'
 import type {
   FocusMode,
+  DiscussionStatus,
   NewsCategory,
   NewsItem,
   Thesis,
@@ -64,7 +65,8 @@ import type {
   WorkspacePage,
 } from './types'
 
-type NewsScope = 'all' | 'pipeline' | 'discussed' | 'needs_discuss'
+type NewsScope = 'all' | 'to_discuss' | 'discussed'
+type NewsThreadScope = 'all' | 'in_thread' | 'no_thread'
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
 type ThreadGroupMode = 'timeline' | 'category' | 'recent'
@@ -159,6 +161,19 @@ function formatShortDate(value: string) {
     day: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(value))
+}
+
+function hasMeetingReason(item: NewsItem) {
+  return Boolean(
+    item.voteCount > 0 ||
+      item.ideaCount > 0 ||
+      item.meetingNominatedAt ||
+      item.topicLinks.length > 0,
+  )
+}
+
+function isToDiscuss(item: NewsItem) {
+  return item.discussionStatus === 'not_discussed' && hasMeetingReason(item)
 }
 
 function compactWords(value: string, limit = 24) {
@@ -324,6 +339,8 @@ function App() {
   const [pickerYear, setPickerYear] = useState(() => new Date().getUTCFullYear())
   const [dropHighlight, setDropHighlight] = useState<NewsCategory | ''>('')
   const [newsScope, setNewsScope] = useState<NewsScope>('all')
+  const [newsThreadScope, setNewsThreadScope] =
+    useState<NewsThreadScope>('all')
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -687,16 +704,15 @@ function App() {
   const discussionCandidates = useMemo(() => {
     return visibleNews
       .filter((item) => {
-        if (newsScope === 'pipeline') return item.topicLinks.length > 0
         if (newsScope === 'discussed') {
-          return item.discussionState === 'discussed'
+          return item.discussionStatus === 'discussed'
         }
-        if (newsScope === 'needs_discuss') {
-          return (
-            item.discussionState === 'needs_discussion' &&
-            (item.voteCount > 0 || item.ideaCount > 0)
-          )
-        }
+        if (newsScope === 'to_discuss') return isToDiscuss(item)
+        return true
+      })
+      .filter((item) => {
+        if (newsThreadScope === 'in_thread') return item.topicLinks.length > 0
+        if (newsThreadScope === 'no_thread') return item.topicLinks.length === 0
         return true
       })
       .slice()
@@ -705,15 +721,14 @@ function App() {
           discussionPriorityScore(b) - discussionPriorityScore(a) ||
           signalTime(b).localeCompare(signalTime(a)),
       )
-  }, [newsScope, visibleNews])
+  }, [newsScope, newsThreadScope, visibleNews])
 
   const meetingQueue = useMemo(
     () =>
       visibleNews
         .filter(
           (item) =>
-            item.discussionState === 'needs_discussion' &&
-            (item.voteCount > 0 || item.ideaCount > 0),
+            isToDiscuss(item),
         )
         .slice()
         .sort(
@@ -976,7 +991,6 @@ function App() {
         !candidate.topicLinks.some((link) => link.topicId === topicId)
           ? {
               ...candidate,
-              discussionState: 'in_thread',
               topicLinks: [
                 ...candidate.topicLinks,
                 {
@@ -1048,13 +1062,11 @@ function App() {
           if (withoutSource.some((link) => link.topicId === targetTopicId)) {
             return {
               ...candidate,
-              discussionState: 'in_thread',
               topicLinks: withoutSource,
             }
           }
           return {
             ...candidate,
-            discussionState: 'in_thread',
             topicLinks: [
               ...withoutSource,
               {
@@ -1115,17 +1127,12 @@ function App() {
     const content = ideaText.trim()
     if (!content) return
     try {
-      const linkedItem = news.find((item) => item.id === linkedNewsId)
-      let voteResult: { voteCount: number; voted: boolean } | null = null
       if (cloudConfigured) {
         await persistTeamIdea({
           content,
           newsId: linkedNewsId || undefined,
           inputType: ideaListening ? 'voice' : 'text',
         })
-        if (linkedNewsId && linkedItem && !linkedItem.votedByMe) {
-          voteResult = await toggleNewsVote(linkedNewsId)
-        }
       }
       setIdeaText('')
       setIdeaNewsId('')
@@ -1136,10 +1143,6 @@ function App() {
               ? {
                   ...item,
                   ideaCount: item.ideaCount + 1,
-                  votedByMe: voteResult?.voted ?? true,
-                  voteCount:
-                    voteResult?.voteCount ??
-                    (item.votedByMe ? item.voteCount : item.voteCount + 1),
                 }
               : item,
           ),
@@ -1220,10 +1223,6 @@ function App() {
           item.id === newsId
             ? {
               ...item,
-              discussionState:
-                item.topicLinks.filter((link) => link.topicId !== topicId).length > 0
-                  ? 'in_thread'
-                  : 'discussed',
               topicLinks: item.topicLinks.filter((link) => link.topicId !== topicId),
               }
             : item,
@@ -1308,7 +1307,7 @@ function App() {
       capturedBy: persisted?.contributorName || identity?.displayName || 'Current user',
       editorialStatus: 'processed',
       ideaCount: 0,
-      discussionState: 'needs_discussion',
+      discussionStatus: 'not_discussed',
       voteCount: 0,
       version: 1,
       topicLinks: [],
@@ -1408,19 +1407,71 @@ function App() {
     }
   }
 
-  async function toggleDiscussionComplete(item: NewsItem) {
-    const discussed = item.discussionState !== 'discussed'
-    const discussedAt = discussed ? new Date().toISOString() : undefined
-    const discussionState = discussed ? 'discussed' : 'needs_discussion'
+  async function setDiscussionOutcome(
+    item: NewsItem,
+    discussionStatus: DiscussionStatus,
+  ) {
+    const discussedAt =
+      discussionStatus === 'discussed' ? new Date().toISOString() : undefined
     try {
       let version = item.version
       if (cloudConfigured) {
         const result = await updateNewsItem(
           item.id,
           {
-            discussion_state: discussionState,
+            discussion_status: discussionStatus,
             discussed_at: discussedAt || null,
-            discussed_by: discussed ? identity?.userId || null : null,
+            discussed_by:
+              discussionStatus === 'discussed'
+                ? identity?.userId || null
+                : null,
+          },
+          item.version,
+        )
+        version = result?.version || version
+      }
+      setNews((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id
+              ? {
+                ...candidate,
+                discussionStatus,
+                discussedAt,
+                discussedBy:
+                  discussionStatus === 'discussed'
+                    ? identity?.displayName
+                    : undefined,
+                version,
+              }
+            : candidate,
+        ),
+      )
+      setNotice(
+        discussionStatus === 'discussed'
+          ? 'Marked as discussed.'
+          : discussionStatus === 'dismissed'
+            ? 'Dismissed from team discussion.'
+            : 'Reopened for discussion.',
+      )
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not update discussion state')
+    }
+  }
+
+  async function toggleMeetingNomination(item: NewsItem) {
+    const nominatedAt = item.meetingNominatedAt
+      ? undefined
+      : new Date().toISOString()
+    try {
+      let version = item.version
+      if (cloudConfigured) {
+        const result = await updateNewsItem(
+          item.id,
+          {
+            meeting_nominated_at: nominatedAt || null,
+            meeting_nominated_by: nominatedAt
+              ? identity?.userId || null
+              : null,
           },
           item.version,
         )
@@ -1431,17 +1482,24 @@ function App() {
           candidate.id === item.id
             ? {
                 ...candidate,
-                discussionState,
-                discussedAt,
-                discussedBy: discussed ? identity?.displayName : undefined,
+                meetingNominatedAt: nominatedAt,
+                meetingNominatedBy: nominatedAt
+                  ? identity?.displayName
+                  : undefined,
                 version,
               }
             : candidate,
         ),
       )
-      setNotice(discussedAt ? 'Marked as discussed.' : 'Moved back to Needs discuss.')
+      setNotice(
+        nominatedAt
+          ? 'Added to To discuss.'
+          : hasMeetingReason({ ...item, meetingNominatedAt: undefined })
+            ? 'Manual nomination removed; other team signals keep this in To discuss.'
+            : 'Removed from To discuss.',
+      )
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not update discussion state')
+      setNotice(error instanceof Error ? error.message : 'Could not update meeting queue')
     }
   }
 
@@ -1703,11 +1761,17 @@ function App() {
       }
       setNotice('Action Thread created')
       if (pendingThreadNewsId) {
+        const meetingSource = news.find(
+          (item) => item.id === meetingThreadNewsId,
+        )
         await linkNewsToTopic(pendingThreadNewsId, id, {
           ...topicDraft,
           id,
           title: topicDraft.title.trim(),
         })
+        if (meetingSource) {
+          await setDiscussionOutcome(meetingSource, 'discussed')
+        }
         setPendingThreadNewsId('')
       }
     } else {
@@ -1877,7 +1941,7 @@ function App() {
       metadata: { contributor_name: contributorName },
       editorialStatus: 'pending',
       ideaCount: 0,
-      discussionState: topic ? 'in_thread' : 'needs_discussion',
+      discussionStatus: 'not_discussed',
       voteCount: 0,
       version: 1,
       topicLinks: topic
@@ -1955,6 +2019,8 @@ function App() {
     )
     const synthesisText = teamView || qiraImplication || takeawayText
     const synthesisLabel = teamView ? 'Team synthesis' : 'Editorial takeaway'
+    const toDiscuss = isToDiscuss(item)
+    const linkedThread = item.topicLinks[0]
     return (
       <article
         className={`news-card ${variant}-card ${draggedNewsId === item.id ? 'dragging' : ''}`}
@@ -2018,15 +2084,20 @@ function App() {
             <span className="meta-contributor">· {item.capturedBy}</span>
           ) : null}
           {variant === 'candidate' ? (
-            <span className="pipeline-state">
-              {item.topicLinks.length > 0
-                ? 'In thread'
-                : item.discussionState === 'discussed'
-                  ? 'Discussed'
-                  : item.voteCount > 0 || item.ideaCount > 0
-                    ? 'Meeting queue'
-                    : 'Not nominated'}
-            </span>
+            <>
+              {toDiscuss ? (
+                <span className="pipeline-state state-to-discuss">To discuss</span>
+              ) : item.discussionStatus === 'discussed' ? (
+                <span className="pipeline-state state-discussed">Discussed</span>
+              ) : item.discussionStatus === 'dismissed' ? (
+                <span className="pipeline-state state-dismissed">Dismissed</span>
+              ) : null}
+              {linkedThread ? (
+                <span className="thread-relation" title={linkedThread.topicTitle}>
+                  In thread · {linkedThread.topicTitle}
+                </span>
+              ) : null}
+            </>
           ) : null}
           <div className="card-actions">
             {item.deletedAt ? (
@@ -2127,16 +2198,28 @@ function App() {
             ) : null}
           </>
         )}
+        {variant === 'candidate' && hasMeetingReason(item) ? (
+          <div className="meeting-reasons" aria-label="Discussion reasons">
+            {item.voteCount > 0 ? (
+              <span>{item.voteCount} recommend{item.voteCount === 1 ? '' : 's'}</span>
+            ) : null}
+            {item.ideaCount > 0 ? (
+              <span>{item.ideaCount} thought{item.ideaCount === 1 ? '' : 's'}</span>
+            ) : null}
+            {item.meetingNominatedAt ? (
+              <span>Added by {item.meetingNominatedBy || 'editor'}</span>
+            ) : null}
+          </div>
+        ) : null}
         <div className="card-footer">
-          {variant === 'live' ? (
-            <>
+          <div className="signal-actions">
               <button
                 className={`vote-button ${item.votedByMe ? 'voted' : ''}`}
                 type="button"
-                title="Vote to discuss"
+                title="Recommend for team discussion"
                 onClick={() => void voteToDiscuss(item)}
               >
-                ↑ {item.voteCount || 0} Discuss
+                ↑ {item.voteCount || 0} Recommend
               </button>
               <button
                 className="text-action idea-button"
@@ -2153,17 +2236,51 @@ function App() {
                   {item.ideaCount} team thought{item.ideaCount === 1 ? '' : 's'}
                 </span>
               ) : null}
-            </>
-          ) : item.topicLinks.length === 0 ? (
-            <button
-              className="secondary-button discussion-state-action"
-              type="button"
-              onClick={() => void toggleDiscussionComplete(item)}
-            >
-              {item.discussionState === 'discussed'
-                ? 'Move to Needs discuss'
-                : 'Mark discussed'}
-            </button>
+          </div>
+          {variant === 'candidate' ? (
+            <div className="candidate-workflow-actions">
+              {item.discussionStatus !== 'not_discussed' ? (
+                <button
+                  className="secondary-button discussion-state-action"
+                  type="button"
+                  onClick={() => void setDiscussionOutcome(item, 'not_discussed')}
+                >
+                  Reopen discussion
+                </button>
+              ) : (
+                <>
+                  {!toDiscuss || item.meetingNominatedAt ? (
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={() => void toggleMeetingNomination(item)}
+                    >
+                      {item.meetingNominatedAt
+                        ? 'Remove manual nomination'
+                        : 'Add to meeting'}
+                    </button>
+                  ) : null}
+                  {toDiscuss ? (
+                    <>
+                      <button
+                        className="secondary-button discussion-state-action"
+                        type="button"
+                        onClick={() => void setDiscussionOutcome(item, 'dismissed')}
+                      >
+                        Dismiss
+                      </button>
+                      <button
+                        className="primary-button discussion-state-action"
+                        type="button"
+                        onClick={() => void setDiscussionOutcome(item, 'discussed')}
+                      >
+                        Mark discussed
+                      </button>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </div>
           ) : null}
         </div>
       </article>
@@ -2388,23 +2505,42 @@ function App() {
   function renderNewsScopeFilter() {
     const options: Array<{ value: NewsScope; label: string }> = [
       { value: 'all', label: 'All news' },
-      { value: 'pipeline', label: 'In threads' },
+      { value: 'to_discuss', label: `To discuss · ${meetingQueue.length}` },
       { value: 'discussed', label: 'Discussed' },
-      { value: 'needs_discuss', label: 'Meeting queue' },
+    ]
+    const threadOptions: Array<{ value: NewsThreadScope; label: string }> = [
+      { value: 'all', label: 'All threads' },
+      { value: 'in_thread', label: 'In a thread' },
+      { value: 'no_thread', label: 'No thread' },
     ]
     return (
-      <div className="signal-scope-filter" role="group" aria-label="Discussion state">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={newsScope === option.value ? 'active' : ''}
-            aria-pressed={newsScope === option.value}
-            onClick={() => setNewsScope(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
+      <div className="news-scope-controls">
+        <div className="signal-scope-filter" role="group" aria-label="Discussion stage">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={newsScope === option.value ? 'active' : ''}
+              aria-pressed={newsScope === option.value}
+              onClick={() => setNewsScope(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="thread-scope-filter" role="group" aria-label="Thread relationship">
+          {threadOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={newsThreadScope === option.value ? 'active' : ''}
+              aria-pressed={newsThreadScope === option.value}
+              onClick={() => setNewsThreadScope(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
     )
   }
@@ -2689,7 +2825,7 @@ function App() {
                   <button
                     className="secondary-button meeting-start"
                     type="button"
-                    title="Includes undiscussed signals with a Discuss vote or team thought"
+                    title="Undiscussed signals recommended, annotated, manually added, or linked to a Thread"
                     onClick={() => {
                       setQuery('')
                       setMeetingIndex(0)
@@ -2700,7 +2836,8 @@ function App() {
                   </button>
                 </div>
                 <p className="meeting-queue-explainer">
-                  Meeting queue includes undiscussed signals nominated with a Discuss vote or team thought.
+                  To discuss includes undiscussed signals with a recommendation,
+                  team thought, manual nomination, or linked Thread.
                 </p>
                 <div className="discussion-toolbar">{renderNewsScopeFilter()}</div>
                 <div className="news-list discussion-list">
@@ -2709,7 +2846,7 @@ function App() {
                   )}
                   {discussionCandidates.length === 0 && (
                     <div className="month-empty">
-                      Vote on Live Signals or wait for AI Daily Review to promote candidates.
+                      No news matches these discussion and Thread filters.
                     </div>
                   )}
                 </div>
@@ -3401,9 +3538,19 @@ function App() {
                 <div className="meeting-signal-meta">
                   <CategoryLabel category={meetingItem.category} />
                   <span>{meetingItem.capturedBy}</span>
-                  <span>↑ {meetingItem.voteCount} Discuss</span>
+                  {meetingItem.voteCount > 0 ? (
+                    <span>↑ {meetingItem.voteCount} recommend{meetingItem.voteCount === 1 ? '' : 's'}</span>
+                  ) : null}
                   {meetingItem.ideaCount > 0 ? (
                     <span>{meetingItem.ideaCount} team thought{meetingItem.ideaCount === 1 ? '' : 's'}</span>
+                  ) : null}
+                  {meetingItem.topicLinks.length > 0 ? (
+                    <span>In thread · {meetingItem.topicLinks[0].topicTitle}</span>
+                  ) : null}
+                  {meetingItem.meetingNominatedAt ? (
+                    <span>
+                      Added by {meetingItem.meetingNominatedBy || 'editor'}
+                    </span>
                   ) : null}
                 </div>
                 <h3>{meetingItem.title}</h3>
@@ -3429,7 +3576,7 @@ function App() {
               <div className="meeting-complete">
                 <span aria-hidden="true">✓</span>
                 <h3>Discussion queue complete</h3>
-                <p>Every visible signal has been discussed or moved into an Action Thread.</p>
+                <p>Every visible signal has a recorded discussion outcome.</p>
               </div>
             )}
             <footer className="meeting-actions">
@@ -3442,7 +3589,7 @@ function App() {
                   Back
                 </button>
               ) : (
-                <span className="meeting-queue-note">Nominated by the team</span>
+                <span className="meeting-queue-note">Team discussion queue</span>
               )}
               <div>
                 {meetingItem ? (
@@ -3456,7 +3603,7 @@ function App() {
                         )
                       }
                     >
-                      Skip
+                      Defer
                     </button>
                     <button
                       className="secondary-button"
@@ -3467,14 +3614,21 @@ function App() {
                         openCreateThread(meetingItem.id)
                       }}
                     >
-                      Create thread
+                      Create thread &amp; complete
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void setDiscussionOutcome(meetingItem, 'dismissed')}
+                    >
+                      Dismiss
                     </button>
                     <button
                       className="primary-button"
                       type="button"
-                      onClick={() => void toggleDiscussionComplete(meetingItem)}
+                      onClick={() => void setDiscussionOutcome(meetingItem, 'discussed')}
                     >
-                      Discussed · next
+                      Discussed, no thread
                     </button>
                   </>
                 ) : (

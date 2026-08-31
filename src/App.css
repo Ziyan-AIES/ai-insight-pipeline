@@ -4508,6 +4508,53 @@ label input:disabled {
   color: #493867;
 }
 
+.news-scope-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.news-scope-controls .signal-scope-filter {
+  margin: 0;
+}
+
+.thread-scope-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #ded9d1;
+  border-radius: 9px;
+  background: #f5f2ed;
+}
+
+.thread-scope-filter button {
+  min-height: 27px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #7a746f;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.thread-scope-filter button:hover {
+  color: #39343e;
+}
+
+.thread-scope-filter button.active {
+  background: #fffdfa;
+  color: #453d50;
+  box-shadow: 0 1px 3px rgb(40 34 28 / 8%);
+}
+
 .category-token,
 .thread-card-category {
   display: inline-flex;
@@ -4588,6 +4635,68 @@ label input:disabled {
 .pipeline-state {
   background: #ebe7f4;
   color: #655184;
+}
+
+.pipeline-state.state-discussed {
+  background: #e5f1eb;
+  color: #3f715a;
+}
+
+.pipeline-state.state-dismissed {
+  background: #eeece7;
+  color: #77716a;
+}
+
+.thread-relation {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 220px;
+  min-height: 20px;
+  padding: 1px 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8edf2;
+  color: #526170;
+  font-size: 9px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meeting-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin-top: 10px;
+  color: #7d7684;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.meeting-reasons span::before {
+  content: '\2022';
+  margin-right: 5px;
+  color: #9a8ab4;
+}
+
+.signal-actions,
+.candidate-workflow-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.candidate-workflow-actions {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.candidate-card .card-footer {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .signals-page .live-card h2,
@@ -5162,6 +5271,27 @@ label input:disabled {
 
   .signal-scope-filter {
     margin-bottom: 12px;
+  }
+
+  .news-scope-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .news-scope-controls .signal-scope-filter {
+    width: 100%;
+    margin: 0;
+  }
+
+  .thread-scope-filter {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .candidate-workflow-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
   }
 
   .form-grid.two-col {
