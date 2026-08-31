@@ -8,9 +8,11 @@ It uses the **same magic-link login and `team_members` list** as the dashboard. 
 
 After updating these files you **must reload the unpacked extension** in `chrome://extensions` (Developer mode → Reload). Existing tabs also need a refresh before the new capture UI appears.
 
-Version **0.4.1** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens a small composer where a team member can add an optional thought before saving; success, duplicate, access, and retry outcomes are explicit.
+Version **0.4.2** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens a small composer where a team member can add an optional thought before saving; success, duplicate, access, and retry outcomes are explicit.
 
 Dashboard and extension keep credentials in their own browser security boundaries, but synchronize the same verified Supabase session on the trusted Dashboard origin. Opening either surface while the other is signed in should connect it automatically. Signing out from the Dashboard also signs out the extension.
+
+Opening Dashboard from the extension creates a one-time server-verified handoff before opening the tab. Only an opaque state travels in the URL fragment; access and refresh tokens never appear in the URL.
 
 The bundled `qira-mark.svg` is sourced from Lenovo's official Qira product page and is kept local so the extension UI works without loading a remote image.
 

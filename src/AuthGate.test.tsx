@@ -139,6 +139,54 @@ describe('membership gate', () => {
     )
   })
 
+  it('claims the one-time session created by Open Dashboard', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/#dashboard_auth=1&state=direct-dashboard-state-1234567890',
+    )
+    mocks.getSession.mockResolvedValue({ data: { session: null } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          authorized: true,
+          access_token: 'direct-access-token',
+          refresh_token: 'direct-refresh-token',
+        }),
+      }),
+    )
+    const requestListener = vi.fn()
+    window.addEventListener(
+      'ai-signals:request-dashboard-session',
+      requestListener,
+    )
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    await waitFor(() => expect(mocks.setSession).toHaveBeenCalledWith({
+      access_token: 'direct-access-token',
+      refresh_token: 'direct-refresh-token',
+    }))
+    const body = JSON.parse(
+      String(vi.mocked(fetch).mock.calls[0]?.[1]?.body),
+    ) as { action?: string; state?: string }
+    expect(body).toEqual({
+      action: 'claim',
+      state: 'direct-dashboard-state-1234567890',
+    })
+    expect(requestListener).not.toHaveBeenCalled()
+    expect(window.location.hash).toBe('')
+    window.removeEventListener(
+      'ai-signals:request-dashboard-session',
+      requestListener,
+    )
+  })
+
   it('shows a clear denial instead of demo data to non-members', async () => {
     mocks.maybeSingle.mockResolvedValue({ data: null, error: null })
     render(

@@ -64,7 +64,10 @@ document.getElementById('signIn').addEventListener('click', async () => {
 })
 
 document.getElementById('openDashboard').addEventListener('click', async () => {
-  await chrome.tabs.create({ url: await workspaceUrl() })
+  chrome.runtime.sendMessage({
+    type: 'bsw-open-dashboard',
+    apiBase: await workspaceUrl(),
+  })
 })
 
 document.getElementById('signOut').addEventListener('click', () => {

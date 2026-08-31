@@ -363,7 +363,10 @@
       showToast('Finish sign-in in the dashboard', 'ok', '', 3000)
     }
     if (act === 'dashboard') {
-      window.open(state.apiBase, '_blank', 'noopener')
+      chrome.runtime.sendMessage({
+        type: 'bsw-open-dashboard',
+        apiBase: state.apiBase,
+      })
     }
     if (act === 'save') {
       state.composerOpen = true

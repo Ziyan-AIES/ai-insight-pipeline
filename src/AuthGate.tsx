@@ -51,6 +51,28 @@ function extensionHandshake() {
   return { enabled, state }
 }
 
+function dashboardSessionHandshake() {
+  if (typeof window === 'undefined') return { enabled: false, state: '' }
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  return {
+    enabled: params.get('dashboard_auth') === '1',
+    state: params.get('state') || '',
+  }
+}
+
+function clearDashboardSessionHandshake() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  if (params.get('dashboard_auth') !== '1') return
+  params.delete('dashboard_auth')
+  params.delete('state')
+  const hash = params.toString()
+  window.history.replaceState(
+    {},
+    '',
+    `${window.location.pathname}${window.location.search}${hash ? `#${hash}` : ''}`,
+  )
+}
+
 function persistHandshakeState(state: string) {
   try {
     window.localStorage.setItem(
@@ -108,6 +130,7 @@ function AuthCard({
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const handshake = useMemo(extensionHandshake, [])
+  const dashboardHandshake = useMemo(dashboardSessionHandshake, [])
   const [session, setSession] = useState<Session | null>(null)
   const [identity, setIdentity] = useState<TeamIdentity | null>(null)
   const [loading, setLoading] = useState(cloudConfigured)
@@ -147,17 +170,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     extensionRestoreAttempted.current = true
     let cancelled = false
-    const state = randomHandshakeState()
+    const state = dashboardHandshake.state || randomHandshakeState()
     setCheckingExtension(true)
 
     void (async () => {
       for (let attempt = 0; attempt < EXTENSION_RESTORE_ATTEMPTS; attempt += 1) {
         if (cancelled) return
-        window.dispatchEvent(
-          new CustomEvent(EXTENSION_SESSION_REQUEST_EVENT, {
-            detail: { state },
-          }),
-        )
+        if (!dashboardHandshake.enabled) {
+          window.dispatchEvent(
+            new CustomEvent(EXTENSION_SESSION_REQUEST_EVENT, {
+              detail: { state },
+            }),
+          )
+        }
         try {
           const result = await fetch('/api/extension-auth', {
             method: 'POST',
@@ -179,7 +204,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 access_token: body.access_token,
                 refresh_token: body.refresh_token,
               })
-              if (!error || cancelled) return
+              if (!error || cancelled) {
+                clearDashboardSessionHandshake()
+                return
+              }
             }
           }
         } catch {
@@ -196,7 +224,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [loading, session])
+  }, [dashboardHandshake.enabled, dashboardHandshake.state, loading, session])
 
   useEffect(() => {
     if (!supabase || !sessionUserId) return

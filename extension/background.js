@@ -56,6 +56,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void completeDashboardSession(message).then(sendResponse)
     return true
   }
+  if (message.type === 'bsw-open-dashboard') {
+    void openDashboard(message.apiBase).then(sendResponse)
+    return true
+  }
   if (message.type === 'bsw-capture') {
     void captureFromPage(message.payload).then(sendResponse)
     return true
@@ -256,6 +260,24 @@ async function completeDashboardSession(message) {
   }
   const body = await result.json().catch(() => ({}))
   return { ok: result.ok, status: result.status, ...body }
+}
+
+async function openDashboard(apiBase) {
+  const origin = normalizeWorkspaceUrl(apiBase || (await storedApiBase()))
+  const stored = await getStoredSession()
+  if (!stored.authorized || !stored.accessToken || !stored.refreshToken) {
+    await chrome.tabs.create({ url: origin, active: true })
+    return { ok: false, signedIn: false, url: origin }
+  }
+  const state = randomState()
+  const completed = await completeDashboardSession({ state, apiBase: origin })
+  if (!completed.ok) {
+    await chrome.tabs.create({ url: origin, active: true })
+    return { ...completed, url: origin }
+  }
+  const url = `${origin}/#dashboard_auth=1&state=${encodeURIComponent(state)}`
+  await chrome.tabs.create({ url, active: true })
+  return { ok: true, signedIn: true, url }
 }
 
 function postDashboardSession(origin, state, stored) {
