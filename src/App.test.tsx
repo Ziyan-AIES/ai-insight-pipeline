@@ -114,7 +114,7 @@ describe('dashboard pilot shell', () => {
       getData: () => '',
     }
     fireEvent.dragStart(trend as HTMLElement, { dataTransfer })
-    fireEvent.drop(screen.getByText('Drop evidence to create an Action Thread'), {
+    fireEvent.drop(screen.getByText('Drop here to create an Action Thread'), {
       dataTransfer,
     })
     const editor = screen.getByRole('dialog', { name: 'New Action Thread' })
@@ -141,7 +141,7 @@ describe('dashboard pilot shell', () => {
       getData: () => '',
     }
     fireEvent.dragStart(thread as HTMLElement, { dataTransfer })
-    fireEvent.drop(screen.getByText('Drop evidence to create a Trend'), {
+    fireEvent.drop(screen.getByText('Drop here to create a Trend'), {
       dataTransfer,
     })
     const editor = screen.getByRole('dialog', { name: 'Edit Trend' })
@@ -159,6 +159,66 @@ describe('dashboard pilot shell', () => {
     expect(
       screen.getByRole('button', { name: 'Harness engineering' }),
     ).toBeInTheDocument()
+  })
+
+  it('adds a no-evidence Trend to the Trend meeting explicitly', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: '+ New Trend' }))
+    const createEditor = screen.getByRole('dialog', { name: 'Create Trend' })
+    fireEvent.change(within(createEditor).getByPlaceholderText(/Name the emerging change/), {
+      target: { value: 'New interaction pattern' },
+    })
+    fireEvent.click(within(createEditor).getByRole('button', { name: 'Create Trend' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'New interaction pattern' }))
+    const editEditor = screen.getByRole('dialog', { name: 'Edit Trend' })
+    fireEvent.click(within(editEditor).getByRole('button', { name: 'Add to meeting' }))
+    expect(await within(editEditor).findByText('Included in Trend meeting')).toBeInTheDocument()
+    expect(within(editEditor).getByRole('button', { name: 'Remove from meeting' })).toBeInTheDocument()
+  })
+
+  it('drags a linked Thread signal into an existing Trend', async () => {
+    render(<App />)
+    const thread = screen
+      .getByRole('heading', { name: 'Harness engineering' })
+      .closest('article')
+    const linkedSignal = within(thread as HTMLElement)
+      .getByRole('link', { name: /DataFlow-Harness turns agent reliability/ })
+      .closest('.linked-signal-row')
+    const trend = screen
+      .getByRole('button', { name: 'Wearables are becoming ambient control layers' })
+      .closest('article')
+    const dataTransfer = {
+      effectAllowed: 'copyMove',
+      dropEffect: 'copy',
+      setData: () => undefined,
+      getData: () => '',
+    }
+    fireEvent.dragStart(linkedSignal as HTMLElement, { dataTransfer })
+    fireEvent.drop(trend as HTMLElement, { dataTransfer })
+    expect(
+      await within(trend as HTMLElement).findByRole('link', {
+        name: /DataFlow-Harness turns agent reliability/,
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps closed Action Threads after active work in the recent view', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('heading', { name: 'Generative UI as software' }))
+    const editor = screen.getByRole('dialog', { name: 'Edit Action Thread' })
+    fireEvent.change(within(editor).getByLabelText('Status'), {
+      target: { value: 'closed' },
+    })
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save changes' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Edit Action Thread' })).toBeNull(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open Action Threads dashboard' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Most recent' }))
+    const titles = Array.from(
+      document.querySelectorAll('.topic-list.kind-pipeline .topic-card h3'),
+    ).map((element) => element.textContent)
+    expect(titles.at(-1)).toBe('Generative UI as software')
   })
 
   it('restores the last workspace separately for this viewer', async () => {
@@ -218,8 +278,8 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByRole('heading', { name: 'Harness engineering' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
     expect(screen.getAllByRole('button', { name: 'Show evidence' }).length).toBeGreaterThan(0)
-    expect(screen.getByText('Drop evidence to create a Trend')).toBeInTheDocument()
-    expect(screen.getByText('Drop evidence to create an Action Thread')).toBeInTheDocument()
+    expect(screen.getByText('Drop here to create a Trend')).toBeInTheDocument()
+    expect(screen.getByText('Drop here to create an Action Thread')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
   })
 

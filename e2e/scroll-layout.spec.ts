@@ -119,6 +119,14 @@ test('keeps the top navigation and three-column workflow usable in narrow window
     (mediumNavigation?.y ?? 0) + (mediumNavigation?.height ?? 0) - 1,
   )
   expect(briefingHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(240)
+  const workspaceNavBox = await page.locator('.workspace-nav').boundingBox()
+  const searchBox = await page.locator('.top-search-shell').boundingBox()
+  const addNewsBox = await page.locator('.top-add-news').boundingBox()
+  const profileBox = await page.locator('.profile-shell').boundingBox()
+  expect(workspaceNavBox?.width ?? 0).toBeGreaterThan(searchBox?.width ?? 0)
+  expect(searchBox?.x ?? 0).toBeGreaterThan(workspaceNavBox?.x ?? 0)
+  expect(addNewsBox?.x ?? 0).toBeGreaterThan(searchBox?.x ?? 0)
+  expect(profileBox?.x ?? 0).toBeGreaterThan(addNewsBox?.x ?? 0)
 
   await page.getByRole('button', { name: 'Expand Evidence' }).click()
   const columns = page.locator('.synthesis-workbench > .workflow-column')
@@ -132,12 +140,31 @@ test('keeps the top navigation and three-column workflow usable in narrow window
   expect(Math.max(...columnRects.map((rect) => rect.width)) - Math.min(...columnRects.map((rect) => rect.width))).toBeLessThan(3)
   expect(columnRects[1].x).toBeGreaterThan(columnRects[0].x)
   expect(columnRects[2].x).toBeGreaterThan(columnRects[1].x)
+  const destinationButtons = page
+    .getByRole('region', { name: 'Action Threads' })
+    .locator('.topic-scope-toggle button')
+  const destinationRects = await destinationButtons.evaluateAll((nodes) =>
+    nodes.map((node) => node.getBoundingClientRect().y),
+  )
+  expect(Math.max(...destinationRects) - Math.min(...destinationRects)).toBeLessThan(3)
 
   await page
     .getByRole('button', { name: 'Open Action Threads dashboard' })
     .click()
   await expect(page.getByRole('heading', { name: 'Action Threads' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'By month' })).toBeVisible()
+
+  await page.setViewportSize({ width: 1440, height: 760 })
+  const timelineColumns = page.locator(
+    '.timeline-scheduled-column, .timeline-unscheduled-column',
+  )
+  await expect(timelineColumns).toHaveCount(2)
+  await expect(timelineColumns.nth(0)).toHaveCSS('overflow-y', 'auto')
+  await expect(timelineColumns.nth(1)).toHaveCSS('overflow-y', 'auto')
+  const timelineRects = await timelineColumns.evaluateAll((nodes) =>
+    nodes.map((node) => node.getBoundingClientRect().x),
+  )
+  expect(timelineRects[1]).toBeGreaterThan(timelineRects[0])
 
   await page.setViewportSize({ width: 540, height: 760 })
   const mobileNavigation = await page.locator('.top-navigation').boundingBox()

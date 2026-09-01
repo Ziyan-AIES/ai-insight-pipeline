@@ -142,6 +142,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(cloudConfigured)
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState(extensionAuthError)
+  const [linkRequestState, setLinkRequestState] = useState<
+    'idle' | 'sending' | 'sent'
+  >('idle')
   const [checkingExtension, setCheckingExtension] = useState(false)
   const extensionRestoreAttempted = useRef(false)
   const [extensionStatus, setExtensionStatus] = useState<
@@ -255,7 +258,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             userId: data.user_id,
             email: data.email,
             displayName:
-              data.display_name || data.email?.split('@')[0] || 'Team member',
+              data.display_name || data.email || 'Team member',
             role: data.role as TeamRole,
           })
           setMessage('')
@@ -350,23 +353,38 @@ export function AuthGate({ children }: { children: ReactNode }) {
   )
 
   async function requestLink() {
-    if (!supabase || !email.trim()) return
+    if (!supabase || !email.trim() || linkRequestState === 'sending') return
+    setLinkRequestState('sending')
     setMessage('Sending secure sign-in link…')
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo:
-          handshake.enabled && handshake.state
-            ? `${window.location.origin}/?extension_auth=1&state=${encodeURIComponent(handshake.state)}`
-            : window.location.origin,
-      },
-    })
-    setMessage(
-      error
-        ? error.message
-        : 'Check your email. The link returns you to this workspace.',
-    )
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo:
+            handshake.enabled && handshake.state
+              ? `${window.location.origin}/?extension_auth=1&state=${encodeURIComponent(handshake.state)}`
+              : window.location.origin,
+        },
+      })
+      if (error) throw error
+      setLinkRequestState('sent')
+      setMessage('Check your email. The link returns you to this workspace.')
+    } catch (error) {
+      setLinkRequestState('idle')
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'The sign-in link could not be sent. Try again.',
+      )
+    }
   }
+
+  const signInButtonLabel =
+    linkRequestState === 'sending'
+      ? 'Sending…'
+      : linkRequestState === 'sent'
+        ? 'Sign-in link sent'
+        : 'Send sign-in link'
 
   const signOutButton = (
     <button
@@ -433,14 +451,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <input
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value)
+              setLinkRequestState('idle')
+            }}
             placeholder="name@company.com"
           />
         </label>
-        <button className="primary-button" type="button" onClick={requestLink}>
-          Send sign-in link
+        <button
+          className={`primary-button auth-submit is-${linkRequestState}`}
+          type="button"
+          onClick={requestLink}
+          disabled={linkRequestState === 'sending' || linkRequestState === 'sent'}
+        >
+          {signInButtonLabel}
         </button>
-        {message && <small>{message}</small>}
+        {message && <small aria-live="polite">{message}</small>}
       </AuthCard>
     )
   }
@@ -468,16 +494,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <input
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setLinkRequestState('idle')
+              }}
               placeholder="name@company.com"
             />
           </label>
-          <button className="primary-button" type="button" onClick={requestLink}>
-            Send sign-in link
+          <button
+            className={`primary-button auth-submit is-${linkRequestState}`}
+            type="button"
+            onClick={requestLink}
+            disabled={linkRequestState === 'sending' || linkRequestState === 'sent'}
+          >
+            {signInButtonLabel}
           </button>
         </>
       )}
-      {!session && message && <small>{message}</small>}
+      {!session && message && <small aria-live="polite">{message}</small>}
       {!session && checkingExtension && (
         <small>Checking your installed AI Signals extension…</small>
       )}

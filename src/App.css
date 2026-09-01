@@ -4649,6 +4649,15 @@ label input:disabled {
 }
 
 @media (max-width: 1050px) {
+  .synthesis-page .topic-pane .workflow-column-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .synthesis-page .topic-pane .workflow-column-heading .heading-actions {
+    width: 100%;
+  }
+
   .top-navigation {
     grid-template-columns: auto minmax(140px, 1fr) auto auto auto;
   }
@@ -4999,6 +5008,139 @@ label input:disabled {
 
   .thread-toolbar {
     gap: 10px;
+  }
+}
+
+/* Final product hierarchy: core workspaces first, utilities compact and right-aligned. */
+.top-navigation {
+  grid-template-columns:
+    minmax(210px, auto)
+    minmax(360px, 1fr)
+    minmax(150px, 220px)
+    max-content
+    max-content
+    max-content;
+  gap: 9px;
+}
+
+.top-navigation .workspace-nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(170px, 1fr));
+  width: min(100%, 520px);
+}
+
+.top-navigation .workspace-nav button {
+  width: 100%;
+  min-width: 0;
+}
+
+.top-search-shell,
+.top-add-news,
+.top-navigation .top-sync-status,
+.profile-shell {
+  justify-self: end;
+}
+
+.top-add-news {
+  width: auto;
+  min-width: 92px;
+  padding-inline: 11px;
+}
+
+/* Destination is a compact single-row classification, not a second navigation layer. */
+.topic-pane .topic-scope-toggle.column-filter,
+.page-threads .topic-scope-toggle.column-filter {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
+  overflow: visible;
+}
+
+.topic-pane .topic-scope-toggle.column-filter button,
+.page-threads .topic-scope-toggle.column-filter button {
+  min-width: 0;
+  padding-inline: 4px;
+  font-size: 8px;
+}
+
+.linked-signal-row[draggable='true'] {
+  cursor: grab;
+}
+
+.linked-signal-row[draggable='true']:active {
+  cursor: grabbing;
+}
+
+/* The scheduled plan and backlog keep independent reading positions. */
+.page-threads .thread-timeline-board {
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.page-threads .timeline-scheduled-column,
+.page-threads .timeline-unscheduled-column {
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #b8b2a8 transparent;
+}
+
+.auth-card .auth-submit {
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.auth-card .auth-submit.is-sending {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.auth-card .auth-submit.is-sent {
+  border-color: #b9dfcf;
+  background: #dff2e9;
+  color: #215c43;
+}
+
+@media (max-width: 1050px) {
+  .top-navigation {
+    grid-template-columns:
+      minmax(280px, 1fr)
+      minmax(130px, 190px)
+      max-content
+      max-content
+      max-content;
+  }
+
+  .top-navigation .workspace-nav {
+    width: min(100%, 420px);
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+
+  .page-threads .thread-timeline-board {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .page-threads .timeline-scheduled-column,
+  .page-threads .timeline-unscheduled-column {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 720px) {
+  .top-navigation {
+    grid-template-columns: minmax(190px, 1fr) minmax(100px, 140px) max-content max-content;
+  }
+
+  .top-navigation .workspace-nav {
+    grid-template-columns: repeat(2, minmax(90px, 1fr));
   }
 }
 

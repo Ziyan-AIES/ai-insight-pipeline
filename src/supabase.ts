@@ -101,7 +101,14 @@ function sessionUserLabel(user: {
     typeof user?.user_metadata?.full_name === 'string'
       ? user.user_metadata.full_name
       : ''
-  return metadataName || user?.email?.split('@')[0] || 'Team member'
+  return metadataName || user?.email || 'Team member'
+}
+
+function teamMemberLabel(
+  displayName: string | null | undefined,
+  email: string | null | undefined,
+) {
+  return displayName?.trim() || email?.trim() || 'Team member'
 }
 
 function captureContributorName(
@@ -117,11 +124,11 @@ function captureContributorName(
       ? (metadata.capture as Record<string, unknown>)
       : null
   const candidates = [
+    capturedById ? memberNames.get(capturedById) : '',
     metadata?.contributor_name,
     metadata?.legacy_user,
     capture?.contributor_name,
     capture?.legacy_user,
-    capturedById ? memberNames.get(capturedById) : '',
   ]
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim()) {
@@ -264,7 +271,7 @@ export async function loadWorkspace(includeDeleted = false) {
   const memberNames = new Map(
     (memberResult.data || []).map((member) => [
       member.user_id,
-      member.display_name || member.email?.split('@')[0] || 'Team member',
+      teamMemberLabel(member.display_name, member.email),
     ]),
   )
   const news: NewsItem[] = ((effectiveNewsData || []) as NewsRow[]).map(
@@ -1311,7 +1318,7 @@ export async function loadActivityEvents(
   const names = new Map(
     (members.data || []).map((member) => [
       member.user_id,
-      member.display_name || member.email?.split('@')[0] || 'Team member',
+      teamMemberLabel(member.display_name, member.email),
     ]),
   )
   return (data || []).map((item) => ({
@@ -1351,7 +1358,7 @@ export async function loadTeamMembers() {
   return (data || []).map((member) => ({
     userId: member.user_id,
     email: member.email,
-    displayName: member.display_name || member.email?.split('@')[0] || 'Team member',
+    displayName: teamMemberLabel(member.display_name, member.email),
     role: member.role as TeamMemberSummary['role'],
   }))
 }

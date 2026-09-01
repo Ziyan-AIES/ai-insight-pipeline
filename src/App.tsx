@@ -202,14 +202,14 @@ function isTrendToDiscuss(trend: Trend) {
   if (
     trend.status !== 'active' ||
     trend.discussionStatus === 'dismissed' ||
-    trend.evidence.length === 0 ||
     trend.actionThreadIds.length > 0
   ) {
     return false
   }
+  if (trend.meetingNominatedAt) return true
+  if (trend.evidence.length === 0) return false
   return Boolean(
     trend.discussionStatus === 'not_discussed' ||
-      trend.meetingNominatedAt ||
       trendNewEvidenceCount(trend) > 0,
   )
 }
@@ -965,6 +965,11 @@ function App() {
         })
         .slice()
         .sort((a, b) => {
+          const aClosed =
+            (a.threadStatus || threadStatusFromLegacy(a.status)) === 'closed'
+          const bClosed =
+            (b.threadStatus || threadStatusFromLegacy(b.status)) === 'closed'
+          if (aClosed !== bClosed) return aClosed ? 1 : -1
           const created = (b.createdAt || '').localeCompare(a.createdAt || '')
           if (created) return created
           return a.title.localeCompare(b.title)
@@ -2857,7 +2862,27 @@ function App() {
     options: { stopCardClick?: boolean } = {},
   ) {
     return (
-      <div className="linked-signal-row" key={item.id}>
+      <div
+        className="linked-signal-row"
+        key={item.id}
+        draggable={canEdit}
+        onDragStart={(event) => {
+          event.stopPropagation()
+          setDraggedNewsId(item.id)
+          setDraggedNewsSourceTopicId(topicId)
+          event.dataTransfer.effectAllowed = 'copyMove'
+          event.dataTransfer.setData('application/x-news-id', item.id)
+          event.dataTransfer.setData(
+            'application/x-news-source-topic-id',
+            topicId,
+          )
+        }}
+        onDragEnd={(event) => {
+          event.stopPropagation()
+          setDraggedNewsId('')
+          setDraggedNewsSourceTopicId('')
+        }}
+      >
         <div>
           {item.url && item.sourceType !== 'manual_note' ? (
             <a
@@ -4146,7 +4171,7 @@ function App() {
                     setDraggedNewsId('')
                   }}
                 >
-                  Drop evidence to create a Trend
+                  Drop here to create a Trend
                 </div>
                 <div
                   className="trend-grid"
@@ -4365,7 +4390,7 @@ function App() {
                     setDraggedNewsId('')
                   }}
                 >
-                  Drop evidence to create an Action Thread
+                  Drop here to create an Action Thread
                 </div>
               )}
               {workspacePage === 'threads' && threadGroupMode === 'timeline' ? (

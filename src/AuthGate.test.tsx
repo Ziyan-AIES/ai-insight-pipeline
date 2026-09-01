@@ -99,6 +99,30 @@ describe('membership gate', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows sending and sent feedback after requesting a sign-in link', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null } })
+    let resolveRequest!: (value: { error: null }) => void
+    mocks.signInWithOtp.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve
+      }),
+    )
+    render(
+      <AuthGate>
+        <div>Protected workspace</div>
+      </AuthGate>,
+    )
+    fireEvent.change(await screen.findByPlaceholderText('name@company.com'), {
+      target: { value: 'person@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send sign-in link' }))
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled()
+    expect(screen.getByText('Sending secure sign-in link…')).toBeInTheDocument()
+    await act(async () => resolveRequest({ error: null }))
+    expect(screen.getByRole('button', { name: 'Sign-in link sent' })).toBeDisabled()
+    expect(screen.getByText(/Check your email/)).toBeInTheDocument()
+  })
+
   it('shows the extension handoff error instead of silently dropping it', async () => {
     window.history.replaceState(
       {},
@@ -333,12 +357,15 @@ describe('extension handshake', () => {
       target: { value: 'person@example.com' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Send sign-in link' }))
-    expect(mocks.signInWithOtp).toHaveBeenCalledWith({
-      email: 'person@example.com',
-      options: {
-        emailRedirectTo: `${window.location.origin}/?extension_auth=1&state=handshake-state-123456`,
-      },
-    })
+    await waitFor(() =>
+      expect(mocks.signInWithOtp).toHaveBeenCalledWith({
+        email: 'person@example.com',
+        options: {
+          emailRedirectTo: `${window.location.origin}/?extension_auth=1&state=handshake-state-123456`,
+        },
+      }),
+    )
+    expect(await screen.findByRole('button', { name: 'Sign-in link sent' })).toBeDisabled()
   })
 
   it('resumes handshake from storage after a magic-link callback without query params', async () => {
