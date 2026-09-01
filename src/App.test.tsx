@@ -184,6 +184,11 @@ describe('dashboard pilot shell', () => {
     const linkedSignal = within(thread as HTMLElement)
       .getByRole('link', { name: /DataFlow-Harness turns agent reliability/ })
       .closest('.linked-signal-row')
+    expect(
+      within(linkedSignal as HTMLElement).getByRole('link', {
+        name: /DataFlow-Harness turns agent reliability/,
+      }),
+    ).toHaveAttribute('draggable', 'false')
     const trend = screen
       .getByRole('button', { name: 'Wearables are becoming ambient control layers' })
       .closest('article')
@@ -202,7 +207,7 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('keeps closed Action Threads after active work in the recent view', async () => {
+  it('folds closed Action Threads below active work in the recent view', async () => {
     render(<App />)
     fireEvent.click(screen.getByRole('heading', { name: 'Generative UI as software' }))
     const editor = screen.getByRole('dialog', { name: 'Edit Action Thread' })
@@ -215,10 +220,69 @@ describe('dashboard pilot shell', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Open Action Threads dashboard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Most recent' }))
-    const titles = Array.from(
-      document.querySelectorAll('.topic-list.kind-pipeline .topic-card h3'),
+    const activeTitles = Array.from(
+      document.querySelectorAll('.topic-list.kind-pipeline > .topic-card h3'),
     ).map((element) => element.textContent)
-    expect(titles.at(-1)).toBe('Generative UI as software')
+    expect(activeTitles).not.toContain('Generative UI as software')
+    const closed = screen.getByText('Closed · 1').closest('details')
+    expect(closed).not.toHaveAttribute('open')
+    fireEvent.click(within(closed as HTMLElement).getByText('Closed · 1'))
+    expect(closed).toHaveAttribute('open')
+    expect(
+      within(closed as HTMLElement).getByRole('heading', {
+        name: 'Generative UI as software',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('collapses Action Threads so Trends owns the remaining workspace', () => {
+    render(<App />)
+    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Action Threads' }))
+    expect(screen.queryByRole('region', { name: 'Action Threads' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Action Threads' }))
+    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+  })
+
+  it('reorders active Trend cards by dragging one card onto another', async () => {
+    render(<App />)
+    for (const title of ['Trend Alpha', 'Trend Beta']) {
+      fireEvent.click(screen.getByRole('button', { name: '+ New Trend' }))
+      const editor = screen.getByRole('dialog', { name: 'Create Trend' })
+      fireEvent.change(within(editor).getByPlaceholderText(/Name the emerging change/), {
+        target: { value: title },
+      })
+      fireEvent.click(within(editor).getByRole('button', { name: 'Create Trend' }))
+      await screen.findByRole('button', { name: title })
+    }
+
+    const alpha = screen.getByRole('button', { name: 'Trend Alpha' }).closest('article')
+    const beta = screen.getByRole('button', { name: 'Trend Beta' }).closest('article')
+    const transfer = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      types: ['application/x-trend-id'],
+      setData: (type: string, value: string) => transfer.set(type, value),
+      getData: (type: string) => transfer.get(type) || '',
+    }
+    fireEvent.dragStart(alpha as HTMLElement, { dataTransfer })
+    fireEvent.dragOver(beta as HTMLElement, { dataTransfer })
+    fireEvent.drop(beta as HTMLElement, { dataTransfer })
+
+    await waitFor(() => {
+      const titles = Array.from(
+        document.querySelectorAll('.trend-grid > .trend-card .trend-title-button'),
+      ).map((element) => element.textContent)
+      expect(titles.indexOf('Trend Alpha')).toBeLessThan(titles.indexOf('Trend Beta'))
+    })
+    expect(
+      JSON.parse(
+        window.localStorage.getItem('signal-intelligence:trend-card-order:demo') ||
+          '[]',
+      ),
+    ).toHaveLength(3)
   })
 
   it('restores the last workspace separately for this viewer', async () => {

@@ -6831,3 +6831,105 @@ label input:disabled {
     overflow: auto;
   }
 }
+
+/* Current synthesis workspace authority. */
+@media (min-width: 1051px) {
+  .top-navigation {
+    position: relative;
+    grid-template-columns:
+      minmax(240px, 1fr)
+      minmax(150px, 220px)
+      max-content
+      max-content
+      max-content;
+  }
+
+  .top-navigation .workspace-nav {
+    position: absolute;
+    left: 50%;
+    width: min(28vw, 520px);
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 1050px) {
+  .top-navigation .workspace-nav {
+    position: static;
+    left: auto;
+    transform: none;
+  }
+}
+
+.synthesis-workbench.evidence-expanded.threads-collapsed {
+  grid-template-columns: minmax(250px, 1fr) minmax(500px, 2fr) 48px;
+}
+
+.synthesis-workbench.evidence-collapsed.threads-collapsed {
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+}
+
+.action-threads-collapsed-rail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: #eeeae3;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+}
+
+.action-threads-collapsed-rail span {
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.action-threads-collapsed-rail strong,
+.action-threads-collapsed-rail i {
+  font-size: 11px;
+  font-style: normal;
+}
+
+.trend-card.accepting-trend-order {
+  border-color: #8b7ac2;
+  box-shadow: inset 0 3px 0 #8b7ac2;
+}
+
+.closed-thread-collection {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.closed-thread-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.synthesis-page .topic-pane .closed-thread-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 620px) {
+  .synthesis-workbench.evidence-expanded.threads-collapsed,
+  .synthesis-workbench.evidence-collapsed.threads-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .action-threads-collapsed-rail {
+    min-height: 42px;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .action-threads-collapsed-rail span {
+    writing-mode: horizontal-tb;
+  }
+}

@@ -106,8 +106,18 @@ test('shows expanded Live Signal previews and a scrollable Trend editor', async 
 test('keeps the top navigation and three-column workflow usable in narrow windows', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 900, height: 760 })
+  await page.setViewportSize({ width: 1440, height: 760 })
   await page.goto('/')
+  const desktopHeader = await page.locator('.top-navigation').boundingBox()
+  const desktopWorkspaceNav = await page.locator('.workspace-nav').boundingBox()
+  expect(
+    Math.abs(
+      ((desktopWorkspaceNav?.x ?? 0) + (desktopWorkspaceNav?.width ?? 0) / 2) -
+        ((desktopHeader?.x ?? 0) + (desktopHeader?.width ?? 0) / 2),
+    ),
+  ).toBeLessThan(3)
+
+  await page.setViewportSize({ width: 900, height: 760 })
 
   const mediumNavigation = await page.locator('.top-navigation').boundingBox()
   const mediumMain = await page.locator('.workspace-main').boundingBox()
@@ -127,6 +137,11 @@ test('keeps the top navigation and three-column workflow usable in narrow window
   expect(searchBox?.x ?? 0).toBeGreaterThan(workspaceNavBox?.x ?? 0)
   expect(addNewsBox?.x ?? 0).toBeGreaterThan(searchBox?.x ?? 0)
   expect(profileBox?.x ?? 0).toBeGreaterThan(addNewsBox?.x ?? 0)
+
+  await page.getByRole('button', { name: 'Collapse Action Threads' }).click()
+  await expect(page.getByRole('button', { name: 'Expand Action Threads' })).toBeVisible()
+  await expect(page.locator('.synthesis-workbench')).toHaveClass(/threads-collapsed/)
+  await page.getByRole('button', { name: 'Expand Action Threads' }).click()
 
   await page.getByRole('button', { name: 'Expand Evidence' }).click()
   const columns = page.locator('.synthesis-workbench > .workflow-column')

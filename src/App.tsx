@@ -90,6 +90,35 @@ const addLinkDraftKey = 'signal-intelligence:add-link-draft'
 const liveSignalsViewStoragePrefix =
   'signal-intelligence:last-viewed:live-signals'
 const workspacePageStoragePrefix = 'signal-intelligence:workspace-page'
+const trendOrderStoragePrefix = 'signal-intelligence:trend-card-order'
+
+function trendOrderStorageKey(viewerId = 'local') {
+  return `${trendOrderStoragePrefix}:${viewerId}`
+}
+
+function loadTrendOrder(viewerId = 'local') {
+  try {
+    const value = window.localStorage.getItem(trendOrderStorageKey(viewerId))
+    if (!value) return []
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function saveTrendOrder(order: string[], viewerId = 'local') {
+  try {
+    window.localStorage.setItem(
+      trendOrderStorageKey(viewerId),
+      JSON.stringify(order),
+    )
+  } catch {
+    // Display order remains available for this session when storage is blocked.
+  }
+}
 
 function explicitWorkspaceFromLocation(): WorkspacePage | null {
   try {
@@ -387,6 +416,11 @@ function App() {
   const [archivedEvidenceOpen, setArchivedEvidenceOpen] = useState(false)
   const [archivedTrendsOpen, setArchivedTrendsOpen] = useState(false)
   const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
+  const [actionThreadsOpen, setActionThreadsOpen] = useState(true)
+  const [closedThreadsOpen, setClosedThreadsOpen] = useState(false)
+  const [trendOrder, setTrendOrder] = useState<string[]>(() =>
+    loadTrendOrder(identity?.userId || 'demo'),
+  )
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -812,6 +846,7 @@ function App() {
   }, [query, searchCategory, trends])
 
   const briefingTrends = useMemo(() => {
+    const order = new Map(trendOrder.map((id, index) => [id, index]))
     return trends
       .filter(
         (trend) =>
@@ -823,8 +858,15 @@ function App() {
         (trend) => trendCategory === 'all' || trend.category === trendCategory,
       )
       .slice()
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  }, [trendCategory, trends])
+      .sort((a, b) => {
+        const aOrder = order.get(a.id)
+        const bOrder = order.get(b.id)
+        if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder
+        if (aOrder !== undefined) return 1
+        if (bOrder !== undefined) return -1
+        return b.createdAt.localeCompare(a.createdAt)
+      })
+  }, [trendCategory, trendOrder, trends])
 
   const archivedTrends = useMemo(
     () =>
@@ -977,11 +1019,31 @@ function App() {
     [threadFrom, threadStatusFilter, threadTo, topicKindFilter, topics],
   )
 
+  const activeVisibleTopics = useMemo(
+    () =>
+      visibleTopics.filter(
+        (topic) =>
+          (topic.threadStatus || threadStatusFromLegacy(topic.status)) !==
+          'closed',
+      ),
+    [visibleTopics],
+  )
+
+  const closedVisibleTopics = useMemo(
+    () =>
+      visibleTopics.filter(
+        (topic) =>
+          (topic.threadStatus || threadStatusFromLegacy(topic.status)) ===
+          'closed',
+      ),
+    [visibleTopics],
+  )
+
   const timelineTopicGroups = useMemo(() => {
     const byMonth = new Map<string, Topic[]>()
     const unscheduled: Topic[] = []
     const currentMonthKey = new Date().toISOString().slice(0, 7)
-    visibleTopics.forEach((topic) => {
+    activeVisibleTopics.forEach((topic) => {
       if (!topic.monthKey) {
         unscheduled.push(topic)
         return
@@ -1005,7 +1067,7 @@ function App() {
         .map(([monthKey, monthTopics]) => ({ monthKey, topics: monthTopics })),
       unscheduled,
     }
-  }, [visibleTopics])
+  }, [activeVisibleTopics])
 
   const removedItems = useMemo(
     () => ({
@@ -2889,6 +2951,7 @@ function App() {
               href={item.url}
               target="_blank"
               rel="noreferrer"
+              draggable={false}
               onClick={(event) => event.stopPropagation()}
               title="Open original article"
             >
@@ -3204,6 +3267,36 @@ function App() {
     )
   }
 
+  function reorderTrendCards(sourceId: string, targetId: string) {
+    if (!sourceId || !targetId || sourceId === targetId) return
+    const order = new Map(trendOrder.map((id, index) => [id, index]))
+    const orderedIds = trends
+      .filter(
+        (trend) =>
+          !trend.deletedAt &&
+          trend.status !== 'archived' &&
+          trend.actionThreadIds.length === 0,
+      )
+      .slice()
+      .sort((a, b) => {
+        const aOrder = order.get(a.id)
+        const bOrder = order.get(b.id)
+        if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder
+        if (aOrder !== undefined) return 1
+        if (bOrder !== undefined) return -1
+        return b.createdAt.localeCompare(a.createdAt)
+      })
+      .map((trend) => trend.id)
+    const sourceIndex = orderedIds.indexOf(sourceId)
+    const targetIndex = orderedIds.indexOf(targetId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+    orderedIds.splice(sourceIndex, 1)
+    orderedIds.splice(targetIndex, 0, sourceId)
+    setTrendOrder(orderedIds)
+    saveTrendOrder(orderedIds, identity?.userId || 'demo')
+    setNotice('Trend order updated')
+  }
+
   function renderTrendCard(trend: Trend) {
     const evidence = trend.evidence
       .slice()
@@ -3222,7 +3315,15 @@ function App() {
       <article
         className={`trend-card cat-${trend.category} ${
           draggedNewsId ? 'accepting-news' : ''
-        } ${trend.status === 'archived' ? 'is-archived' : ''}`}
+        } ${trend.status === 'archived' ? 'is-archived' : ''} ${
+          draggedTrendId === trend.id ? 'dragging-trend' : ''
+        } ${
+          draggedTrendId &&
+          draggedTrendId !== trend.id &&
+          trend.status !== 'archived'
+            ? 'accepting-trend-order'
+            : ''
+        }`}
         key={trend.id}
         draggable={canEdit}
         onDragStart={(event) => {
@@ -3233,17 +3334,44 @@ function App() {
         }}
         onDragEnd={() => setDraggedTrendId('')}
         onDragOver={(event) => {
-          if (!draggedNewsId) return
+          const carriesNews =
+            Boolean(draggedNewsId) ||
+            Array.from(event.dataTransfer.types || []).includes(
+              'application/x-news-id',
+            )
+          if (carriesNews) {
+            event.preventDefault()
+            event.stopPropagation()
+            event.dataTransfer.dropEffect = 'copy'
+            return
+          }
+          const carriesTrend =
+            event.dataTransfer.getData('application/x-trend-id') ||
+            draggedTrendId
+          if (!carriesTrend || carriesTrend === trend.id) return
           event.preventDefault()
-          event.dataTransfer.dropEffect = 'copy'
+          event.stopPropagation()
+          event.dataTransfer.dropEffect = 'move'
         }}
         onDrop={(event) => {
           const newsId =
             event.dataTransfer.getData('application/x-news-id') || draggedNewsId
-          if (!newsId) return
+          if (newsId) {
+            event.preventDefault()
+            event.stopPropagation()
+            void linkNewsToTrend(trend.id, newsId)
+            setDraggedNewsId('')
+            setDraggedNewsSourceTopicId('')
+            return
+          }
+          const sourceTrendId =
+            event.dataTransfer.getData('application/x-trend-id') ||
+            draggedTrendId
+          if (!sourceTrendId || sourceTrendId === trend.id) return
           event.preventDefault()
-          void linkNewsToTrend(trend.id, newsId)
-          setDraggedNewsId('')
+          event.stopPropagation()
+          reorderTrendCards(sourceTrendId, trend.id)
+          setDraggedTrendId('')
         }}
       >
         <header className="trend-card-head">
@@ -3301,11 +3429,18 @@ function App() {
               onDragStart={(event) => {
                 event.stopPropagation()
                 setDraggedNewsId(item.id)
+                setDraggedNewsSourceTopicId('')
+                event.dataTransfer.effectAllowed = 'copyMove'
                 event.dataTransfer.setData('application/x-news-id', item.id)
+                event.dataTransfer.setData(
+                  'application/x-news-source-topic-id',
+                  '',
+                )
               }}
               onDragEnd={(event) => {
                 event.stopPropagation()
                 setDraggedNewsId('')
+                setDraggedNewsSourceTopicId('')
               }}
             >
               {item.url && item.sourceType !== 'manual_note' ? (
@@ -3313,6 +3448,7 @@ function App() {
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
+                  draggable={false}
                   onClick={(event) => event.stopPropagation()}
                 >
                   {item.title}
@@ -3640,6 +3776,22 @@ function App() {
           </div>
         ) : null}
       </article>
+    )
+  }
+
+  function renderClosedThreadCollection() {
+    if (closedVisibleTopics.length === 0) return null
+    return (
+      <details
+        className="archived-collection closed-thread-collection"
+        open={closedThreadsOpen || threadStatusFilter === 'closed'}
+        onToggle={(event) => setClosedThreadsOpen(event.currentTarget.open)}
+      >
+        <summary>Closed · {closedVisibleTopics.length}</summary>
+        <div className="closed-thread-list">
+          {closedVisibleTopics.map((topic) => renderTopicCard(topic))}
+        </div>
+      </details>
     )
   }
 
@@ -4079,6 +4231,10 @@ function App() {
                 : evidenceInboxOpen
                   ? 'evidence-expanded'
                   : 'evidence-collapsed'
+            } ${
+              workspacePage === 'synthesis' && !actionThreadsOpen
+                ? 'threads-collapsed'
+                : ''
             }`}
           >
             {workspacePage === 'synthesis' &&
@@ -4220,23 +4376,46 @@ function App() {
                 </div>
               </section>
             )}
-            <section
-              className="topic-pane workflow-column"
-              aria-label="Action Threads"
-            >
+            {workspacePage === 'synthesis' && !actionThreadsOpen ? (
+              <button
+                className="action-threads-collapsed-rail"
+                type="button"
+                aria-label="Expand Action Threads"
+                onClick={() => setActionThreadsOpen(true)}
+              >
+                <i aria-hidden="true">‹</i>
+                <span>Action Threads</span>
+                <strong>{activeVisibleTopics.length}</strong>
+              </button>
+            ) : (
+              <section
+                className="topic-pane workflow-column"
+                aria-label="Action Threads"
+              >
               <div className="workflow-column-heading">
                 <h1>Action Threads</h1>
                 <div className="heading-actions">
                   {workspacePage === 'synthesis' && (
-                    <button
-                      className="icon-button expand-threads"
-                      type="button"
-                      title="Open Action Threads dashboard"
-                      aria-label="Open Action Threads dashboard"
-                      onClick={() => setWorkspacePage('threads')}
-                    >
-                      View all
-                    </button>
+                    <>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        title="Collapse Action Threads"
+                        aria-label="Collapse Action Threads"
+                        onClick={() => setActionThreadsOpen(false)}
+                      >
+                        ›
+                      </button>
+                      <button
+                        className="icon-button expand-threads"
+                        type="button"
+                        title="Open Action Threads dashboard"
+                        aria-label="Open Action Threads dashboard"
+                        onClick={() => setWorkspacePage('threads')}
+                      >
+                        View all
+                      </button>
+                    </>
                   )}
                   {workspacePage === 'threads' && (
                     <button
@@ -4408,7 +4587,7 @@ function App() {
                         </p>
                       </div>
                       <span className="count-badge">
-                        {visibleTopics.length - timelineTopicGroups.unscheduled.length}
+                        {activeVisibleTopics.length - timelineTopicGroups.unscheduled.length}
                       </span>
                     </header>
                     <div className="timeline-month-stack">
@@ -4499,7 +4678,7 @@ function App() {
                   aria-label="Action Threads grouped by category"
                 >
                   {liveSignalCategories.map((category) => {
-                    const categoryTopics = visibleTopics.filter(
+                    const categoryTopics = activeVisibleTopics.filter(
                       (topic) => topic.category === category,
                     )
                     if (categoryTopics.length === 0) return null
@@ -4541,23 +4720,25 @@ function App() {
                       </section>
                     )
                   })}
-                  {visibleTopics.length === 0 && (
+                  {activeVisibleTopics.length === 0 && (
                     <div className="month-empty">
-                      No Action Threads in this filter yet.
+                      No active Action Threads in this filter yet.
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="topic-list kind-pipeline">
-                  {visibleTopics.map((topic) => renderTopicCard(topic))}
-                  {visibleTopics.length === 0 && (
+                  {activeVisibleTopics.map((topic) => renderTopicCard(topic))}
+                  {activeVisibleTopics.length === 0 && (
                     <div className="month-empty">
-                      No Action Threads in this filter yet.
+                      No active Action Threads in this filter yet.
                     </div>
                   )}
                 </div>
               )}
-            </section>
+              {renderClosedThreadCollection()}
+              </section>
+            )}
           </div>
         )}
       </main>
