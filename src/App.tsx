@@ -9,6 +9,7 @@ import {
   createThesis,
   createTopic,
   createTrend,
+  deleteTrendItem,
   deleteNewsItem,
   deleteThesisItem,
   deleteTopicItem,
@@ -33,6 +34,7 @@ import {
   topicMonthLabel,
   unlinkTopicNews,
   unlinkTrendNews,
+  unlinkTrendTopic,
   updateNewsItem,
   updateNewsCategory,
   updateTeamMemberRole,
@@ -76,6 +78,7 @@ import type {
 type TopicKindFilter = 'all' | TopicKind
 type ThreadStatusFilter = 'all' | ThreadStatus
 type ThreadGroupMode = 'timeline' | 'category' | 'recent'
+type EvidenceScope = 'all' | 'unassigned'
 type AddLinkDraft = {
   open: boolean
   url: string
@@ -379,6 +382,10 @@ function App() {
     useState<NewsCategory | 'all'>('all')
   const [evidenceCategory, setEvidenceCategory] =
     useState<NewsCategory | 'all'>('all')
+  const [evidenceScope, setEvidenceScope] = useState<EvidenceScope>('all')
+  const [evidenceTrendFilterId, setEvidenceTrendFilterId] = useState('')
+  const [archivedEvidenceOpen, setArchivedEvidenceOpen] = useState(false)
+  const [archivedTrendsOpen, setArchivedTrendsOpen] = useState(false)
   const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
@@ -398,6 +405,8 @@ function App() {
   const [ideaNewsId, setIdeaNewsId] = useState('')
   const [ideaListening, setIdeaListening] = useState(false)
   const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [searchCategory, setSearchCategory] = useState<NewsCategory | 'all'>('all')
   const [searchContributor, setSearchContributor] = useState('all')
   const [meetingMode, setMeetingMode] = useState(false)
@@ -408,6 +417,7 @@ function App() {
   const [pendingThreadTrendId, setPendingThreadTrendId] = useState('')
   const [meetingThreadTrendId, setMeetingThreadTrendId] = useState('')
   const [pendingTrendNewsId, setPendingTrendNewsId] = useState('')
+  const [pendingTrendTopicId, setPendingTrendTopicId] = useState('')
   const [showAddLink, setShowAddLink] = useState(initialAddLinkDraft.open)
   const [showRecycleBin, setShowRecycleBin] = useState(false)
   const [showTeam, setShowTeam] = useState(false)
@@ -423,6 +433,7 @@ function App() {
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedNewsSourceTopicId, setDraggedNewsSourceTopicId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
+  const [draggedTrendId, setDraggedTrendId] = useState('')
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteTitle, setNoteTitle] = useState('')
   const [noteBody, setNoteBody] = useState('')
@@ -563,6 +574,17 @@ function App() {
   }, [openNewsMenuId])
 
   useEffect(() => {
+    if (!searchOpen && !profileMenuOpen) return
+    const closeFloatingMenus = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (searchOpen && !target?.closest('.top-search-shell')) setSearchOpen(false)
+      if (profileMenuOpen && !target?.closest('.profile-shell')) setProfileMenuOpen(false)
+    }
+    window.addEventListener('mousedown', closeFloatingMenus)
+    return () => window.removeEventListener('mousedown', closeFloatingMenus)
+  }, [profileMenuOpen, searchOpen])
+
+  useEffect(() => {
     const viewerKey = identity?.userId || 'demo'
     if (restoredWorkspaceFor.current === viewerKey) return
     restoredWorkspaceFor.current = viewerKey
@@ -700,6 +722,8 @@ function App() {
       setShowRecycleBin(false)
       setShowTeam(false)
       setShowAddNote(false)
+      setSearchOpen(false)
+      setProfileMenuOpen(false)
       setCreatingTopic(false)
       setCreatingThesis(false)
     }
@@ -708,23 +732,18 @@ function App() {
   }, [closeAddLink])
 
   const visibleNews = useMemo(() => {
-    const needle = query.trim().toLowerCase()
     return news
       .filter((item) => {
-        const matchesCategory = true
-        const matchesPeriod = needle
-          ? true
-          : isInDashboardTimeRange(signalTime(item), timeMode, selectedMonth)
+        const matchesPeriod = isInDashboardTimeRange(
+          signalTime(item),
+          timeMode,
+          selectedMonth,
+        )
         const matchesScope = !item.deletedAt && !item.archivedAt
-        const matchesQuery =
-          !needle ||
-          `${item.title} ${item.summary} ${item.takeaway} ${item.source} ${item.category} ${item.topicLinks.map((link) => link.topicTitle).join(' ')}`
-            .toLowerCase()
-            .includes(needle)
-        return matchesCategory && matchesPeriod && matchesScope && matchesQuery
+        return matchesPeriod && matchesScope
       })
       .sort((a, b) => signalTime(b).localeCompare(signalTime(a)))
-  }, [news, query, selectedMonth, timeMode])
+  }, [news, selectedMonth, timeMode])
 
   const searchContributors = useMemo(
     () =>
@@ -738,7 +757,7 @@ function App() {
     const needle = query.trim().toLowerCase()
     if (!needle) return []
     return news
-      .filter((item) => !item.deletedAt && !item.archivedAt)
+      .filter((item) => !item.deletedAt)
       .filter(
         (item) =>
           searchCategory === 'all' || item.category === searchCategory,
@@ -778,9 +797,7 @@ function App() {
     return trends
       .filter(
         (trend) =>
-          !trend.deletedAt &&
-          trend.status !== 'archived' &&
-          trend.actionThreadIds.length === 0,
+          !trend.deletedAt && trend.actionThreadIds.length === 0,
       )
       .filter(
         (trend) =>
@@ -809,6 +826,22 @@ function App() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [trendCategory, trends])
 
+  const archivedTrends = useMemo(
+    () =>
+      trendCategory === 'all'
+        ? trends
+            .filter(
+              (trend) =>
+                !trend.deletedAt &&
+                trend.status === 'archived' &&
+                trend.actionThreadIds.length === 0,
+            )
+            .slice()
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        : [],
+    [trendCategory, trends],
+  )
+
   const synthesisEvidence = useMemo(
     () =>
       news
@@ -816,11 +849,31 @@ function App() {
           (item) =>
             !item.deletedAt &&
             !item.archivedAt &&
-            (evidenceCategory === 'all' || item.category === evidenceCategory),
+            (evidenceCategory === 'all' || item.category === evidenceCategory) &&
+            (evidenceScope === 'all' ||
+              (item.trendLinks.length === 0 && item.topicLinks.length === 0)) &&
+            (!evidenceTrendFilterId ||
+              item.trendLinks.some((link) => link.trendId === evidenceTrendFilterId)),
         )
         .slice()
         .sort((a, b) => signalTime(b).localeCompare(signalTime(a))),
-    [evidenceCategory, news],
+    [evidenceCategory, evidenceScope, evidenceTrendFilterId, news],
+  )
+
+  const archivedEvidence = useMemo(
+    () =>
+      evidenceScope === 'all' && !evidenceTrendFilterId
+        ? news
+            .filter(
+              (item) =>
+                !item.deletedAt &&
+                Boolean(item.archivedAt) &&
+                (evidenceCategory === 'all' || item.category === evidenceCategory),
+            )
+            .slice()
+            .sort((a, b) => signalTime(b).localeCompare(signalTime(a)))
+        : [],
+    [evidenceCategory, evidenceScope, evidenceTrendFilterId, news],
   )
 
   const meetingEligibleTrends = useMemo(
@@ -1117,7 +1170,10 @@ function App() {
   ) {
     const topic = topicOverride || topics.find((item) => item.id === topicId)
     if (!topic || !news.some((item) => item.id === newsId)) return false
-    if (topic.supportingNews.includes(newsId)) return true
+    const persistedTopicAlreadyHasNews =
+      topics.some((item) => item.id === topicId) &&
+      topic.supportingNews.includes(newsId)
+    if (persistedTopicAlreadyHasNews) return true
     try {
       if (cloudConfigured) await persistTopicNews(topicId, newsId)
     } catch (error) {
@@ -1681,6 +1737,30 @@ function App() {
     })
   }
 
+  async function completeTopicDowngrade(sourceTopic: Topic) {
+    if (cloudConfigured) {
+      for (const source of sourceTopic.sourceTrends) {
+        await unlinkTrendTopic(source.trendId, sourceTopic.id)
+      }
+      await deleteTopicItem(sourceTopic.id)
+    }
+    setTopics((current) => current.filter((topic) => topic.id !== sourceTopic.id))
+    setTrends((current) =>
+      current.map((trend) => ({
+        ...trend,
+        actionThreadIds: trend.actionThreadIds.filter(
+          (topicId) => topicId !== sourceTopic.id,
+        ),
+      })),
+    )
+    setNews((current) =>
+      current.map((item) => ({
+        ...item,
+        topicLinks: item.topicLinks.filter((link) => link.topicId !== sourceTopic.id),
+      })),
+    )
+  }
+
   async function saveTrendDraft() {
     if (!trendDraft || !trendDraft.title.trim()) return
     if (creatingTrend) {
@@ -1702,18 +1782,22 @@ function App() {
           })
           if (result) saved = result
         }
-        const evidence = pendingTrendNewsId
-          ? [
-              {
-                newsId: pendingTrendNewsId,
-                role: 'supporting' as const,
-                displayOrder: 1,
-                linkedAt: new Date().toISOString(),
-              },
-            ]
-          : []
-        if (cloudConfigured && pendingTrendNewsId) {
-          await persistTrendNews(saved.id, pendingTrendNewsId, 'supporting', 1)
+        const sourceTopic = topics.find((topic) => topic.id === pendingTrendTopicId)
+        const evidenceNewsIds = sourceTopic
+          ? sourceTopic.supportingNews
+          : pendingTrendNewsId
+            ? [pendingTrendNewsId]
+            : []
+        const evidence = evidenceNewsIds.map((newsId, index) => ({
+          newsId,
+          role: 'supporting' as const,
+          displayOrder: index + 1,
+          linkedAt: new Date().toISOString(),
+        }))
+        if (cloudConfigured) {
+          for (const [index, newsId] of evidenceNewsIds.entries()) {
+            await persistTrendNews(saved.id, newsId, 'supporting', index + 1)
+          }
         }
         const created: Trend = {
           ...trendDraft,
@@ -1725,10 +1809,10 @@ function App() {
           evidence,
         }
         setTrends((current) => [created, ...current])
-        if (pendingTrendNewsId) {
+        if (evidenceNewsIds.length > 0) {
           setNews((current) =>
             current.map((item) =>
-              item.id === pendingTrendNewsId
+              evidenceNewsIds.includes(item.id)
                 ? {
                     ...item,
                     trendLinks: [
@@ -1744,6 +1828,9 @@ function App() {
             ),
           )
         }
+        if (sourceTopic) {
+          await completeTopicDowngrade(sourceTopic)
+        }
         setNotice('Trend created')
       } catch (error) {
         setNotice(
@@ -1755,6 +1842,7 @@ function App() {
       }
     } else {
       try {
+        const previousTrend = trends.find((trend) => trend.id === trendDraft.id)
         let version = trendDraft.version
         let updatedAt = trendDraft.updatedAt
         if (cloudConfigured) {
@@ -1782,16 +1870,51 @@ function App() {
         setTrends((current) =>
           current.map((trend) => (trend.id === saved.id ? saved : trend)),
         )
-        setNews((current) =>
-          current.map((item) => ({
-            ...item,
-            trendLinks: item.trendLinks.map((link) =>
-              link.trendId === saved.id
-                ? { ...link, trendTitle: saved.title }
-                : link,
+        const addedEvidence = trendDraft.evidence.filter(
+          (evidence) =>
+            !previousTrend?.evidence.some(
+              (existing) => existing.newsId === evidence.newsId,
             ),
-          })),
         )
+        if (cloudConfigured) {
+          for (const evidence of addedEvidence) {
+            await persistTrendNews(
+              saved.id,
+              evidence.newsId,
+              'supporting',
+              evidence.displayOrder,
+            )
+          }
+        }
+        setNews((current) =>
+          current.map((item) => {
+            const linked = trendDraft.evidence.some(
+              (evidence) => evidence.newsId === item.id,
+            )
+            const hasLink = item.trendLinks.some((link) => link.trendId === saved.id)
+            return {
+              ...item,
+              trendLinks: [
+                ...item.trendLinks.map((link) =>
+                  link.trendId === saved.id
+                    ? { ...link, trendTitle: saved.title }
+                    : link,
+                ),
+                ...(linked && !hasLink
+                  ? [
+                      {
+                        trendId: saved.id,
+                        trendTitle: saved.title,
+                        role: 'supporting' as const,
+                      },
+                    ]
+                  : []),
+              ],
+            }
+          }),
+        )
+        const sourceTopic = topics.find((topic) => topic.id === pendingTrendTopicId)
+        if (sourceTopic) await completeTopicDowngrade(sourceTopic)
         setNotice('Trend updated')
       } catch (error) {
         setNotice(error instanceof Error ? error.message : 'Could not update Trend')
@@ -1801,14 +1924,56 @@ function App() {
     setTrendDraft(null)
     setCreatingTrend(false)
     setPendingTrendNewsId('')
+    setPendingTrendTopicId('')
   }
 
-  async function removeTrend(id: string, skipConfirmation = false) {
+  async function setEvidenceArchived(newsIds: string[], archived: boolean) {
+    const changedAt = new Date().toISOString()
+    const versions = new Map<string, number | undefined>()
+    for (const newsId of newsIds) {
+      const item = news.find((candidate) => candidate.id === newsId)
+      if (!item) continue
+      const metadata = {
+        ...item.metadata,
+        archived_at: archived ? changedAt : null,
+      }
+      if (cloudConfigured) {
+        const result = await updateNewsItem(
+          newsId,
+          { metadata },
+          item.version,
+        )
+        versions.set(newsId, result?.version)
+      }
+    }
+    setNews((current) =>
+      current.map((item) =>
+        newsIds.includes(item.id)
+          ? {
+              ...item,
+              archivedAt: archived ? changedAt : undefined,
+              metadata: {
+                ...item.metadata,
+                archived_at: archived ? changedAt : null,
+              },
+              version: versions.get(item.id) || item.version,
+            }
+          : item,
+      ),
+    )
+  }
+
+  async function setTrendArchived(
+    id: string,
+    archived: boolean,
+    skipConfirmation = false,
+  ) {
     const trend = trends.find((candidate) => candidate.id === id)
     if (!trend) return
     if (
+      archived &&
       !skipConfirmation &&
-      !window.confirm('Dismiss and archive this Trend? Its news will remain processed.')
+      !window.confirm('Archive this Trend and all of its Evidence? You can restore both later.')
     ) {
       return
     }
@@ -1817,18 +1982,29 @@ function App() {
       if (cloudConfigured) {
         const result = await updateTrendItem(
           id,
-          { status: 'archived', discussion_status: 'dismissed' },
+          {
+            status: archived ? 'archived' : 'active',
+            discussion_status: archived ? 'dismissed' : 'not_discussed',
+            meeting_nominated_at: null,
+            meeting_nominated_by: null,
+          },
           trend.version,
         )
         version = result?.version || version
       }
+      await setEvidenceArchived(
+        trend.evidence.map((evidence) => evidence.newsId),
+        archived,
+      )
       setTrends((current) =>
         current.map((candidate) =>
           candidate.id === id
             ? {
                 ...candidate,
-                status: 'archived',
-                discussionStatus: 'dismissed',
+                status: archived ? 'archived' : 'active',
+                discussionStatus: archived ? 'dismissed' : 'not_discussed',
+                meetingNominatedAt: undefined,
+                meetingNominatedBy: undefined,
                 version,
               }
             : candidate,
@@ -1836,9 +2012,41 @@ function App() {
       )
       setTrendDraft(null)
       setCreatingTrend(false)
-      setNotice('Trend dismissed and archived')
+      setNotice(
+        archived
+          ? 'Trend and its Evidence archived'
+          : 'Trend and its Evidence restored',
+      )
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not archive Trend')
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : archived
+            ? 'Could not archive Trend'
+            : 'Could not restore Trend',
+      )
+    }
+  }
+
+  async function deleteTrend(id: string) {
+    const trend = trends.find((candidate) => candidate.id === id)
+    if (!trend || !window.confirm('Delete this Trend? Its Evidence will remain available.')) {
+      return
+    }
+    try {
+      if (cloudConfigured) await deleteTrendItem(id)
+      setTrends((current) => current.filter((candidate) => candidate.id !== id))
+      setNews((current) =>
+        current.map((item) => ({
+          ...item,
+          trendLinks: item.trendLinks.filter((link) => link.trendId !== id),
+        })),
+      )
+      setTrendDraft(null)
+      setCreatingTrend(false)
+      setNotice('Trend deleted')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not delete Trend')
     }
   }
 
@@ -1988,6 +2196,44 @@ function App() {
     }
   }
 
+  async function setTrendMeetingIncluded(trend: Trend, included: boolean) {
+    const nominatedAt = included ? new Date().toISOString() : undefined
+    const discussedAt = included ? undefined : new Date().toISOString()
+    try {
+      let version = trend.version
+      if (cloudConfigured) {
+        const result = await updateTrendItem(
+          trend.id,
+          {
+            discussion_status: included ? 'not_discussed' : 'discussed',
+            meeting_nominated_at: nominatedAt || null,
+            meeting_nominated_by: included ? identity?.userId || null : null,
+            last_discussed_at: discussedAt || null,
+            last_discussed_by: included ? null : identity?.userId || null,
+          },
+          trend.version,
+        )
+        version = result?.version || version
+      }
+      const updated: Trend = {
+        ...trend,
+        discussionStatus: included ? 'not_discussed' : 'discussed',
+        meetingNominatedAt: nominatedAt,
+        meetingNominatedBy: included ? identity?.displayName : undefined,
+        lastDiscussedAt: discussedAt,
+        lastDiscussedBy: included ? undefined : identity?.displayName,
+        version,
+      }
+      setTrends((current) =>
+        current.map((candidate) => (candidate.id === trend.id ? updated : candidate)),
+      )
+      setTrendDraft((current) => (current?.id === trend.id ? updated : current))
+      setNotice(included ? 'Added to Trend meeting' : 'Removed from Trend meeting')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not update Trend meeting')
+    }
+  }
+
   async function linkTrendToTopic(
     trend: Trend,
     topic: Topic,
@@ -2050,6 +2296,59 @@ function App() {
         observed: trend.observation,
         currentView: trend.initialRead,
       },
+    })
+    setTopicDraft((current) =>
+      current
+        ? {
+            ...current,
+            supportingNews: trend.evidence.map((evidence) => evidence.newsId),
+            decisionSummary: [
+              trend.observation ? `• What's changed: ${trend.observation}` : '',
+              trend.initialRead ? `• Initial read: ${trend.initialRead}` : '',
+              trend.discussionQuestion
+                ? `• Discussion question: ${trend.discussionQuestion}`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          }
+        : current,
+    )
+  }
+
+  function openCreateTrendFromTopic(topic: Topic) {
+    const now = new Date().toISOString()
+    const sourceTrend = topic.sourceTrends
+      .map((source) => trends.find((trend) => trend.id === source.trendId))
+      .find((trend): trend is Trend => Boolean(trend && !trend.deletedAt))
+    setTopicDraft(null)
+    setCreatingTopic(false)
+    setPendingTrendTopicId(topic.id)
+    setPendingTrendNewsId('')
+    setCreatingTrend(!sourceTrend)
+    setTrendDraft({
+      ...(sourceTrend || {}),
+      id: sourceTrend?.id || '',
+      title: topic.title,
+      category: topic.category,
+      observation: topic.analysis.observed || topic.notes,
+      initialRead: topic.analysis.currentView || topic.decisionSummary,
+      discussionQuestion: topic.analysis.keyQuestion,
+      status: 'active',
+      discussionStatus: 'not_discussed',
+      createdBy: sourceTrend?.createdBy || identity?.displayName,
+      createdAt: sourceTrend?.createdAt || now,
+      updatedAt: now,
+      version: sourceTrend?.version || 1,
+      evidence: topic.supportingNews.map((newsId, index) => ({
+        newsId,
+        role: 'supporting',
+        displayOrder: index + 1,
+        linkedAt: now,
+      })),
+      actionThreadIds: (sourceTrend?.actionThreadIds || []).filter(
+        (topicId) => topicId !== topic.id,
+      ),
     })
   }
 
@@ -2258,8 +2557,8 @@ function App() {
       notes: seed.notes || '',
       analysis: seed.analysis || { ...emptyTopicAnalysis },
       outputs: [],
-      ownerId: identity?.userId,
-      ownerName: identity?.displayName,
+      ownerId: identity?.userId || (!cloudConfigured ? 'demo-user' : undefined),
+      ownerName: identity?.displayName || (!cloudConfigured ? 'Demo user' : undefined),
       decisionSummary: '',
       nextStep: '',
       outcomeUrl: '',
@@ -2272,6 +2571,10 @@ function App() {
 
   async function saveTopicDraft() {
     if (!topicDraft || !topicDraft.title.trim()) return
+    if (creatingTopic && !topicDraft.ownerId) {
+      setNotice('Choose an owner before creating this Action Thread.')
+      return
+    }
     if (creatingTopic) {
       let id: string
       try {
@@ -2894,8 +3197,16 @@ function App() {
       <article
         className={`trend-card cat-${trend.category} ${
           draggedNewsId ? 'accepting-news' : ''
-        }`}
+        } ${trend.status === 'archived' ? 'is-archived' : ''}`}
         key={trend.id}
+        draggable={canEdit}
+        onDragStart={(event) => {
+          if (draggedNewsId) return
+          setDraggedTrendId(trend.id)
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('application/x-trend-id', trend.id)
+        }}
+        onDragEnd={() => setDraggedTrendId('')}
         onDragOver={(event) => {
           if (!draggedNewsId) return
           event.preventDefault()
@@ -2914,7 +3225,9 @@ function App() {
           <CategoryLabel category={trend.category} className="category-token" />
           <div className="trend-card-state">
             <span className={`trend-review-state ${needsReview ? 'needs-review' : ''}`}>
-              {newEvidence > 0 && trend.lastDiscussedAt
+              {trend.status === 'archived'
+                ? 'Archived'
+                : newEvidence > 0 && trend.lastDiscussedAt
                 ? `${newEvidence} new`
                 : needsReview
                   ? 'Needs review'
@@ -3019,13 +3332,28 @@ function App() {
             type="button"
             onClick={() => {
               setEvidenceInboxOpen(true)
-              setEvidenceCategory(trend.category)
+              setEvidenceScope('all')
+              if (trend.evidence.length > 0) {
+                setEvidenceCategory('all')
+                setEvidenceTrendFilterId(trend.id)
+              } else {
+                setEvidenceTrendFilterId('')
+                setEvidenceCategory(trend.category)
+              }
             }}
             hidden={!canEdit}
           >
             Show evidence
           </button>
-          {needsReview ? (
+          {trend.status === 'archived' ? (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => void setTrendArchived(trend.id, false)}
+            >
+              Unarchive
+            </button>
+          ) : needsReview ? (
             <button
               className="primary-button"
               type="button"
@@ -3045,6 +3373,55 @@ function App() {
     )
   }
 
+  function renderEvidenceWorkCard(item: NewsItem, archived = false) {
+    const homeCount = item.trendLinks.length + item.topicLinks.length
+    return (
+      <article
+        className={`evidence-work-card ${archived ? 'is-archived' : ''}`}
+        key={item.id}
+        draggable={canEdit && !archived}
+        onDragStart={(event) => {
+          if (archived) return
+          setDraggedNewsId(item.id)
+          event.dataTransfer.effectAllowed = 'copy'
+          event.dataTransfer.setData('application/x-news-id', item.id)
+        }}
+        onDragEnd={() => setDraggedNewsId('')}
+      >
+        <div className="evidence-work-meta">
+          <CategoryLabel category={item.category} />
+          <span>{formatShortDate(signalTime(item))}</span>
+          {archived ? <span className="archived-label">Archived</span> : null}
+          <button
+            className="text-action"
+            type="button"
+            onClick={() => setNewsDraft({ ...item })}
+            hidden={!canEdit}
+          >
+            Edit
+          </button>
+        </div>
+        {item.url && item.sourceType !== 'manual_note' ? (
+          <a href={item.url} target="_blank" rel="noreferrer">
+            {item.title}
+          </a>
+        ) : (
+          <strong>{item.title}</strong>
+        )}
+        {noteTakeaway(item) ? <p>{compactWords(noteTakeaway(item), 18)}</p> : null}
+        <div className="evidence-homes">
+          {item.trendLinks.map((link) => (
+            <span key={`trend-${link.trendId}`}>Trend · {link.trendTitle}</span>
+          ))}
+          {item.topicLinks.map((link) => (
+            <span key={`topic-${link.topicId}`}>Thread · {link.topicTitle}</span>
+          ))}
+          {homeCount === 0 ? <span className="unassigned">Unassigned</span> : null}
+        </div>
+      </article>
+    )
+  }
+
   function renderEvidenceColumn() {
     return (
       <section className="evidence-pane workflow-column" aria-label="Evidence">
@@ -3052,6 +3429,22 @@ function App() {
           <h1>Evidence</h1>
           <div className="heading-actions">
             <span className="column-count">{synthesisEvidence.length}</span>
+            <div className="compact-toggle" role="group" aria-label="Evidence state">
+              {(['all', 'unassigned'] as EvidenceScope[]).map((scope) => (
+                <button
+                  type="button"
+                  key={scope}
+                  className={evidenceScope === scope ? 'active' : ''}
+                  aria-pressed={evidenceScope === scope}
+                  onClick={() => {
+                    setEvidenceScope(scope)
+                    setEvidenceTrendFilterId('')
+                  }}
+                >
+                  {scope === 'all' ? 'All' : 'Unassigned'}
+                </button>
+              ))}
+            </div>
             <button
               className="icon-button"
               type="button"
@@ -3084,57 +3477,31 @@ function App() {
             </button>
           ))}
         </div>
+        {evidenceTrendFilterId ? (
+          <button
+            className="active-filter-chip"
+            type="button"
+            onClick={() => setEvidenceTrendFilterId('')}
+          >
+            {trends.find((trend) => trend.id === evidenceTrendFilterId)?.title || 'Trend evidence'} ×
+          </button>
+        ) : null}
         <div className="evidence-column-list">
-          {synthesisEvidence.map((item) => {
-            const homeCount = item.trendLinks.length + item.topicLinks.length
-            return (
-              <article
-                className="evidence-work-card"
-                key={item.id}
-                draggable={canEdit}
-                onDragStart={(event) => {
-                  setDraggedNewsId(item.id)
-                  event.dataTransfer.effectAllowed = 'copy'
-                  event.dataTransfer.setData('application/x-news-id', item.id)
-                }}
-                onDragEnd={() => setDraggedNewsId('')}
-              >
-                <div className="evidence-work-meta">
-                  <CategoryLabel category={item.category} />
-                  <span>{formatShortDate(signalTime(item))}</span>
-                  <button
-                    className="text-action"
-                    type="button"
-                    onClick={() => setNewsDraft({ ...item })}
-                    hidden={!canEdit}
-                  >
-                    Edit
-                  </button>
-                </div>
-                {item.url && item.sourceType !== 'manual_note' ? (
-                  <a href={item.url} target="_blank" rel="noreferrer">
-                    {item.title}
-                  </a>
-                ) : (
-                  <strong>{item.title}</strong>
-                )}
-                {noteTakeaway(item) ? (
-                  <p>{compactWords(noteTakeaway(item), 18)}</p>
-                ) : null}
-                <div className="evidence-homes">
-                  {item.trendLinks.map((link) => (
-                    <span key={`trend-${link.trendId}`}>Trend · {link.trendTitle}</span>
-                  ))}
-                  {item.topicLinks.map((link) => (
-                    <span key={`topic-${link.topicId}`}>Thread · {link.topicTitle}</span>
-                  ))}
-                  {homeCount === 0 ? <span className="unassigned">Unassigned</span> : null}
-                </div>
-              </article>
-            )
-          })}
+          {synthesisEvidence.map((item) => renderEvidenceWorkCard(item))}
           {synthesisEvidence.length === 0 ? (
             <div className="column-empty">No evidence in this category.</div>
+          ) : null}
+          {archivedEvidence.length > 0 ? (
+            <details
+              className="archived-collection"
+              open={archivedEvidenceOpen}
+              onToggle={(event) => setArchivedEvidenceOpen(event.currentTarget.open)}
+            >
+              <summary>Archived · {archivedEvidence.length}</summary>
+              <div className="archived-card-list">
+                {archivedEvidence.map((item) => renderEvidenceWorkCard(item, true))}
+              </div>
+            </details>
           ) : null}
         </div>
       </section>
@@ -3156,9 +3523,9 @@ function App() {
           draggedNewsId ? 'accepting-news' : ''
         } ${draggedTopicId === topic.id ? 'dragging-topic' : ''}`}
         key={topic.id}
-        draggable={workspacePage === 'threads' && canEdit}
+        draggable={canEdit}
         onDragStart={(event) => {
-          if (workspacePage !== 'threads' || !canEdit) return
+          if (!canEdit) return
           setDraggedTopicId(topic.id)
           if (event.dataTransfer) {
             event.dataTransfer.effectAllowed = 'move'
@@ -3248,6 +3615,130 @@ function App() {
           </div>
         ) : null}
       </article>
+    )
+  }
+
+  function renderGlobalSearch() {
+    return (
+      <div className="top-search-shell">
+        <label className="top-search-field">
+          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.06 1.06-3.65-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
+            />
+          </svg>
+          <span className="sr-only">Search by keywords</span>
+          <input
+            value={query}
+            onFocus={() => setSearchOpen(true)}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setSearchOpen(true)
+            }}
+            placeholder="Keywords"
+          />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery('')
+                setSearchOpen(false)
+              }}
+            >
+              ×
+            </button>
+          ) : null}
+        </label>
+        {searchOpen && query.trim() ? (
+          <div className="global-search-results top-search-results" role="dialog" aria-label="Search results">
+            <div className="search-result-filters">
+              <select
+                aria-label="Search category"
+                value={searchCategory}
+                onChange={(event) =>
+                  setSearchCategory(event.target.value as NewsCategory | 'all')
+                }
+              >
+                <option value="all">All categories</option>
+                {Object.entries(categoryLabels).map(([value, label]) => (
+                  <option value={value} key={value}>{label}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Search contributor"
+                value={searchContributor}
+                onChange={(event) => setSearchContributor(event.target.value)}
+              >
+                <option value="all">All contributors</option>
+                {searchContributors.map((name) => (
+                  <option value={name} key={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="search-result-section">
+              <strong>News</strong>
+              {globalNewsResults.map((item) => (
+                <a
+                  href={item.url || undefined}
+                  target={item.url ? '_blank' : undefined}
+                  rel={item.url ? 'noreferrer' : undefined}
+                  key={item.id}
+                  onClick={() => setSearchOpen(false)}
+                >
+                  <span>{item.title}</span>
+                  <small>
+                    {categoryLabels[item.category]} · {item.capturedBy}
+                    {item.archivedAt ? ' · Archived' : ''}
+                  </small>
+                </a>
+              ))}
+            </div>
+            <div className="search-result-section">
+              <strong>Trends</strong>
+              {globalTrendResults.map((trend) => (
+                <button
+                  type="button"
+                  key={trend.id}
+                  onClick={() => {
+                    setWorkspacePage('synthesis')
+                    setCreatingTrend(false)
+                    setTrendDraft({ ...trend })
+                    setSearchOpen(false)
+                  }}
+                >
+                  <span>{trend.title}</span>
+                  <small>
+                    {categoryLabels[trend.category]} · {trend.evidence.length} signals
+                    {trend.status === 'archived' ? ' · Archived' : ''}
+                  </small>
+                </button>
+              ))}
+            </div>
+            <div className="search-result-section">
+              <strong>Action Threads</strong>
+              {globalTopicResults.map((topic) => (
+                <button
+                  type="button"
+                  key={topic.id}
+                  onClick={() => {
+                    setCreatingTopic(false)
+                    setTopicDraft({ ...topic })
+                    setSearchOpen(false)
+                  }}
+                >
+                  <span>{topic.title}</span>
+                  <small>{topicKindLabels[topic.kind]} · {topic.ownerName || 'Unassigned'}</small>
+                </button>
+              ))}
+            </div>
+            {globalNewsResults.length + globalTrendResults.length + globalTopicResults.length === 0 ? (
+              <p className="search-empty">No matching results.</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     )
   }
 
@@ -3405,41 +3896,32 @@ function App() {
             Synthesis
           </button>
         </nav>
-        <div className="sidebar-user">
-          <div className="sync-status">
-            <span className={`status-dot ${syncState}`} />
-            {cloudConfigured
-              ? syncState === 'synced'
-                ? 'Synced'
-                : syncState === 'error'
-                  ? 'Sync interrupted'
-                  : 'Connecting'
-              : 'Demo workspace'}
-          </div>
-          {canAdmin && cloudConfigured && (
-            <>
-              <button
-                className="recycle-button"
-                type="button"
-                onClick={() => void openTeamManagement()}
-              >
-                Team
-              </button>
-              <button
-                className="recycle-button"
-                type="button"
-                onClick={() => setShowRecycleBin(true)}
-              >
-                Recycle Bin
-              </button>
-            </>
-          )}
+        {renderGlobalSearch()}
+        <button
+          className="top-add-news"
+          type="button"
+          onClick={() => setShowAddLink(true)}
+        >
+          + Add News
+        </button>
+        <div className="sync-status top-sync-status">
+          <span className={`status-dot ${syncState}`} />
+          {cloudConfigured
+            ? syncState === 'synced'
+              ? 'Synced'
+              : syncState === 'error'
+                ? 'Sync interrupted'
+                : 'Connecting'
+            : 'Demo'}
+        </div>
+        <div className="profile-shell">
           <button
             className="avatar-button"
             type="button"
-            aria-label={`Sign out ${identity?.displayName || ''}`}
-            title={`${identity?.displayName || 'Demo user'}${identity ? ` · ${identity.role}` : ''} · click to sign out`}
-            onClick={() => void signOut()}
+            aria-label="Open profile menu"
+            aria-expanded={profileMenuOpen}
+            title={identity?.displayName || 'Demo user'}
+            onClick={() => setProfileMenuOpen((open) => !open)}
           >
             {(identity?.displayName || 'DU')
               .split(/\s+/)
@@ -3448,125 +3930,34 @@ function App() {
               .slice(0, 2)
               .toUpperCase()}
           </button>
+          {profileMenuOpen ? (
+            <div className="profile-menu" role="menu">
+              <div className="profile-summary">
+                <strong>{identity?.displayName || 'Demo user'}</strong>
+                <span>{identity?.email || 'Local demo workspace'}</span>
+              </div>
+              {canAdmin && cloudConfigured ? (
+                <>
+                  <button type="button" role="menuitem" onClick={() => void openTeamManagement()}>
+                    Team
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => setShowRecycleBin(true)}>
+                    Recycle Bin
+                  </button>
+                </>
+              ) : null}
+              <button type="button" role="menuitem" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </div>
+          ) : null}
         </div>
       </header>
 
       <div className="workspace-main">
-        <header className="utility-bar">
-          <div className="search-shell">
-            <label className="search-field">
-              <span>Search workspace</span>
-              <svg
-                className="search-icon"
-                viewBox="0 0 20 20"
-                width="16"
-                height="16"
-                aria-hidden="true"
-              >
-                <path
-                  fill="currentColor"
-                  d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.06 1.06-3.65-3.65A5.5 5.5 0 1 1 8.5 3Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
-                />
-              </svg>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search signals, Trends, evidence, and Action Threads..."
-              />
-            </label>
-            {query.trim() ? (
-              <div className="global-search-results" role="dialog" aria-label="Search results">
-                <div className="search-result-filters">
-                  <select
-                    aria-label="Search category"
-                    value={searchCategory}
-                    onChange={(event) =>
-                      setSearchCategory(event.target.value as NewsCategory | 'all')
-                    }
-                  >
-                    <option value="all">All categories</option>
-                    {Object.entries(categoryLabels).map(([value, label]) => (
-                      <option value={value} key={value}>{label}</option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="Search contributor"
-                    value={searchContributor}
-                    onChange={(event) => setSearchContributor(event.target.value)}
-                  >
-                    <option value="all">All contributors</option>
-                    {searchContributors.map((name) => (
-                      <option value={name} key={name}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="search-result-section">
-                  <strong>News</strong>
-                  {globalNewsResults.map((item) => (
-                    <a
-                      href={item.url || undefined}
-                      target={item.url ? '_blank' : undefined}
-                      rel={item.url ? 'noreferrer' : undefined}
-                      key={item.id}
-                      onClick={() => setQuery('')}
-                    >
-                      <span>{item.title}</span>
-                      <small>{categoryLabels[item.category]} · {item.capturedBy}</small>
-                    </a>
-                  ))}
-                </div>
-                <div className="search-result-section">
-                  <strong>Trends</strong>
-                  {globalTrendResults.map((trend) => (
-                    <button
-                      type="button"
-                      key={trend.id}
-                      onClick={() => {
-                        setWorkspacePage('synthesis')
-                        setCreatingTrend(false)
-                        setTrendDraft({ ...trend })
-                        setQuery('')
-                      }}
-                    >
-                      <span>{trend.title}</span>
-                      <small>{categoryLabels[trend.category]} · {trend.evidence.length} signals</small>
-                    </button>
-                  ))}
-                </div>
-                <div className="search-result-section">
-                  <strong>Action Threads</strong>
-                  {globalTopicResults.map((topic) => (
-                    <button
-                      type="button"
-                      key={topic.id}
-                      onClick={() => {
-                        setCreatingTopic(false)
-                        setTopicDraft({ ...topic })
-                        setQuery('')
-                      }}
-                    >
-                      <span>{topic.title}</span>
-                      <small>{topicKindLabels[topic.kind]} · {topic.ownerName || 'Unassigned'}</small>
-                    </button>
-                  ))}
-                </div>
-                {globalNewsResults.length + globalTrendResults.length + globalTopicResults.length === 0 ? (
-                  <p className="search-empty">No matching signals, Trends, or Action Threads.</p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          <div className="account-actions">
-            {workspacePage === 'signals' ? renderTimeFilter() : null}
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => setShowAddLink(true)}
-            >
-              + Add News
-            </button>
-          </div>
-        </header>
+        {workspacePage === 'signals' ? (
+          <header className="page-context-bar">{renderTimeFilter()}</header>
+        ) : null}
 
       {notice && (
         <button
@@ -3731,13 +4122,22 @@ function App() {
                   ))}
                 </div>
                 <div
-                  className={`column-drop-zone ${draggedNewsId ? 'active' : ''}`}
+                  className={`column-drop-zone ${draggedNewsId || draggedTopicId ? 'active' : ''}`}
                   onDragOver={(event) => {
-                    if (!draggedNewsId) return
+                    if (!draggedNewsId && !draggedTopicId) return
                     event.preventDefault()
-                    event.dataTransfer.dropEffect = 'copy'
+                    event.dataTransfer.dropEffect = draggedTopicId ? 'move' : 'copy'
                   }}
                   onDrop={(event) => {
+                    const topicId =
+                      event.dataTransfer.getData('application/x-topic-id') || draggedTopicId
+                    if (topicId) {
+                      const topic = topics.find((candidate) => candidate.id === topicId)
+                      event.preventDefault()
+                      if (topic) openCreateTrendFromTopic(topic)
+                      setDraggedTopicId('')
+                      return
+                    }
                     const newsId =
                       event.dataTransfer.getData('application/x-news-id') || draggedNewsId
                     if (!newsId) return
@@ -3748,7 +4148,24 @@ function App() {
                 >
                   Drop evidence to create a Trend
                 </div>
-                <div className="trend-grid">
+                <div
+                  className="trend-grid"
+                  onDragOver={(event) => {
+                    const trend = trends.find((candidate) => candidate.id === draggedTrendId)
+                    if (trend?.status !== 'archived') return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                  }}
+                  onDrop={(event) => {
+                    const trendId =
+                      event.dataTransfer.getData('application/x-trend-id') || draggedTrendId
+                    const trend = trends.find((candidate) => candidate.id === trendId)
+                    if (trend?.status !== 'archived') return
+                    event.preventDefault()
+                    void setTrendArchived(trend.id, false, true)
+                    setDraggedTrendId('')
+                  }}
+                >
                   {briefingTrends.map((trend) => renderTrendCard(trend))}
                   {briefingTrends.length === 0 && (
                     <div className="month-empty">
@@ -3763,6 +4180,18 @@ function App() {
                       </button>
                     </div>
                   )}
+                  {archivedTrends.length > 0 ? (
+                    <details
+                      className="archived-collection archived-trends"
+                      open={archivedTrendsOpen}
+                      onToggle={(event) => setArchivedTrendsOpen(event.currentTarget.open)}
+                    >
+                      <summary>Archived Trends · {archivedTrends.length}</summary>
+                      <div className="archived-card-list">
+                        {archivedTrends.map((trend) => renderTrendCard(trend))}
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
               </section>
             )}
@@ -3910,13 +4339,24 @@ function App() {
               )}
               {workspacePage === 'synthesis' && (
                 <div
-                  className={`column-drop-zone ${draggedNewsId ? 'active' : ''}`}
+                  className={`column-drop-zone ${draggedNewsId || draggedTrendId ? 'active' : ''}`}
                   onDragOver={(event) => {
-                    if (!draggedNewsId) return
+                    if (!draggedNewsId && !draggedTrendId) return
                     event.preventDefault()
-                    event.dataTransfer.dropEffect = 'copy'
+                    event.dataTransfer.dropEffect = draggedTrendId ? 'move' : 'copy'
                   }}
                   onDrop={(event) => {
+                    const trendId =
+                      event.dataTransfer.getData('application/x-trend-id') || draggedTrendId
+                    if (trendId) {
+                      const trend = trends.find((candidate) => candidate.id === trendId)
+                      event.preventDefault()
+                      if (trend && trend.status !== 'archived') {
+                        openCreateThreadFromTrend(trend)
+                      }
+                      setDraggedTrendId('')
+                      return
+                    }
                     const newsId =
                       event.dataTransfer.getData('application/x-news-id') || draggedNewsId
                     if (!newsId) return
@@ -4440,6 +4880,7 @@ function App() {
                   setTrendDraft(null)
                   setCreatingTrend(false)
                   setPendingTrendNewsId('')
+                  setPendingTrendTopicId('')
                 }}
               >
                 ×
@@ -4488,6 +4929,29 @@ function App() {
                 <p className="workflow-note">
                   A Trend stays in Watching until it is upgraded to an Action Thread or dismissed.
                 </p>
+                {!creatingTrend && trendDraft.status !== 'archived' ? (
+                  <div className="trend-editor-lifecycle">
+                    <span>
+                      {isTrendToDiscuss(trendDraft)
+                        ? 'Included in Trend meeting'
+                        : 'Not in Trend meeting'}
+                    </span>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() =>
+                        void setTrendMeetingIncluded(
+                          trendDraft,
+                          !isTrendToDiscuss(trendDraft),
+                        )
+                      }
+                    >
+                      {isTrendToDiscuss(trendDraft)
+                        ? 'Remove from meeting'
+                        : 'Add to meeting'}
+                    </button>
+                  </div>
+                ) : null}
                 <label>
                   What changed
                   <textarea
@@ -4570,14 +5034,29 @@ function App() {
             </div>
             <div className="modal-actions split-actions sticky-footer">
               {!creatingTrend ? (
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => void removeTrend(trendDraft.id)}
-                  hidden={!canEdit}
-                >
-                  Archive Trend
-                </button>
+                <div className="destructive-actions">
+                  <button
+                    className={trendDraft.status === 'archived' ? 'secondary-button' : 'danger-button'}
+                    type="button"
+                    onClick={() =>
+                      void setTrendArchived(
+                        trendDraft.id,
+                        trendDraft.status !== 'archived',
+                      )
+                    }
+                    hidden={!canEdit}
+                  >
+                    {trendDraft.status === 'archived' ? 'Unarchive Trend' : 'Archive Trend'}
+                  </button>
+                  <button
+                    className="text-danger-button"
+                    type="button"
+                    onClick={() => void deleteTrend(trendDraft.id)}
+                    hidden={!canEdit}
+                  >
+                    Delete Trend
+                  </button>
+                </div>
               ) : (
                 <span />
               )}
@@ -4589,6 +5068,7 @@ function App() {
                     setTrendDraft(null)
                     setCreatingTrend(false)
                     setPendingTrendNewsId('')
+                    setPendingTrendTopicId('')
                   }}
                 >
                   Cancel
@@ -4733,9 +5213,11 @@ function App() {
                     <button
                       className="secondary-button"
                       type="button"
-                      onClick={() => void removeTrend(trendMeetingItem.id, true)}
+                      onClick={() =>
+                        void setTrendArchived(trendMeetingItem.id, true, true)
+                      }
                     >
-                      Dismiss Trend
+                      Archive Trend
                     </button>
                     <button
                       className="primary-button"
@@ -5036,12 +5518,14 @@ function App() {
                     aria-required="true"
                   />
                   {creatingTopic ? (
-                    <small className="field-hint">Required. All other fields are optional or have defaults.</small>
+                    <small className="field-hint">Title, destination, and owner are required.</small>
                   ) : null}
                 </label>
                 <div className="thread-classification-grid">
                   <fieldset className="choice-field">
-                    <legend>Destination</legend>
+                    <legend>
+                      Destination <span className="required-mark" aria-hidden="true">*</span>
+                    </legend>
                     <div className="option-pills" aria-label="Destination">
                       {Object.entries(topicKindLabels).map(([value, label]) => (
                         <button
@@ -5155,7 +5639,9 @@ function App() {
                 <h3>Ownership and decision</h3>
                 <div className="form-grid two-col">
                   <label>
-                    Owner
+                    <span>
+                      Owner <span className="required-mark" aria-hidden="true">*</span>
+                    </span>
                     <select
                       value={topicDraft.ownerId || ''}
                       onChange={(event) => {
@@ -5279,14 +5765,24 @@ function App() {
             </div>
             <div className="modal-actions split-actions sticky-footer">
               {!creatingTopic ? (
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => void removeTopic(topicDraft.id)}
-                  hidden={!canAdmin}
-                >
-                  Delete thread
-                </button>
+                <div className="destructive-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => openCreateTrendFromTopic(topicDraft)}
+                    hidden={!canEdit}
+                  >
+                    Move to Trend
+                  </button>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={() => void removeTopic(topicDraft.id)}
+                    hidden={!canAdmin}
+                  >
+                    Delete thread
+                  </button>
+                </div>
               ) : (
                 <span />
               )}
@@ -5302,7 +5798,10 @@ function App() {
                   className="primary-button"
                   type="button"
                   onClick={() => void saveTopicDraft()}
-                  disabled={!topicDraft.title.trim()}
+                  disabled={
+                    !topicDraft.title.trim() ||
+                    (creatingTopic && !topicDraft.ownerId)
+                  }
                 >
                   {creatingTopic ? 'Create Action Thread' : 'Save changes'}
                 </button>

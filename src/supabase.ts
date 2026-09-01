@@ -998,6 +998,20 @@ export async function persistTrendTopic(trendId: string, topicId: string) {
   if (error) throw error
 }
 
+export async function unlinkTrendTopic(trendId: string, topicId: string) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('trend_topics')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: session.data.session?.user.id || null,
+    })
+    .eq('trend_id', trendId)
+    .eq('topic_id', topicId)
+  if (error) throw error
+}
+
 export async function createTopic(input: {
   title: string
   notes: string

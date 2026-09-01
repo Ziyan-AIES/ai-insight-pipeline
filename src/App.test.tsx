@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App, { NewsWhyItMatters } from './App'
 
 function selectJuly2026() {
@@ -17,6 +17,7 @@ function openBriefing() {
 
 describe('dashboard pilot shell', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     window.sessionStorage.clear()
     window.localStorage.clear()
     window.history.replaceState(null, '', '/')
@@ -24,7 +25,7 @@ describe('dashboard pilot shell', () => {
 
   it('defaults a first-time user to the three-column Synthesis workspace', () => {
     render(<App />)
-    expect(screen.getByText(/Demo workspace/)).toBeInTheDocument()
+    expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
     expect(
       screen.getByRole('region', { name: 'Action Threads' }),
@@ -37,6 +38,127 @@ describe('dashboard pilot shell', () => {
     expect(within(navigation).getByRole('button', { name: 'Live Signals' })).toBeInTheDocument()
     expect(within(navigation).getByRole('button', { name: 'Synthesis' })).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
+  })
+
+  it('uses a closable keyword search and opens profile actions without signing out', () => {
+    render(<App />)
+    const search = screen.getByPlaceholderText('Keywords')
+    fireEvent.focus(search)
+    fireEvent.change(search, { target: { value: 'Granola' } })
+    expect(screen.getByRole('dialog', { name: 'Search results' })).toBeInTheDocument()
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('dialog', { name: 'Search results' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open profile menu' }))
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
+  })
+
+  it('filters Evidence to unassigned signals and scopes Show evidence to one Trend', () => {
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Expand Evidence' })[0])
+    const evidence = screen.getByRole('region', { name: 'Evidence' })
+    fireEvent.click(within(evidence).getByRole('button', { name: 'Unassigned' }))
+    expect(
+      within(evidence).getByRole('link', {
+        name: /Earnings calls treat AI attach rate/,
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(evidence).queryByRole('link', {
+        name: /Granola brings ambient meeting memory/,
+      }),
+    ).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Evidence' }))
+    const trend = screen
+      .getByRole('button', { name: 'Wearables are becoming ambient control layers' })
+      .closest('article')
+    fireEvent.click(within(trend as HTMLElement).getByRole('button', { name: 'Show evidence' }))
+    const scoped = screen.getByRole('region', { name: 'Evidence' })
+    expect(
+      within(scoped).getByRole('link', {
+        name: /Granola brings ambient meeting memory/,
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(scoped).queryByRole('link', {
+        name: /Earnings calls treat AI attach rate/,
+      }),
+    ).toBeNull()
+  })
+
+  it('archives a Trend with its Evidence and keeps both recoverable', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Wearables are becoming ambient control layers' }),
+    )
+    const editor = screen.getByRole('dialog', { name: 'Edit Trend' })
+    fireEvent.click(within(editor).getByRole('button', { name: 'Archive Trend' }))
+    await waitFor(() =>
+      expect(screen.getByText('Archived Trends · 1')).toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: 'Expand Evidence' })[0])
+    expect(screen.getByText('Archived · 1')).toBeInTheDocument()
+  })
+
+  it('drags a Trend into a new Action Thread with inherited framing and Evidence', () => {
+    render(<App />)
+    const trend = screen
+      .getByRole('button', { name: 'Wearables are becoming ambient control layers' })
+      .closest('article')
+    const dataTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      setData: () => undefined,
+      getData: () => '',
+    }
+    fireEvent.dragStart(trend as HTMLElement, { dataTransfer })
+    fireEvent.drop(screen.getByText('Drop evidence to create an Action Thread'), {
+      dataTransfer,
+    })
+    const editor = screen.getByRole('dialog', { name: 'New Action Thread' })
+    expect(within(editor).getByDisplayValue('Wearables are becoming ambient control layers')).toBeInTheDocument()
+    expect(
+      (within(editor).getByLabelText('Team decision') as HTMLTextAreaElement).value,
+    ).toContain("• What's changed:")
+    expect(
+      within(editor).getByRole('link', {
+        name: /Granola brings ambient meeting memory/,
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('drags an Action Thread back into an editable Trend and removes thread-only fields', async () => {
+    render(<App />)
+    const thread = screen
+      .getByRole('heading', { name: 'Harness engineering' })
+      .closest('article')
+    const dataTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      setData: () => undefined,
+      getData: () => '',
+    }
+    fireEvent.dragStart(thread as HTMLElement, { dataTransfer })
+    fireEvent.drop(screen.getByText('Drop evidence to create a Trend'), {
+      dataTransfer,
+    })
+    const editor = screen.getByRole('dialog', { name: 'Edit Trend' })
+    expect(within(editor).getByDisplayValue('Harness engineering')).toBeInTheDocument()
+    expect(within(editor).queryByLabelText('Owner')).toBeNull()
+    expect(
+      within(editor).getByRole('link', {
+        name: /DataFlow-Harness turns agent reliability/,
+      }),
+    ).toBeInTheDocument()
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save changes' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Harness engineering' })).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Harness engineering' }),
+    ).toBeInTheDocument()
   })
 
   it('restores the last workspace separately for this viewer', async () => {
