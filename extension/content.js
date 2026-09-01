@@ -227,7 +227,8 @@
           position: absolute;
           right: 52px;
           top: -24px;
-          width: 292px;
+          width: min(292px, calc(100vw - 92px));
+          box-sizing: border-box;
           padding: 12px;
           border: 1px solid #d7dbe0;
           border-radius: 12px;
@@ -238,8 +239,12 @@
         #${rootId} .bsw-composer strong { display: block; font-size: 13px; }
         #${rootId} .bsw-composer p { margin: 4px 0 9px; color: #697079; font-size: 11px; line-height: 1.35; }
         #${rootId} .bsw-composer textarea {
+          display: block;
           width: 100%;
+          min-width: 0;
+          max-width: 100%;
           min-height: 68px;
+          box-sizing: border-box;
           resize: vertical;
           padding: 8px 9px;
           border: 1px solid #d7dbe0;

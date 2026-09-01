@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.4.3')
+    expect(manifest.version).toBe('0.4.4')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
@@ -100,6 +100,15 @@ describe('extension session UI', () => {
     expect(contentSource).toMatch(/Retry/)
     expect(backgroundSource).toMatch(/authorization: `Bearer \$\{accessToken\}`/)
     expect(contentSource).not.toMatch(/user:\s*state\.user/)
+  })
+
+  it('keeps the thought composer and textarea inside the viewport', () => {
+    expect(contentSource).toMatch(
+      /\.bsw-composer \{[\s\S]*width: min\(292px, calc\(100vw - 92px\)\);[\s\S]*box-sizing: border-box/,
+    )
+    expect(contentSource).toMatch(
+      /\.bsw-composer textarea \{[\s\S]*max-width: 100%;[\s\S]*box-sizing: border-box/,
+    )
   })
 
   it('keeps settings lightweight and aligned to the Dashboard', () => {
