@@ -196,7 +196,12 @@ function trendNewEvidenceCount(trend: Trend) {
 }
 
 function isTrendToDiscuss(trend: Trend) {
-  if (trend.status !== 'active' || trend.discussionStatus === 'dismissed') {
+  if (
+    trend.status !== 'active' ||
+    trend.discussionStatus === 'dismissed' ||
+    trend.evidence.length === 0 ||
+    trend.actionThreadIds.length > 0
+  ) {
     return false
   }
   return Boolean(
@@ -362,7 +367,7 @@ function App() {
     workspaceFromLocation,
   )
   const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(false)
-  const [timeMode, setTimeMode] = useState<DashboardTimeMode>('month')
+  const [timeMode, setTimeMode] = useState<DashboardTimeMode>('all')
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
     return { year: now.getUTCFullYear(), month: now.getUTCMonth() }
@@ -372,8 +377,9 @@ function App() {
   const [dropHighlight, setDropHighlight] = useState<NewsCategory | ''>('')
   const [trendCategory, setTrendCategory] =
     useState<NewsCategory | 'all'>('all')
-  const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(true)
-  const [evidenceDestination, setEvidenceDestination] = useState('')
+  const [evidenceCategory, setEvidenceCategory] =
+    useState<NewsCategory | 'all'>('all')
+  const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -417,7 +423,6 @@ function App() {
   const [draggedNewsId, setDraggedNewsId] = useState('')
   const [draggedNewsSourceTopicId, setDraggedNewsSourceTopicId] = useState('')
   const [draggedTopicId, setDraggedTopicId] = useState('')
-  const [draggedTrendId, setDraggedTrendId] = useState('')
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteTitle, setNoteTitle] = useState('')
   const [noteBody, setNoteBody] = useState('')
@@ -789,59 +794,52 @@ function App() {
       .slice(0, 6)
   }, [query, searchCategory, trends])
 
-  const activeTrendCategories = useMemo(
-    () =>
-      liveSignalCategories.filter((category) =>
-        trends.some(
-          (trend) =>
-            !trend.deletedAt &&
-            trend.status !== 'archived' &&
-            trend.category === category,
-        ),
-      ),
-    [trends],
-  )
-
   const briefingTrends = useMemo(() => {
-    const visibleIds = new Set(visibleNews.map((item) => item.id))
     return trends
-      .filter((trend) => !trend.deletedAt && trend.status !== 'archived')
+      .filter(
+        (trend) =>
+          !trend.deletedAt &&
+          trend.status !== 'archived' &&
+          trend.actionThreadIds.length === 0,
+      )
       .filter(
         (trend) => trendCategory === 'all' || trend.category === trendCategory,
       )
-      .filter(
-        (trend) =>
-          timeMode === 'all' ||
-          trend.evidence.length === 0 ||
-          trend.evidence.some((evidence) => visibleIds.has(evidence.newsId)),
-      )
       .slice()
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  }, [timeMode, trendCategory, trends, visibleNews])
+  }, [trendCategory, trends])
 
-  const evidenceInbox = useMemo(
+  const synthesisEvidence = useMemo(
     () =>
-      visibleNews
+      news
         .filter(
           (item) =>
             !item.deletedAt &&
             !item.archivedAt &&
-            item.discussionStatus === 'not_discussed' &&
-            item.trendLinks.length === 0 &&
-            item.topicLinks.length === 0,
+            (evidenceCategory === 'all' || item.category === evidenceCategory),
         )
         .slice()
-        .sort(
-          (a, b) =>
-            discussionPriorityScore(b) - discussionPriorityScore(a) ||
-            signalTime(b).localeCompare(signalTime(a)),
-        ),
-    [visibleNews],
+        .sort((a, b) => signalTime(b).localeCompare(signalTime(a))),
+    [evidenceCategory, news],
+  )
+
+  const meetingEligibleTrends = useMemo(
+    () =>
+      trends
+        .filter(
+          (trend) =>
+            !trend.deletedAt &&
+            trend.status !== 'archived' &&
+            trend.actionThreadIds.length === 0,
+        )
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [trends],
   )
 
   const trendMeetingQueue = useMemo(
-    () => briefingTrends.filter(isTrendToDiscuss),
-    [briefingTrends],
+    () => meetingEligibleTrends.filter(isTrendToDiscuss),
+    [meetingEligibleTrends],
   )
   const trendMeetingItem =
     trendMeetingQueue[
@@ -1612,43 +1610,6 @@ function App() {
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not update discussion state')
-    }
-  }
-
-  async function archiveSignalFromInbox(item: NewsItem) {
-    const archivedAt = new Date().toISOString()
-    const metadata = { ...item.metadata, archived_at: archivedAt }
-    try {
-      let version = item.version
-      if (cloudConfigured) {
-        const result = await updateNewsItem(
-          item.id,
-          {
-            discussion_status: 'dismissed',
-            discussed_at: null,
-            discussed_by: null,
-            metadata,
-          },
-          item.version,
-        )
-        version = result?.version || version
-      }
-      setNews((current) =>
-        current.map((candidate) =>
-          candidate.id === item.id
-            ? {
-                ...candidate,
-                archivedAt,
-                discussionStatus: 'dismissed',
-                metadata,
-                version,
-              }
-            : candidate,
-        ),
-      )
-      setNotice('Signal archived.')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not archive signal')
     }
   }
 
@@ -2927,24 +2888,14 @@ function App() {
         (entry): entry is { link: Trend['evidence'][number]; item: NewsItem } =>
           Boolean(entry.item && !entry.item.deletedAt),
       )
-    const linkedThreads = trend.actionThreadIds
-      .map((id) => topics.find((topic) => topic.id === id && !topic.deletedAt))
-      .filter((topic): topic is Topic => Boolean(topic))
     const newEvidence = trendNewEvidenceCount(trend)
+    const needsReview = isTrendToDiscuss(trend)
     return (
       <article
         className={`trend-card cat-${trend.category} ${
           draggedNewsId ? 'accepting-news' : ''
-        } ${draggedTrendId === trend.id ? 'dragging-trend' : ''}`}
+        }`}
         key={trend.id}
-        draggable={canEdit}
-        onDragStart={(event) => {
-          if (!canEdit) return
-          setDraggedTrendId(trend.id)
-          event.dataTransfer.effectAllowed = 'move'
-          event.dataTransfer.setData('application/x-trend-id', trend.id)
-        }}
-        onDragEnd={() => setDraggedTrendId('')}
         onDragOver={(event) => {
           if (!draggedNewsId) return
           event.preventDefault()
@@ -2962,7 +2913,13 @@ function App() {
         <header className="trend-card-head">
           <CategoryLabel category={trend.category} className="category-token" />
           <div className="trend-card-state">
-            <span className="trend-created">Created {formatShortDate(trend.createdAt)}</span>
+            <span className={`trend-review-state ${needsReview ? 'needs-review' : ''}`}>
+              {newEvidence > 0 && trend.lastDiscussedAt
+                ? `${newEvidence} new`
+                : needsReview
+                  ? 'Needs review'
+                  : `Reviewed ${formatShortDate(trend.lastDiscussedAt || trend.updatedAt)}`}
+            </span>
             <span className="trend-signal-count">
               {evidence.length} signal{evidence.length === 1 ? '' : 's'}
             </span>
@@ -3046,23 +3003,6 @@ function App() {
             </p>
           ) : null}
         </div>
-        {linkedThreads.length > 0 ? (
-          <div className="trend-thread-links">
-            {linkedThreads.map((topic) => (
-              <button
-                type="button"
-                key={topic.id}
-                onClick={() => {
-                  setWorkspacePage('threads')
-                  setCreatingTopic(false)
-                  setTopicDraft({ ...topic })
-                }}
-              >
-                Action Thread · {topic.title}
-              </button>
-            ))}
-          </div>
-        ) : null}
         <footer className="trend-card-actions">
           <button
             className="text-action"
@@ -3072,173 +3012,131 @@ function App() {
               setTrendDraft({ ...trend })
             }}
           >
-            Open trend
+            Edit
           </button>
           <button
             className="secondary-button"
             type="button"
             onClick={() => {
-              setEvidenceDestination(`trend:${trend.id}`)
               setEvidenceInboxOpen(true)
-              setTimeout(
-                () =>
-                  document
-                    .querySelector('.evidence-inbox')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-                0,
-              )
+              setEvidenceCategory(trend.category)
             }}
             hidden={!canEdit}
           >
-            Add signals
+            Show evidence
           </button>
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => openCreateThreadFromTrend(trend)}
-          >
-            Upgrade to Action Thread
-          </button>
+          {needsReview ? (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => {
+                const index = trendMeetingQueue.findIndex(
+                  (candidate) => candidate.id === trend.id,
+                )
+                setTrendMeetingIndex(Math.max(0, index))
+                setTrendMeetingMode(true)
+              }}
+            >
+              Review
+            </button>
+          ) : null}
         </footer>
       </article>
     )
   }
 
-  function renderEvidenceInbox() {
-    const targetTrend = evidenceDestination.startsWith('trend:')
-      ? trends.find((trend) => trend.id === evidenceDestination.slice(6))
-      : undefined
-    const targetTopic = evidenceDestination.startsWith('topic:')
-      ? topics.find((topic) => topic.id === evidenceDestination.slice(6))
-      : undefined
-    const targetName = targetTrend?.title || targetTopic?.title
+  function renderEvidenceColumn() {
     return (
-      <section className={`evidence-inbox ${evidenceInboxOpen ? 'open' : ''}`}>
-        <button
-          className="evidence-inbox-summary"
-          type="button"
-          aria-expanded={evidenceInboxOpen}
-          onClick={() => setEvidenceInboxOpen((open) => !open)}
-        >
-          <span>
-            <strong>Evidence Inbox · {evidenceInbox.length}</strong>
-            <small>Untriaged signals with no Trend or Action Thread</small>
-          </span>
-          <span>{evidenceInboxOpen ? 'Close' : 'Open'}</span>
-        </button>
-        {evidenceInboxOpen ? (
-          <div className="evidence-inbox-body">
-            <div className="evidence-target-row">
-              <label>
-                Add to
-                <select
-                  aria-label="Evidence destination"
-                  value={evidenceDestination}
-                  onChange={(event) => setEvidenceDestination(event.target.value)}
-                >
-                  <option value="">Choose a destination</option>
-                  <optgroup label="Watching Trends">
-                    {briefingTrends.map((trend) => (
-                      <option value={`trend:${trend.id}`} key={trend.id}>
-                        {trend.title}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Action Threads">
-                    {topics
-                      .filter((topic) => !topic.deletedAt)
-                      .map((topic) => (
-                        <option value={`topic:${topic.id}`} key={topic.id}>
-                          {topic.title}
-                        </option>
-                      ))}
-                  </optgroup>
-                </select>
-              </label>
-              <p>Select once, then process the queue one signal at a time.</p>
-            </div>
-            <div className="evidence-inbox-list">
-              {evidenceInbox.map((item) => (
-                <article
-                  className="evidence-inbox-row"
-                  key={item.id}
-                  draggable
-                  onDragStart={(event) => {
-                    setDraggedNewsId(item.id)
-                    event.dataTransfer.setData('application/x-news-id', item.id)
-                  }}
-                  onDragEnd={() => setDraggedNewsId('')}
-                >
-                  <div>
-                    <div className="evidence-inbox-meta">
-                      <CategoryLabel category={item.category} />
-                      <span>{item.capturedBy}</span>
-                    </div>
-                    {item.url && item.sourceType !== 'manual_note' ? (
-                      <a href={item.url} target="_blank" rel="noreferrer">
-                        {item.title}
-                      </a>
-                    ) : (
-                      <strong>{item.title}</strong>
-                    )}
-                    {noteTakeaway(item) ? (
-                      <p>{compactWords(noteTakeaway(item), 22)}</p>
-                    ) : null}
-                  </div>
-                  <div className="evidence-inbox-actions">
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={!targetTrend && !targetTopic}
-                      onClick={() => {
-                        if (targetTrend) void linkNewsToTrend(targetTrend.id, item.id)
-                        if (targetTopic) void linkNewsToTopic(item.id, targetTopic.id, targetTopic)
-                      }}
-                      hidden={!canEdit}
-                    >
-                      {targetName ? `Add to ${compactWords(targetName, 5)}` : 'Choose destination'}
-                    </button>
-                    <button
-                      className="text-action"
-                      type="button"
-                      onClick={() => openNewTrend(item.id)}
-                      hidden={!canEdit}
-                    >
-                      New Trend
-                    </button>
-                    <button
-                      className="text-action"
-                      type="button"
-                      onClick={() => openCreateThread(item.id)}
-                      hidden={!canEdit}
-                    >
-                      New Action Thread
-                    </button>
-                    <button
-                      className="text-action"
-                      type="button"
-                      onClick={() => void setDiscussionOutcome(item, 'discussed')}
-                    >
-                      Keep watching
-                    </button>
-                    <button
-                      className="text-action danger-text"
-                      type="button"
-                      onClick={() => void archiveSignalFromInbox(item)}
-                    >
-                      Archive
-                    </button>
-                  </div>
-                </article>
-              ))}
-              {evidenceInbox.length === 0 ? (
-                <div className="month-empty">
-                  Inbox clear. Every signal has a home or a recorded outcome.
-                </div>
-              ) : null}
-            </div>
+      <section className="evidence-pane workflow-column" aria-label="Evidence">
+        <div className="workflow-column-heading">
+          <h1>Evidence</h1>
+          <div className="heading-actions">
+            <span className="column-count">{synthesisEvidence.length}</span>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Collapse Evidence"
+              title="Collapse Evidence"
+              onClick={() => setEvidenceInboxOpen(false)}
+            >
+              ‹
+            </button>
           </div>
-        ) : null}
+        </div>
+        <div className="column-filter" role="group" aria-label="Evidence category">
+          <button
+            type="button"
+            className={evidenceCategory === 'all' ? 'active' : ''}
+            aria-pressed={evidenceCategory === 'all'}
+            onClick={() => setEvidenceCategory('all')}
+          >
+            All
+          </button>
+          {liveSignalCategories.map((category) => (
+            <button
+              type="button"
+              key={category}
+              className={evidenceCategory === category ? 'active' : ''}
+              aria-pressed={evidenceCategory === category}
+              onClick={() => setEvidenceCategory(category)}
+            >
+              {categoryLabels[category]}
+            </button>
+          ))}
+        </div>
+        <div className="evidence-column-list">
+          {synthesisEvidence.map((item) => {
+            const homeCount = item.trendLinks.length + item.topicLinks.length
+            return (
+              <article
+                className="evidence-work-card"
+                key={item.id}
+                draggable={canEdit}
+                onDragStart={(event) => {
+                  setDraggedNewsId(item.id)
+                  event.dataTransfer.effectAllowed = 'copy'
+                  event.dataTransfer.setData('application/x-news-id', item.id)
+                }}
+                onDragEnd={() => setDraggedNewsId('')}
+              >
+                <div className="evidence-work-meta">
+                  <CategoryLabel category={item.category} />
+                  <span>{formatShortDate(signalTime(item))}</span>
+                  <button
+                    className="text-action"
+                    type="button"
+                    onClick={() => setNewsDraft({ ...item })}
+                    hidden={!canEdit}
+                  >
+                    Edit
+                  </button>
+                </div>
+                {item.url && item.sourceType !== 'manual_note' ? (
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    {item.title}
+                  </a>
+                ) : (
+                  <strong>{item.title}</strong>
+                )}
+                {noteTakeaway(item) ? (
+                  <p>{compactWords(noteTakeaway(item), 18)}</p>
+                ) : null}
+                <div className="evidence-homes">
+                  {item.trendLinks.map((link) => (
+                    <span key={`trend-${link.trendId}`}>Trend · {link.trendTitle}</span>
+                  ))}
+                  {item.topicLinks.map((link) => (
+                    <span key={`topic-${link.topicId}`}>Thread · {link.topicTitle}</span>
+                  ))}
+                  {homeCount === 0 ? <span className="unassigned">Unassigned</span> : null}
+                </div>
+              </article>
+            )
+          })}
+          {synthesisEvidence.length === 0 ? (
+            <div className="column-empty">No evidence in this category.</div>
+          ) : null}
+        </div>
       </section>
     )
   }
@@ -3255,7 +3153,7 @@ function App() {
     return (
       <article
         className={`topic-card kind-${topic.kind} ${
-          draggedNewsId || draggedTrendId ? 'accepting-news' : ''
+          draggedNewsId ? 'accepting-news' : ''
         } ${draggedTopicId === topic.id ? 'dragging-topic' : ''}`}
         key={topic.id}
         draggable={workspacePage === 'threads' && canEdit}
@@ -3274,24 +3172,12 @@ function App() {
           setTopicDraft({ ...topic })
         }}
         onDragOver={(event) => {
-          if (!draggedNewsId && !draggedTrendId) return
+          if (!draggedNewsId) return
           event.preventDefault()
           event.stopPropagation()
           event.dataTransfer.dropEffect = 'copy'
         }}
         onDrop={(event) => {
-          const trendId =
-            event.dataTransfer.getData('application/x-trend-id') ||
-            draggedTrendId
-          if (trendId) {
-            const sourceTrend = trends.find((trend) => trend.id === trendId)
-            if (!sourceTrend) return
-            event.preventDefault()
-            event.stopPropagation()
-            void linkTrendToTopic(sourceTrend, topic)
-            setDraggedTrendId('')
-            return
-          }
           const newsId =
             event.dataTransfer.getData('application/x-news-id') ||
             draggedNewsId
@@ -3497,12 +3383,8 @@ function App() {
         headerHidden ? 'banner-hidden' : ''
       }`}
     >
-      <aside className="qira-sidebar">
-        <p className="brand-title">
-          Qira Strategic
-          <br />
-          Market Intelligence
-        </p>
+      <header className="top-navigation">
+        <p className="brand-title">Qira Strategic Market Intelligence</p>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
             className={workspacePage === 'signals' ? 'active' : ''}
@@ -3520,7 +3402,7 @@ function App() {
             type="button"
             onClick={() => setWorkspacePage('synthesis')}
           >
-            Intelligence Briefing
+            Synthesis
           </button>
         </nav>
         <div className="sidebar-user">
@@ -3567,7 +3449,7 @@ function App() {
               .toUpperCase()}
           </button>
         </div>
-      </aside>
+      </header>
 
       <div className="workspace-main">
         <header className="utility-bar">
@@ -3675,7 +3557,7 @@ function App() {
             ) : null}
           </div>
           <div className="account-actions">
-            {workspacePage !== 'threads' ? renderTimeFilter() : null}
+            {workspacePage === 'signals' ? renderTimeFilter() : null}
             <button
               className="primary-button"
               type="button"
@@ -3774,17 +3656,37 @@ function App() {
         )}
 
         {(workspacePage === 'synthesis' || workspacePage === 'threads') && (
-          <>
+          <div
+            className={`synthesis-workbench ${
+              workspacePage === 'threads'
+                ? 'threads-expanded'
+                : evidenceInboxOpen
+                  ? 'evidence-expanded'
+                  : 'evidence-collapsed'
+            }`}
+          >
+            {workspacePage === 'synthesis' &&
+              (evidenceInboxOpen ? (
+                renderEvidenceColumn()
+              ) : (
+                <button
+                  className="evidence-collapsed-rail"
+                  type="button"
+                  aria-label="Expand Evidence"
+                  onClick={() => setEvidenceInboxOpen(true)}
+                >
+                  <span>Evidence</span>
+                  <strong>{news.filter((item) => !item.deletedAt && !item.archivedAt).length}</strong>
+                  <i aria-hidden="true">›</i>
+                </button>
+              ))}
             {workspacePage === 'synthesis' && (
               <section
-                className="news-pane trend-briefing-pane"
-                aria-label="Intelligence Briefing"
+                className="news-pane trend-briefing-pane workflow-column"
+                aria-label="Trends"
               >
-                <div className="pane-heading">
-                  <div>
-                    <span className="eyebrow">What changed and why it matters</span>
-                    <h1>Emerging Trends</h1>
-                  </div>
+                <div className="workflow-column-heading">
+                  <h1>Trends</h1>
                   <div className="heading-actions">
                     <button
                       className="secondary-button"
@@ -3807,20 +3709,16 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <p className="meeting-queue-explainer">
-                  Trends turn related signals into an evidence-backed view of what
-                  is changing, what it may mean, and what the team should discuss.
-                </p>
-                <div className="trend-category-filter" role="group" aria-label="Trend category">
+                <div className="column-filter" role="group" aria-label="Trend category">
                   <button
                     type="button"
                     className={trendCategory === 'all' ? 'active' : ''}
                     aria-pressed={trendCategory === 'all'}
                     onClick={() => setTrendCategory('all')}
                   >
-                    Active trends
+                    All
                   </button>
-                  {activeTrendCategories.map((category) => (
+                  {liveSignalCategories.map((category) => (
                     <button
                       type="button"
                       key={category}
@@ -3832,50 +3730,48 @@ function App() {
                     </button>
                   ))}
                 </div>
+                <div
+                  className={`column-drop-zone ${draggedNewsId ? 'active' : ''}`}
+                  onDragOver={(event) => {
+                    if (!draggedNewsId) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'copy'
+                  }}
+                  onDrop={(event) => {
+                    const newsId =
+                      event.dataTransfer.getData('application/x-news-id') || draggedNewsId
+                    if (!newsId) return
+                    event.preventDefault()
+                    openNewTrend(newsId)
+                    setDraggedNewsId('')
+                  }}
+                >
+                  Drop evidence to create a Trend
+                </div>
                 <div className="trend-grid">
                   {briefingTrends.map((trend) => renderTrendCard(trend))}
                   {briefingTrends.length === 0 && (
                     <div className="month-empty">
                       <strong>No Trends in this view yet.</strong>
-                      <p>Create a Trend from reviewed evidence instead of reviewing news one by one.</p>
+                      <p>Expand Evidence and drag a signal here to create one.</p>
                       <button
                         className="primary-button"
                         type="button"
-                        onClick={() => {
-                          setEvidenceInboxOpen(true)
-                          setEvidenceDestination('')
-                        }}
+                        onClick={() => setEvidenceInboxOpen(true)}
                       >
-                        Open Evidence Inbox
+                        Expand Evidence
                       </button>
                     </div>
                   )}
                 </div>
-                {renderEvidenceInbox()}
               </section>
             )}
             <section
-              className={`topic-pane ${draggedTrendId ? 'accepting-trend' : ''}`}
+              className="topic-pane workflow-column"
               aria-label="Action Threads"
-              onDragOver={(event) => {
-                if (!draggedTrendId || workspacePage !== 'synthesis') return
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'move'
-              }}
-              onDrop={(event) => {
-                if (!draggedTrendId || workspacePage !== 'synthesis') return
-                const trend = trends.find((item) => item.id === draggedTrendId)
-                if (!trend) return
-                event.preventDefault()
-                openCreateThreadFromTrend(trend)
-                setDraggedTrendId('')
-              }}
             >
-              <div className="pane-heading">
-                <div>
-                  <span className="eyebrow">What we do with it</span>
-                  <h1>Action Threads</h1>
-                </div>
+              <div className="workflow-column-heading">
+                <h1>Action Threads</h1>
                 <div className="heading-actions">
                   {workspacePage === 'synthesis' && (
                     <button
@@ -3885,7 +3781,7 @@ function App() {
                       aria-label="Open Action Threads dashboard"
                       onClick={() => setWorkspacePage('threads')}
                     >
-                      ↗
+                      View all
                     </button>
                   )}
                   {workspacePage === 'threads' && (
@@ -3894,7 +3790,7 @@ function App() {
                       type="button"
                       onClick={() => setWorkspacePage('synthesis')}
                     >
-                      ← Intelligence Briefing
+                      ← Synthesis
                     </button>
                   )}
                   <button
@@ -3904,11 +3800,11 @@ function App() {
                     onClick={() => openCreateThread()}
                     hidden={!canEdit}
                   >
-                    + New
+                    + New Action Thread
                   </button>
                 </div>
               </div>
-              <div className="topic-scope-toggle" aria-label="Destination">
+              <div className="topic-scope-toggle column-filter" aria-label="Destination">
                 {(['all', 'pov', 'insight', 'strategy', 'roadmap', 'poc'] as TopicKindFilter[]).map(
                   (kind) => (
                     <button
@@ -4013,10 +3909,24 @@ function App() {
                 </div>
               )}
               {workspacePage === 'synthesis' && (
-                <p className="thread-source-hint">
-                  Drop a Trend here to upgrade it, or onto an existing Action
-                  Thread to merge its evidence and rationale.
-                </p>
+                <div
+                  className={`column-drop-zone ${draggedNewsId ? 'active' : ''}`}
+                  onDragOver={(event) => {
+                    if (!draggedNewsId) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'copy'
+                  }}
+                  onDrop={(event) => {
+                    const newsId =
+                      event.dataTransfer.getData('application/x-news-id') || draggedNewsId
+                    if (!newsId) return
+                    event.preventDefault()
+                    openCreateThread(newsId)
+                    setDraggedNewsId('')
+                  }}
+                >
+                  Drop evidence to create an Action Thread
+                </div>
               )}
               {workspacePage === 'threads' && threadGroupMode === 'timeline' ? (
                 <div
@@ -4183,7 +4093,7 @@ function App() {
                 </div>
               )}
             </section>
-          </>
+          </div>
         )}
       </main>
       </div>

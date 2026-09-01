@@ -84,9 +84,9 @@ test('shows expanded Live Signal previews and a scrollable Trend editor', async 
   }
   await page.getByRole('button', { name: 'Close', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Intelligence Briefing' }).click()
+  await page.getByRole('button', { name: 'Synthesis' }).click()
   await expect(page.locator('article.trend-card').first()).toBeVisible()
-  await expect(page.getByLabel('Evidence destination')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Expand Evidence' })).toBeVisible()
 
   await page.setViewportSize({ width: 900, height: 620 })
   await page.getByRole('button', { name: '+ New Trend' }).click()
@@ -103,22 +103,35 @@ test('shows expanded Live Signal previews and a scrollable Trend editor', async 
   })
 })
 
-test('keeps workspace content visible in non-maximized and mobile windows', async ({
+test('keeps the top navigation and three-column workflow usable in narrow windows', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 900, height: 760 })
   await page.goto('/')
 
-  const mediumSidebar = await page.locator('.qira-sidebar').boundingBox()
+  const mediumNavigation = await page.locator('.top-navigation').boundingBox()
   const mediumMain = await page.locator('.workspace-main').boundingBox()
   const briefingHeading = await page
-    .getByRole('heading', { name: 'Emerging Trends' })
+    .getByRole('heading', { name: 'Trends' })
     .boundingBox()
-  expect(mediumSidebar?.width ?? 0).toBeLessThanOrEqual(170)
-  expect(mediumMain?.x ?? 0).toBeGreaterThanOrEqual(
-    (mediumSidebar?.x ?? 0) + (mediumSidebar?.width ?? 0) - 1,
+  expect(mediumNavigation?.height ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(90)
+  expect(mediumMain?.y ?? 0).toBeGreaterThanOrEqual(
+    (mediumNavigation?.y ?? 0) + (mediumNavigation?.height ?? 0) - 1,
   )
-  expect(briefingHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(180)
+  expect(briefingHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(240)
+
+  await page.getByRole('button', { name: 'Expand Evidence' }).click()
+  const columns = page.locator('.synthesis-workbench > .workflow-column')
+  await expect(columns).toHaveCount(3)
+  const columnRects = await columns.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = node.getBoundingClientRect()
+      return { width: rect.width, x: rect.x }
+    }),
+  )
+  expect(Math.max(...columnRects.map((rect) => rect.width)) - Math.min(...columnRects.map((rect) => rect.width))).toBeLessThan(3)
+  expect(columnRects[1].x).toBeGreaterThan(columnRects[0].x)
+  expect(columnRects[2].x).toBeGreaterThan(columnRects[1].x)
 
   await page
     .getByRole('button', { name: 'Open Action Threads dashboard' })
@@ -127,14 +140,14 @@ test('keeps workspace content visible in non-maximized and mobile windows', asyn
   await expect(page.getByRole('button', { name: 'By month' })).toBeVisible()
 
   await page.setViewportSize({ width: 540, height: 760 })
-  const mobileSidebar = await page.locator('.qira-sidebar').boundingBox()
+  const mobileNavigation = await page.locator('.top-navigation').boundingBox()
   const mobileMain = await page.locator('.workspace-main').boundingBox()
   const threadHeading = await page
     .getByRole('heading', { name: 'Action Threads' })
     .boundingBox()
-  expect(mobileSidebar?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(110)
+  expect(mobileNavigation?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(150)
   expect(mobileMain?.y ?? 0).toBeGreaterThanOrEqual(
-    (mobileSidebar?.y ?? 0) + (mobileSidebar?.height ?? 0) - 1,
+    (mobileNavigation?.y ?? 0) + (mobileNavigation?.height ?? 0) - 1,
   )
   expect(threadHeading?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(230)
 })
