@@ -111,7 +111,7 @@ function teamMemberLabel(
   return displayName?.trim() || email?.trim() || 'Team member'
 }
 
-function captureContributorName(
+export function captureContributorName(
   metadata: Record<string, unknown> | null | undefined,
   capturedById: string | null,
   memberNames: Map<string, string>,
@@ -124,8 +124,8 @@ function captureContributorName(
       ? (metadata.capture as Record<string, unknown>)
       : null
   const candidates = [
-    capturedById ? memberNames.get(capturedById) : '',
     metadata?.contributor_name,
+    capturedById ? memberNames.get(capturedById) : '',
     metadata?.legacy_user,
     capture?.contributor_name,
     capture?.legacy_user,
