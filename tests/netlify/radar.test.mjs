@@ -30,6 +30,8 @@ describe('Industry Radar ingestion helpers', () => {
       expect.arrayContaining(['autonomous-coding', 'agent-evaluation']),
     )
     expect(topicSlugsFor('Consumer AI products continue to grow')).toEqual([])
+    expect(topicSlugsFor('AI Mode adds travel planning to Google Search')).toContain('ai-search-engines')
+    expect(topicSlugsFor('Managed Agents help developers build production-ready agents')).toContain('agent-platforms')
     expect(topicSlugsFor('Ten tips for a better vegetable garden')).toEqual([])
   })
 
