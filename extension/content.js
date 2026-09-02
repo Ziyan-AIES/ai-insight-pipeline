@@ -22,6 +22,10 @@
     toastKind: 'ok',
     toastAction: '',
     captureState: 'idle',
+    captureStatusUrl: '',
+    captureStatusKnown: false,
+    captured: false,
+    statusBusy: false,
     busy: false,
     composerOpen: false,
     thought: '',
@@ -287,6 +291,7 @@
     `
     document.documentElement.appendChild(root)
     root.addEventListener('click', onActionClick)
+    root.addEventListener('pointerenter', () => void refreshCaptureStatus())
     root.addEventListener('input', (event) => {
       if (event.target.matches('.bsw-composer textarea')) state.thought = event.target.value
     })
@@ -306,9 +311,16 @@
     const toast = root.querySelector('.bsw-toast')
     const composer = root.querySelector('.bsw-composer')
     if (mode === 'authorized') {
+      const captureLabel = state.captureState === 'saved'
+        ? 'Captured'
+        : state.captureState === 'saving'
+          ? 'Saving…'
+          : state.captureState === 'checking'
+            ? 'Checking…'
+            : 'Capture'
       topSlot.innerHTML = actionMarkup(
         'save',
-        'Capture',
+        captureLabel,
         captureIcon(state.captureState),
         state.captureState,
       )
@@ -377,6 +389,7 @@
       state.composerOpen = true
       clearToast()
       renderDock()
+      void refreshCaptureStatus()
       document.getElementById(rootId)?.querySelector('.bsw-composer textarea')?.focus()
     }
     if (act === 'capture-cancel') {
@@ -391,6 +404,11 @@
 
   async function saveSignal() {
     if (state.busy) return
+    if (state.captureStatusKnown && state.captured && !state.thought.trim()) {
+      state.composerOpen = false
+      showToast('Already captured', 'ok')
+      return
+    }
     state.busy = true
     state.captureState = 'saving'
     clearToast()
@@ -413,6 +431,9 @@
         },
       })
       if (result?.ok) {
+        state.captureStatusUrl = page.url
+        state.captureStatusKnown = true
+        state.captured = true
         state.captureState = 'saved'
         const hadThought = Boolean(state.thought.trim())
         state.composerOpen = false
@@ -446,6 +467,48 @@
     }
   }
 
+  async function refreshCaptureStatus(force = false) {
+    if (
+      !state.dockEnabled ||
+      onDashboard ||
+      authMode() !== 'authorized' ||
+      state.statusBusy
+    ) return
+    const url = location.href
+    if (state.captureStatusUrl !== url) {
+      state.captureStatusKnown = false
+      state.captured = false
+    }
+    if (
+      !force &&
+      state.captureStatusKnown &&
+      state.captureStatusUrl === url
+    ) return
+    state.statusBusy = true
+    state.captureStatusUrl = url
+    if (state.captureState !== 'saving') state.captureState = 'checking'
+    renderDock()
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: 'bsw-capture-status',
+        url,
+      })
+      if (location.href !== url) return
+      if (result?.ok) {
+        state.captureStatusKnown = true
+        state.captured = Boolean(result.saved)
+      }
+      if (state.captureState !== 'saving') {
+        state.captureState = state.captured ? 'saved' : 'idle'
+      }
+    } catch {
+      if (state.captureState !== 'saving') state.captureState = 'idle'
+    } finally {
+      state.statusBusy = false
+      renderDock()
+    }
+  }
+
   function clearToast() {
     window.clearTimeout(showToast.timer)
     state.toast = ''
@@ -462,7 +525,7 @@
       state.toast = ''
       state.toastKind = 'ok'
       state.toastAction = ''
-      state.captureState = 'idle'
+      state.captureState = state.captured ? 'saved' : 'idle'
       renderDock()
     }, duration)
   }
@@ -494,13 +557,15 @@
   }
 
   function extractText() {
-    const candidates = [
+    const candidates = [...new Set([
       document.querySelector('article'),
       document.querySelector('main'),
       document.body,
-    ].filter(Boolean)
-    const best = candidates.sort((a, b) => visibleText(b).length - visibleText(a).length)[0]
-    return visibleText(best).slice(0, 60000)
+    ].filter(Boolean))]
+    return candidates
+      .map((node) => visibleText(node))
+      .sort((a, b) => b.length - a.length)[0]
+      ?.slice(0, 60000) || ''
   }
 
   function extractImages() {
@@ -534,7 +599,7 @@
   }
 
   function captureIcon(stateName = 'idle') {
-    if (stateName === 'saving') {
+    if (stateName === 'saving' || stateName === 'checking') {
       return '<span class="bsw-spinner" aria-hidden="true"></span>'
     }
     if (stateName === 'saved') {

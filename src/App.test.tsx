@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App, { NewsWhyItMatters } from './App'
+import { demoTrends } from './demoData'
+import { isTrendStale } from './trendHealth'
 
 function selectJuly2026() {
   fireEvent.click(screen.getByRole('button', { name: /▾/ }))
@@ -36,10 +38,58 @@ describe('dashboard pilot shell', () => {
       screen.getByRole('link', { name: 'Open dashboard home' }),
     ).toHaveAttribute('href', '/?workspace=synthesis')
     const navigation = screen.getByRole('navigation', { name: 'Workspace' })
-    expect(within(navigation).getAllByRole('button')).toHaveLength(2)
+    expect(within(navigation).getAllByRole('button')).toHaveLength(3)
+    expect(within(navigation).getByRole('button', { name: 'Industry Radar' })).toBeInTheDocument()
     expect(within(navigation).getByRole('button', { name: 'Live Signals' })).toBeInTheDocument()
     expect(within(navigation).getByRole('button', { name: 'Synthesis' })).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
+  })
+
+  it('opens Industry Radar with deduplicated topics and transparent source coverage', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
+
+    const radar = screen.getByRole('region', { name: 'Industry Radar' })
+    expect(within(radar).getByRole('heading', { name: 'Industry Radar' })).toBeInTheDocument()
+    expect(within(radar).getAllByText('AI agents and automation')).toHaveLength(2)
+    expect(within(radar).getByText(/distinct developments/)).toBeInTheDocument()
+
+    fireEvent.click(within(radar).getByRole('button', { name: /Sources ·/ }))
+    const sources = screen.getByRole('dialog', { name: 'Sources' })
+    expect(within(sources).getByText('Product Hunt')).toBeInTheDocument()
+    expect(within(sources).getByRole('button', { name: '+ Add source' })).toBeInTheDocument()
+  })
+
+  it('opens a capped diversified Radar reading set from one user action', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
+    const radar = screen.getByRole('region', { name: 'Industry Radar' })
+    fireEvent.click(within(radar).getByRole('button', { name: /Open selected/ }))
+    expect(open).toHaveBeenCalled()
+    expect(open.mock.calls.length).toBeLessThanOrEqual(5)
+  })
+
+  it('marks only previously reviewed inactive Trends as stale', () => {
+    const reviewed = {
+      ...demoTrends[1],
+      discussionStatus: 'discussed' as const,
+      createdAt: '2026-01-01T00:00:00Z',
+      lastDiscussedAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      evidence: demoTrends[1].evidence.map((evidence) => ({
+        ...evidence,
+        linkedAt: '2026-01-01T00:00:00Z',
+      })),
+    }
+    expect(isTrendStale(reviewed, Date.parse('2026-03-15T00:00:00Z'))).toBe(true)
+    expect(
+      isTrendStale(
+        { ...reviewed, lastReviewedAt: '2026-03-01T00:00:00Z' },
+        Date.parse('2026-03-15T00:00:00Z'),
+      ),
+    ).toBe(false)
+    expect(isTrendStale({ ...reviewed, discussionStatus: 'not_discussed' })).toBe(false)
   })
 
   it('uses a closable keyword search and opens profile actions without signing out', () => {

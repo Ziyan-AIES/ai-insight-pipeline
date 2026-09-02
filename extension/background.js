@@ -64,6 +64,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void captureFromPage(message.payload).then(sendResponse)
     return true
   }
+  if (message.type === 'bsw-capture-status') {
+    void captureStatus(message.url).then(sendResponse)
+    return true
+  }
   return false
 })
 
@@ -177,6 +181,35 @@ async function captureFromPage(payload) {
     }
   } catch (error) {
     return { ok: false, status: 0, error: error.message || 'Save failed' }
+  }
+}
+
+async function captureStatus(url) {
+  const stored = await getStoredSession()
+  if (!stored.accessToken || !stored.authorized) {
+    return { ok: false, status: 401, saved: false }
+  }
+  try {
+    let result = await getCaptureStatus(stored.apiBase, stored.accessToken, url)
+    if (result.status === 401) {
+      const refreshed = await refreshSession()
+      if (refreshed.ok && refreshed.access_token) {
+        result = await getCaptureStatus(
+          stored.apiBase,
+          refreshed.access_token,
+          url,
+        )
+      }
+    }
+    const parsed = await result.json().catch(() => ({}))
+    return {
+      ok: result.ok,
+      status: result.status,
+      saved: Boolean(parsed.saved && !parsed.deleted),
+      editorial_status: parsed.editorial_status || '',
+    }
+  } catch {
+    return { ok: false, status: 0, saved: false }
   }
 }
 
@@ -315,6 +348,12 @@ function postDashboardHandoff(origin, state, accessToken) {
       authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ action: 'dashboard', state }),
+  })
+}
+
+async function getCaptureStatus(apiBase, accessToken, url) {
+  return fetch(`${apiBase}/api/status?url=${encodeURIComponent(url || '')}`, {
+    headers: { authorization: `Bearer ${accessToken}` },
   })
 }
 

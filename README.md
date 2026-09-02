@@ -7,12 +7,13 @@ A private team workspace that connects news capture, AI editorial review, and Ac
 ## Product flow
 
 1. Capture a link from Live Signals, Intelligence Synthesis, or the AI Signals Chrome extension; optionally add a quick thought before saving.
-2. Scan **Live Signals** as a 2×3 category grid of what is happening now.
-3. Vote to Discuss and add anonymous ideas for AI Daily Review.
-4. Open **Intelligence Synthesis** to review the explicit team states: Needs discuss, Discussed, and In threads. Meeting mode moves through the current Needs discuss queue one signal at a time.
-5. Drag a candidate onto an Action Thread to link it. Threads carry an owner, team decision, next step, outcome link, destination, status, and work month.
+2. Use **Industry Radar** to see which market topics are accelerating across independent sources before the team makes an editorial choice.
+3. Scan **Live Signals** as a 2×3 category grid of what is happening now.
+4. Vote to Discuss and add anonymous ideas for AI Daily Review.
+5. Open **Intelligence Synthesis** to review the explicit team states: Needs discuss, Discussed, and In threads. Meeting mode moves through the current Needs discuss queue one signal at a time.
+6. Drag a candidate onto an Action Thread to link it. Threads carry an owner, team decision, next step, outcome link, destination, status, and work month.
 
-The top-level navigation is **Live Signals | Intelligence Synthesis**. Global search finds news and Action Threads across time, with category and contributor filters. + Add News stays in the global bar. There is intentionally no Today homepage: the product opens on followed-category signal updates and their takeaways.
+The top-level navigation is **Industry Radar | Live Signals | Intelligence Synthesis**. Global search finds news and Action Threads across time, with category and contributor filters. + Add News stays in the global bar. There is intentionally no Today homepage: the product opens on followed-category signal updates and their takeaways.
 
 ## Stack
 
@@ -65,6 +66,8 @@ closed for that fallback path. Editorial jobs keep a separate
 - `CAPTURE_WRITE_TOKEN`
 - `EDITORIAL_WRITE_TOKEN`
 - `APP_ORIGIN` (exact allowed origin, or a comma-separated allowlist)
+- `PRODUCTHUNT_CLIENT_ID`
+- `PRODUCTHUNT_CLIENT_SECRET`
 
 `CAPTURE_WRITE_TOKEN` is a temporary fallback for older extension builds.
 New extension versions sign in with the dashboard magic link and send the
@@ -75,6 +78,29 @@ token is unset, so existing extension and local editorial clients can be
 rotated without downtime.
 
 Never commit real values.
+
+## Industry Radar
+
+Industry Radar is a machine-observed layer upstream of Live Signals. It ranks
+topic activity over 7- or 30-day windows, compares it with the preceding
+window, and counts distinct underlying developments rather than every article.
+The evidence panel deliberately selects at most one article per source and per
+story so a batch-open reading set is varied instead of repetitive.
+
+Admins can add, enable, reorder, or remove sources in the Sources drawer.
+Pasting a website URL first probes its advertised RSS/Atom feeds; built-in
+connectors cover Product Hunt and Hacker News. Removed sources are soft-deleted
+so existing evidence remains auditable. Collection runs every four hours and
+editors can also request a refresh from the page.
+
+Before enabling it in production:
+
+1. Apply `supabase/migrations/20260902173000_industry_radar.sql`.
+2. Add the two Product Hunt credentials above to Netlify for Functions/Runtime.
+3. Deploy the site and use **Refresh now** once to verify source health.
+
+Product Hunt credentials remain server-side. Confirm that the intended use is
+compatible with Product Hunt's API terms before using its data commercially.
 
 ## Chrome extension
 

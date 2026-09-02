@@ -43,6 +43,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/radar/source"
+  to = "/.netlify/functions/radar-source"
+  status = 200
+
+[[redirects]]
+  from = "/api/radar/ingest"
+  to = "/.netlify/functions/radar-ingest"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

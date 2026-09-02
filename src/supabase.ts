@@ -19,7 +19,12 @@ import type {
   Trend,
   TrendEvidenceRole,
   TrendStatus,
+  WorkspaceSearchResult,
   WorkspacePage,
+  RadarConnectorType,
+  RadarItem,
+  RadarSource,
+  RadarSourceType,
 } from './types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
@@ -415,6 +420,7 @@ export async function loadWorkspace(includeDeleted = false) {
     lastDiscussedBy: row.last_discussed_by
       ? memberNames.get(row.last_discussed_by) || 'Team member'
       : undefined,
+    lastReviewedAt: row.last_reviewed_at || undefined,
     meetingNominatedAt: row.meeting_nominated_at || undefined,
     meetingNominatedBy: row.meeting_nominated_by
       ? memberNames.get(row.meeting_nominated_by) || 'Team member'
@@ -500,6 +506,7 @@ type TrendRow = {
   discussion_status: DiscussionStatus
   last_discussed_at?: string | null
   last_discussed_by?: string | null
+  last_reviewed_at?: string | null
   meeting_nominated_at?: string | null
   meeting_nominated_by?: string | null
   created_by?: string | null
@@ -518,6 +525,35 @@ type TrendRow = {
     topic_id: string
     deleted_at?: string | null
   }>
+}
+
+export async function searchWorkspace(
+  query: string,
+  category: NewsCategory | 'all' = 'all',
+  contributor = 'all',
+) {
+  if (!supabase || !query.trim()) return [] as WorkspaceSearchResult[]
+  const { data, error } = await supabase.rpc('search_workspace', {
+    p_query: query.trim(),
+    p_category: category === 'all' ? null : category,
+    p_contributor: contributor === 'all' ? null : contributor,
+    p_limit_per_type: 8,
+  })
+  if (error) throw error
+  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+    entityType: row.entity_type as WorkspaceSearchResult['entityType'],
+    id: String(row.entity_id || ''),
+    title: String(row.title || ''),
+    category: row.category as NewsCategory,
+    url: row.url ? String(row.url) : undefined,
+    contributor: row.contributor ? String(row.contributor) : undefined,
+    archived: Boolean(row.archived),
+    status: row.status ? String(row.status) : undefined,
+    kind: row.kind ? (String(row.kind) as TopicKind) : undefined,
+    ownerName: row.owner_name ? String(row.owner_name) : undefined,
+    evidenceCount: Number(row.evidence_count || 0),
+    matchedAt: String(row.matched_at || ''),
+  }))
 }
 
 function missingTrendSchema(error: { message?: string; code?: string } | null) {
@@ -554,7 +590,7 @@ export async function loadLastWorkspacePage(): Promise<WorkspacePage | null> {
     throw error
   }
   const page = data?.last_workspace_page
-  return page === 'signals' || page === 'synthesis' || page === 'threads'
+  return page === 'radar' || page === 'signals' || page === 'synthesis' || page === 'threads'
     ? page
     : null
 }
@@ -928,6 +964,7 @@ export async function updateTrendItem(
     discussion_status?: DiscussionStatus
     last_discussed_at?: string | null
     last_discussed_by?: string | null
+    last_reviewed_at?: string | null
     meeting_nominated_at?: string | null
     meeting_nominated_by?: string | null
   },
@@ -1264,8 +1301,15 @@ export async function importLegacyNews() {
   return Number(body.imported || 0)
 }
 
+export interface WorkspaceRealtimeChange {
+  table: string
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE'
+  newRecord: Record<string, unknown>
+  oldRecord: Record<string, unknown>
+}
+
 export function subscribeToWorkspace(
-  onChange: () => void,
+  onChange: (change: WorkspaceRealtimeChange) => void,
   onStatus?: (status: 'connecting' | 'synced' | 'error') => void,
 ) {
   if (!supabase) return () => undefined
@@ -1279,6 +1323,7 @@ export function subscribeToWorkspace(
     'editorial_readouts',
     'editorial_job_runs',
     'news_votes',
+    'news_ideas',
     'trends',
     'trend_news',
     'trend_topics',
@@ -1286,7 +1331,13 @@ export function subscribeToWorkspace(
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table },
-      onChange,
+      (payload) =>
+        onChange({
+          table,
+          eventType: payload.eventType,
+          newRecord: (payload.new || {}) as Record<string, unknown>,
+          oldRecord: (payload.old || {}) as Record<string, unknown>,
+        }),
     )
   }
   channel.subscribe((status) => {
@@ -1385,4 +1436,232 @@ export async function updateTeamMemberRole(
     .update({ role })
     .eq('user_id', userId)
   if (error) throw error
+}
+
+type RadarSourceRow = {
+  id: string
+  name: string
+  domain: string
+  homepage_url: string
+  feed_url: string
+  source_type: RadarSourceType
+  connector_type: RadarConnectorType
+  enabled: boolean
+  priority: number
+  display_order: number
+  last_fetched_at: string | null
+  last_success_at: string | null
+  last_error: string | null
+}
+
+type RadarItemRow = {
+  id: string
+  source_id: string
+  external_id: string
+  canonical_url: string
+  title: string
+  summary: string
+  author: string
+  published_at: string
+  story_key: string
+  topic_slugs: string[] | null
+  engagement: RadarItem['engagement'] | null
+  radar_sources: {
+    name: string
+    source_type: RadarSourceType
+  } | null
+}
+
+function mapRadarSource(row: RadarSourceRow, itemCount7d = 0): RadarSource {
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    homepageUrl: row.homepage_url,
+    feedUrl: row.feed_url,
+    sourceType: row.source_type,
+    connectorType: row.connector_type,
+    enabled: row.enabled,
+    priority: Number(row.priority || 0),
+    displayOrder: Number(row.display_order || 0),
+    lastFetchedAt: row.last_fetched_at || undefined,
+    lastSuccessAt: row.last_success_at || undefined,
+    lastError: row.last_error || undefined,
+    itemCount7d,
+  }
+}
+
+export async function loadRadarData() {
+  if (!supabase) return null
+  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const [sourceResult, itemResult] = await Promise.all([
+    supabase
+      .from('radar_sources')
+      .select(
+        'id,name,domain,homepage_url,feed_url,source_type,connector_type,enabled,priority,display_order,last_fetched_at,last_success_at,last_error',
+      )
+      .is('deleted_at', null)
+      .order('display_order'),
+    supabase
+      .from('radar_items')
+      .select(
+        'id,source_id,external_id,canonical_url,title,summary,author,published_at,story_key,topic_slugs,engagement,radar_sources(name,source_type)',
+      )
+      .gte('published_at', since)
+      .order('published_at', { ascending: false })
+      .limit(2500),
+  ])
+  if (sourceResult.error) throw sourceResult.error
+  if (itemResult.error) throw itemResult.error
+
+  const itemRows = (itemResult.data || []) as unknown as RadarItemRow[]
+  const counts = new Map<string, number>()
+  const items = itemRows.map((row): RadarItem => {
+    if (row.published_at >= sevenDaysAgo) {
+      counts.set(row.source_id, (counts.get(row.source_id) || 0) + 1)
+    }
+    return {
+      id: row.id,
+      sourceId: row.source_id,
+      sourceName: row.radar_sources?.name || 'Unknown source',
+      sourceType: row.radar_sources?.source_type || 'industry_news',
+      externalId: row.external_id,
+      url: row.canonical_url,
+      title: row.title,
+      summary: row.summary || '',
+      author: row.author || '',
+      publishedAt: row.published_at,
+      storyKey: row.story_key || row.id,
+      topicSlugs: Array.isArray(row.topic_slugs) ? row.topic_slugs : [],
+      engagement: row.engagement || {},
+    }
+  })
+  return {
+    sources: ((sourceResult.data || []) as RadarSourceRow[]).map((row) =>
+      mapRadarSource(row, counts.get(row.id) || 0),
+    ),
+    items,
+  }
+}
+
+export async function createRadarSource(input: {
+  name: string
+  homepageUrl: string
+  feedUrl: string
+  sourceType: RadarSourceType
+  connectorType?: RadarConnectorType
+}) {
+  if (!supabase) return null
+  const session = await supabase.auth.getSession()
+  const userId = session.data.session?.user.id
+  if (!userId) throw new Error('Sign in to add a source')
+  const homepage = new URL(input.homepageUrl)
+  if (!['http:', 'https:'].includes(homepage.protocol)) {
+    throw new Error('Only HTTP(S) sources are allowed')
+  }
+  const { data: last } = await supabase
+    .from('radar_sources')
+    .select('display_order')
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const { data, error } = await supabase
+    .from('radar_sources')
+    .insert({
+      name: input.name.trim(),
+      domain: homepage.hostname.replace(/^www\./, '').toLowerCase(),
+      homepage_url: homepage.toString(),
+      feed_url: input.feedUrl,
+      source_type: input.sourceType,
+      connector_type: input.connectorType || 'rss',
+      enabled: true,
+      priority: 50,
+      display_order: Number(last?.display_order || 0) + 1,
+      created_by: userId,
+      updated_by: userId,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return mapRadarSource(data as RadarSourceRow)
+}
+
+export async function updateRadarSource(
+  sourceId: string,
+  patch: Partial<
+    Pick<RadarSource, 'enabled' | 'priority' | 'displayOrder' | 'name' | 'feedUrl' | 'sourceType'>
+  >,
+) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const values: Record<string, unknown> = {
+    updated_by: session.data.session?.user.id || null,
+  }
+  if (patch.enabled !== undefined) values.enabled = patch.enabled
+  if (patch.priority !== undefined) values.priority = patch.priority
+  if (patch.displayOrder !== undefined) values.display_order = patch.displayOrder
+  if (patch.name !== undefined) values.name = patch.name.trim()
+  if (patch.feedUrl !== undefined) values.feed_url = patch.feedUrl
+  if (patch.sourceType !== undefined) values.source_type = patch.sourceType
+  const { error } = await supabase.from('radar_sources').update(values).eq('id', sourceId)
+  if (error) throw error
+}
+
+export async function archiveRadarSource(sourceId: string) {
+  if (!supabase) return
+  const session = await supabase.auth.getSession()
+  const { error } = await supabase
+    .from('radar_sources')
+    .update({
+      enabled: false,
+      deleted_at: new Date().toISOString(),
+      updated_by: session.data.session?.user.id || null,
+    })
+    .eq('id', sourceId)
+  if (error) throw error
+}
+
+export async function reorderRadarSources(sourceIds: string[]) {
+  await Promise.all(
+    sourceIds.map((id, index) => updateRadarSource(id, { displayOrder: index + 1 })),
+  )
+}
+
+async function radarApi(path: string, init: RequestInit = {}) {
+  if (!supabase) throw new Error('Cloud workspace is not configured')
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token
+  if (!token) throw new Error('Sign in to manage radar sources')
+  const result = await fetch(path, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      ...(init.headers || {}),
+    },
+  })
+  const body = await result.json().catch(() => ({}))
+  if (!result.ok) throw new Error(body.error || 'Radar request failed')
+  return body
+}
+
+export function probeRadarSource(url: string) {
+  return radarApi('/api/radar/source', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'probe', url }),
+  }) as Promise<{
+    ok: true
+    name: string
+    homepageUrl: string
+    feedUrl: string
+    preview: Array<{ title: string; url: string; publishedAt: string }>
+  }>
+}
+
+export function triggerRadarIngest() {
+  return radarApi('/api/radar/ingest', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{ ok: true; fetched: number; inserted: number; failed: number }>
 }

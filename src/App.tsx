@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { CategoryLabel } from './components/CategoryLabel'
+import { IndustryRadar } from './components/IndustryRadar'
 import { demoNews, demoTheses, demoTopics, demoTrends } from './demoData'
 import { useTeamAuth } from './auth-context'
 import {
@@ -27,6 +28,7 @@ import {
   persistTrendTopic,
   recordWorkspaceView,
   saveLastWorkspacePage,
+  searchWorkspace,
   restoreContent,
   purgeContent,
   purgeRecycleBin,
@@ -42,6 +44,7 @@ import {
   updateThesisItem,
   updateTopicItem,
   updateTrendItem,
+  type WorkspaceRealtimeChange,
 } from './supabase'
 import {
   categoryLabels,
@@ -61,6 +64,11 @@ import {
   signalTime,
   type DashboardTimeMode,
 } from './intelligence'
+import {
+  isTrendStale,
+  trendInactiveDays,
+  trendLastActivityAt,
+} from './trendHealth'
 import type {
   FocusMode,
   DiscussionStatus,
@@ -73,6 +81,7 @@ import type {
   TeamMemberSummary,
   ActivityEvent,
   Trend,
+  WorkspaceSearchResult,
   WorkspacePage,
 } from './types'
 
@@ -96,12 +105,78 @@ function explicitWorkspaceFromLocation(): WorkspacePage | null {
   try {
     const page = new URLSearchParams(window.location.search).get('workspace')
     if (page === 'synthesis' || page === 'weekly') return 'synthesis'
+    if (page === 'radar') return 'radar'
     if (page === 'threads') return 'threads'
     if (page === 'signals') return 'signals'
     return null
   } catch {
     return null
   }
+}
+
+function realtimeText(
+  record: Record<string, unknown>,
+  key: string,
+  fallback = '',
+) {
+  const value = record[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+function realtimeOptionalText(
+  record: Record<string, unknown>,
+  key: string,
+  fallback?: string,
+) {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) return fallback
+  const value = record[key]
+  return typeof value === 'string' && value ? value : undefined
+}
+
+function realtimeNumber(
+  record: Record<string, unknown>,
+  key: string,
+  fallback = 0,
+) {
+  const value = Number(record[key])
+  return Number.isFinite(value) ? value : fallback
+}
+
+function realtimeMetadata(record: Record<string, unknown>) {
+  const value = record.metadata
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function realtimeTopicAnalysis(
+  record: Record<string, unknown>,
+  fallback: Topic['analysis'],
+) {
+  if (!Object.prototype.hasOwnProperty.call(record, 'analysis')) return fallback
+  const value = record.analysis
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ...emptyTopicAnalysis }
+  }
+  const analysis = value as Record<string, unknown>
+  return {
+    keyQuestion: String(analysis.keyQuestion || analysis.key_question || ''),
+    observed: String(analysis.observed || ''),
+    currentView: String(analysis.currentView || analysis.current_view || ''),
+    implications: String(analysis.implications || ''),
+    watch: String(analysis.watch || ''),
+  }
+}
+
+function upsertWorkspaceItem<T extends { id: string }>(
+  items: T[],
+  next: T,
+  prepend = true,
+) {
+  if (items.some((item) => item.id === next.id)) {
+    return items.map((item) => (item.id === next.id ? next : item))
+  }
+  return prepend ? [next, ...items] : [...items, next]
 }
 
 function workspaceFromLocation(): WorkspacePage {
@@ -412,6 +487,11 @@ function App() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [searchCategory, setSearchCategory] = useState<NewsCategory | 'all'>('all')
   const [searchContributor, setSearchContributor] = useState('all')
+  const [databaseSearchResults, setDatabaseSearchResults] = useState<
+    WorkspaceSearchResult[]
+  >([])
+  const [databaseSearchLoading, setDatabaseSearchLoading] = useState(false)
+  const [databaseSearchError, setDatabaseSearchError] = useState('')
   const [meetingMode, setMeetingMode] = useState(false)
   const [meetingIndex, setMeetingIndex] = useState(0)
   const [meetingThreadNewsId, setMeetingThreadNewsId] = useState('')
@@ -452,6 +532,11 @@ function App() {
   const [selectedThesisId, setSelectedThesisId] = useState('')
   const [notice, setNotice] = useState('')
   const [headerHidden, setHeaderHidden] = useState(false)
+  const newsRef = useRef(news)
+  const topicsRef = useRef(topics)
+  const trendsRef = useRef(trends)
+  const teamMembersRef = useRef(teamMembers)
+  const lastReconcileAt = useRef(0)
   const recordedSignalViewFor = useRef('')
   const restoredWorkspaceFor = useRef('')
   const selectedActivityType = newsDraft
@@ -465,6 +550,13 @@ function App() {
     newsDraft?.id ||
     (topicDraft && !creatingTopic ? topicDraft.id : '') ||
     (thesisDraft && !creatingThesis ? thesisDraft.id : '')
+
+  useEffect(() => {
+    newsRef.current = news
+    topicsRef.current = topics
+    trendsRef.current = trends
+    teamMembersRef.current = teamMembers
+  }, [news, teamMembers, topics, trends])
 
   const closeAddLink = useCallback(() => {
     setShowAddLink(false)
@@ -497,13 +589,443 @@ function App() {
     }
   }, [canAdmin])
 
+  const applyRealtimeChange = useCallback((change: WorkspaceRealtimeChange) => {
+    const record =
+      change.eventType === 'DELETE' ? change.oldRecord : change.newRecord
+    const id = realtimeText(record, 'id')
+
+    if (change.table === 'news_items' && id) {
+      setNews((current) => {
+        if (change.eventType === 'DELETE') {
+          return current.filter((item) => item.id !== id)
+        }
+        const existing = current.find((item) => item.id === id)
+        const metadata = realtimeMetadata(record)
+        const capturedById = realtimeOptionalText(record, 'captured_by')
+        const capturedMember = teamMembersRef.current.find(
+          (member) => member.userId === capturedById,
+        )
+        const contributor = [
+          metadata.contributor_name,
+          capturedMember?.displayName,
+          metadata.legacy_user,
+          existing?.capturedBy,
+        ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+        const next: NewsItem = {
+          id,
+          url: realtimeText(record, 'canonical_url', existing?.url),
+          title: realtimeText(record, 'title', existing?.title || 'Untitled signal'),
+          source: realtimeText(record, 'source', existing?.source),
+          summary: realtimeText(record, 'summary', existing?.summary),
+          takeaway: realtimeText(record, 'takeaway', existing?.takeaway),
+          industryImportance: realtimeText(
+            record,
+            'industry_importance',
+            existing?.industryImportance,
+          ),
+          qiraRelevance: realtimeText(record, 'qira_relevance', existing?.qiraRelevance),
+          teamSynthesis: realtimeText(record, 'team_synthesis', existing?.teamSynthesis),
+          discussionPriorityScore: realtimeNumber(
+            record,
+            'discussion_priority_score',
+            existing?.discussionPriorityScore,
+          ),
+          category: (realtimeText(record, 'category', existing?.category || 'ecosystem') as NewsCategory),
+          sourceType:
+            realtimeText(record, 'source_type', existing?.sourceType) === 'manual_note'
+              ? 'manual_note'
+              : 'captured_news',
+          capturedAt: realtimeText(record, 'captured_at', existing?.capturedAt || new Date().toISOString()),
+          publishedAt: realtimeOptionalText(
+            record,
+            'published_at',
+            existing?.publishedAt,
+          ),
+          capturedBy: contributor || 'Team member',
+          lastEditedBy:
+            typeof metadata.last_edited_by === 'string'
+              ? metadata.last_edited_by
+              : existing?.lastEditedBy,
+          archivedAt:
+            typeof metadata.archived_at === 'string'
+              ? metadata.archived_at
+              : undefined,
+          metadata,
+          imageUrl: realtimeText(record, 'image_url', existing?.imageUrl) || undefined,
+          editorialStatus: (realtimeText(
+            record,
+            'editorial_status',
+            existing?.editorialStatus || 'pending',
+          ) as NewsItem['editorialStatus']),
+          lastReviewedAt: realtimeOptionalText(
+            record,
+            'last_reviewed_at',
+            existing?.lastReviewedAt,
+          ),
+          ideaCount: existing?.ideaCount || 0,
+          discussionStatus: (realtimeText(
+            record,
+            'discussion_status',
+            existing?.discussionStatus || 'not_discussed',
+          ) as DiscussionStatus),
+          discussedAt: realtimeOptionalText(
+            record,
+            'discussed_at',
+            existing?.discussedAt,
+          ),
+          discussedBy:
+            teamMembersRef.current.find(
+              (member) => member.userId === realtimeOptionalText(record, 'discussed_by'),
+            )?.displayName || existing?.discussedBy,
+          meetingNominatedAt: realtimeOptionalText(
+            record,
+            'meeting_nominated_at',
+            existing?.meetingNominatedAt,
+          ),
+          meetingNominatedBy:
+            teamMembersRef.current.find(
+              (member) =>
+                member.userId === realtimeOptionalText(record, 'meeting_nominated_by'),
+            )?.displayName || existing?.meetingNominatedBy,
+          voteCount: realtimeNumber(record, 'vote_count', existing?.voteCount),
+          votedByMe: existing?.votedByMe,
+          discussionOrder:
+            record.discussion_order === null
+              ? undefined
+              : realtimeNumber(
+                  record,
+                  'discussion_order',
+                  existing?.discussionOrder,
+                ),
+          updatedAt: realtimeText(record, 'updated_at', existing?.updatedAt),
+          version: realtimeNumber(record, 'version', existing?.version || 1),
+          deletedAt: realtimeOptionalText(
+            record,
+            'deleted_at',
+            existing?.deletedAt,
+          ),
+          topicLinks: existing?.topicLinks || [],
+          trendLinks: existing?.trendLinks || [],
+        }
+        return existing
+          ? current.map((item) => (item.id === id ? next : item))
+          : [next, ...current]
+      })
+      return true
+    }
+
+    if (change.table === 'trends' && id) {
+      setTrends((current) => {
+        if (change.eventType === 'DELETE') {
+          return current.filter((trend) => trend.id !== id)
+        }
+        const existing = current.find((trend) => trend.id === id)
+        const next: Trend = {
+          id,
+          title: realtimeText(record, 'title', existing?.title || 'Untitled Trend'),
+          displayOrder: realtimeNumber(record, 'display_order', existing?.displayOrder),
+          category: (realtimeText(record, 'category', existing?.category || 'ecosystem') as NewsCategory),
+          observation: realtimeText(record, 'observation', existing?.observation),
+          initialRead: realtimeText(record, 'initial_read', existing?.initialRead),
+          discussionQuestion: realtimeText(
+            record,
+            'discussion_question',
+            existing?.discussionQuestion,
+          ),
+          status: (realtimeText(record, 'status', existing?.status || 'draft') as Trend['status']),
+          discussionStatus: (realtimeText(
+            record,
+            'discussion_status',
+            existing?.discussionStatus || 'not_discussed',
+          ) as DiscussionStatus),
+          lastDiscussedAt: realtimeOptionalText(
+            record,
+            'last_discussed_at',
+            existing?.lastDiscussedAt,
+          ),
+          lastDiscussedBy:
+            teamMembersRef.current.find(
+              (member) =>
+                member.userId === realtimeOptionalText(record, 'last_discussed_by'),
+            )?.displayName || existing?.lastDiscussedBy,
+          lastReviewedAt: realtimeOptionalText(
+            record,
+            'last_reviewed_at',
+            existing?.lastReviewedAt,
+          ),
+          meetingNominatedAt: realtimeOptionalText(
+            record,
+            'meeting_nominated_at',
+            existing?.meetingNominatedAt,
+          ),
+          meetingNominatedBy:
+            teamMembersRef.current.find(
+              (member) =>
+                member.userId === realtimeOptionalText(record, 'meeting_nominated_by'),
+            )?.displayName || existing?.meetingNominatedBy,
+          createdBy:
+            teamMembersRef.current.find(
+              (member) => member.userId === realtimeOptionalText(record, 'created_by'),
+            )?.displayName || existing?.createdBy,
+          createdAt: realtimeText(record, 'created_at', existing?.createdAt || new Date().toISOString()),
+          updatedAt: realtimeText(record, 'updated_at', existing?.updatedAt || new Date().toISOString()),
+          version: realtimeNumber(record, 'version', existing?.version || 1),
+          deletedAt: realtimeOptionalText(
+            record,
+            'deleted_at',
+            existing?.deletedAt,
+          ),
+          evidence: existing?.evidence || [],
+          actionThreadIds: existing?.actionThreadIds || [],
+        }
+        return existing
+          ? current.map((trend) => (trend.id === id ? next : trend))
+          : [next, ...current]
+      })
+      return true
+    }
+
+    if (change.table === 'topics' && id) {
+      setTopics((current) => {
+        if (change.eventType === 'DELETE') {
+          return current.filter((topic) => topic.id !== id)
+        }
+        const existing = current.find((topic) => topic.id === id)
+        const monthKey = (
+          realtimeOptionalText(record, 'scheduled_month', existing?.monthKey) || ''
+        ).slice(0, 7)
+        const next: Topic = {
+          id,
+          title: realtimeText(record, 'title', existing?.title || 'Untitled Action Thread'),
+          thesisId: realtimeOptionalText(record, 'thesis_id', existing?.thesisId),
+          parentTopicId: realtimeOptionalText(
+            record,
+            'parent_topic_id',
+            existing?.parentTopicId,
+          ),
+          monthKey,
+          monthLabel: topicMonthLabel(monthKey),
+          category: (realtimeText(record, 'category', existing?.category || 'ecosystem') as NewsCategory),
+          status: (realtimeText(record, 'status', existing?.status || 'idea') as Topic['status']),
+          threadStatus: (realtimeText(
+            record,
+            'thread_status',
+            existing?.threadStatus || 'open',
+          ) as ThreadStatus),
+          kind: (realtimeText(record, 'kind', existing?.kind || 'insight') as TopicKind),
+          notes: realtimeText(record, 'notes', existing?.notes),
+          analysis: realtimeTopicAnalysis(
+            record,
+            existing?.analysis || { ...emptyTopicAnalysis },
+          ),
+          outputs: existing?.outputs || [],
+          ownerId: realtimeOptionalText(record, 'owner_id', existing?.ownerId),
+          ownerName:
+            teamMembersRef.current.find(
+              (member) => member.userId === realtimeOptionalText(record, 'owner_id'),
+            )?.displayName || existing?.ownerName,
+          decisionSummary: realtimeText(
+            record,
+            'decision_summary',
+            existing?.decisionSummary,
+          ),
+          nextStep: realtimeText(record, 'next_step', existing?.nextStep),
+          outcomeUrl: realtimeText(record, 'outcome_url', existing?.outcomeUrl),
+          createdAt: realtimeText(record, 'created_at', existing?.createdAt),
+          displayOrder: realtimeNumber(record, 'display_order', existing?.displayOrder),
+          updatedAt: realtimeText(record, 'updated_at', existing?.updatedAt),
+          version: realtimeNumber(record, 'version', existing?.version || 1),
+          deletedAt: realtimeOptionalText(
+            record,
+            'deleted_at',
+            existing?.deletedAt,
+          ),
+          supportingNews: existing?.supportingNews || [],
+          sourceTrends: existing?.sourceTrends || [],
+        }
+        return existing
+          ? current.map((topic) => (topic.id === id ? next : topic))
+          : [next, ...current]
+      })
+      return true
+    }
+
+    const active = change.eventType !== 'DELETE' && !record.deleted_at
+    if (change.table === 'topic_news') {
+      const topicId = realtimeText(record, 'topic_id')
+      const newsId = realtimeText(record, 'news_id')
+      if (!topicId || !newsId) return false
+      setTopics((current) =>
+        current.map((topic) =>
+          topic.id !== topicId
+            ? topic
+            : {
+                ...topic,
+                supportingNews: active
+                  ? Array.from(new Set([...topic.supportingNews, newsId]))
+                  : topic.supportingNews.filter((candidate) => candidate !== newsId),
+              },
+        ),
+      )
+      setNews((current) =>
+        current.map((item) => {
+          if (item.id !== newsId) return item
+          const existing = item.topicLinks.find((link) => link.topicId === topicId)
+          return {
+            ...item,
+            topicLinks: active
+              ? existing
+                ? item.topicLinks
+                : [
+                    ...item.topicLinks,
+                    {
+                      topicId,
+                      topicTitle:
+                        topicsRef.current.find((topic) => topic.id === topicId)?.title ||
+                        'Action Thread',
+                      monthLabel:
+                        topicsRef.current.find((topic) => topic.id === topicId)?.monthLabel ||
+                        'Unscheduled',
+                    },
+                  ]
+              : item.topicLinks.filter((link) => link.topicId !== topicId),
+          }
+        }),
+      )
+      return true
+    }
+
+    if (change.table === 'trend_news') {
+      const trendId = realtimeText(record, 'trend_id')
+      const newsId = realtimeText(record, 'news_id')
+      if (!trendId || !newsId) return false
+      setTrends((current) =>
+        current.map((trend) => {
+          if (trend.id !== trendId) return trend
+          const existing = trend.evidence.find((link) => link.newsId === newsId)
+          return {
+            ...trend,
+            evidence: active
+              ? existing
+                ? trend.evidence.map((link) =>
+                    link.newsId === newsId
+                      ? {
+                          ...link,
+                          role: (realtimeText(record, 'evidence_role', link.role) as typeof link.role),
+                          displayOrder: realtimeNumber(
+                            record,
+                            'display_order',
+                            link.displayOrder,
+                          ),
+                        }
+                      : link,
+                  )
+                : [
+                    ...trend.evidence,
+                    {
+                      newsId,
+                      role: (realtimeText(record, 'evidence_role', 'supporting') as Trend['evidence'][number]['role']),
+                      displayOrder: realtimeNumber(record, 'display_order', 1),
+                      linkedAt: realtimeText(record, 'linked_at', new Date().toISOString()),
+                    },
+                  ]
+              : trend.evidence.filter((link) => link.newsId !== newsId),
+          }
+        }),
+      )
+      setNews((current) =>
+        current.map((item) => {
+          if (item.id !== newsId) return item
+          const existing = item.trendLinks.find((link) => link.trendId === trendId)
+          return {
+            ...item,
+            trendLinks: active
+              ? existing
+                ? item.trendLinks
+                : [
+                    ...item.trendLinks,
+                    {
+                      trendId,
+                      trendTitle:
+                        trendsRef.current.find((trend) => trend.id === trendId)?.title ||
+                        'Trend',
+                      role: (realtimeText(record, 'evidence_role', 'supporting') as Trend['evidence'][number]['role']),
+                    },
+                  ]
+              : item.trendLinks.filter((link) => link.trendId !== trendId),
+          }
+        }),
+      )
+      return true
+    }
+
+    if (change.table === 'trend_topics') {
+      const trendId = realtimeText(record, 'trend_id')
+      const topicId = realtimeText(record, 'topic_id')
+      if (!trendId || !topicId) return false
+      setTrends((current) =>
+        current.map((trend) =>
+          trend.id !== trendId
+            ? trend
+            : {
+                ...trend,
+                actionThreadIds: active
+                  ? Array.from(new Set([...trend.actionThreadIds, topicId]))
+                  : trend.actionThreadIds.filter((candidate) => candidate !== topicId),
+              },
+        ),
+      )
+      setTopics((current) =>
+        current.map((topic) => {
+          if (topic.id !== topicId) return topic
+          const existing = topic.sourceTrends.find((link) => link.trendId === trendId)
+          return {
+            ...topic,
+            sourceTrends: active
+              ? existing
+                ? topic.sourceTrends
+                : [
+                    ...topic.sourceTrends,
+                    {
+                      trendId,
+                      trendTitle:
+                        trendsRef.current.find((trend) => trend.id === trendId)?.title ||
+                        'Trend',
+                    },
+                  ]
+              : topic.sourceTrends.filter((link) => link.trendId !== trendId),
+          }
+        }),
+      )
+      return true
+    }
+
+    if (change.table === 'news_ideas' && change.eventType === 'INSERT') {
+      const newsId = realtimeText(record, 'news_id')
+      if (!newsId) return true
+      setNews((current) =>
+        current.map((item) =>
+          item.id === newsId ? { ...item, ideaCount: item.ideaCount + 1 } : item,
+        ),
+      )
+      return true
+    }
+
+    return change.table === 'editorial_job_runs' || change.table === 'news_votes'
+  }, [])
+
   useEffect(() => {
     void reloadWorkspace()
     let timeout = 0
     const unsubscribe = subscribeToWorkspace(
-      () => {
+      (change) => {
+        const handledIncrementally = applyRealtimeChange(change)
+        if (handledIncrementally) {
+          setSyncState('synced')
+          return
+        }
         window.clearTimeout(timeout)
-        timeout = window.setTimeout(() => void reloadWorkspace(true), 180)
+        timeout = window.setTimeout(() => void reloadWorkspace(true), 500)
       },
       setSyncState,
     )
@@ -511,7 +1033,7 @@ function App() {
       window.clearTimeout(timeout)
       unsubscribe()
     }
-  }, [reloadWorkspace])
+  }, [applyRealtimeChange, reloadWorkspace])
 
   useEffect(() => {
     if (!selectedActivityType || !selectedActivityId || !cloudConfigured) {
@@ -537,16 +1059,31 @@ function App() {
 
   useEffect(() => {
     if (!cloudConfigured) return
-    const handleOnline = () => {
+    const reconcile = () => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return
+      const now = Date.now()
+      if (now - lastReconcileAt.current < 5000) return
+      lastReconcileAt.current = now
       setSyncState('connecting')
       void reloadWorkspace(true)
     }
+    const handleOnline = () => reconcile()
     const handleOffline = () => setSyncState('error')
+    const handleFocus = () => reconcile()
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') reconcile()
+    }
+    const interval = window.setInterval(reconcile, 60 * 60 * 1000)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
     return () => {
+      window.clearInterval(interval)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [reloadWorkspace])
 
@@ -596,7 +1133,7 @@ function App() {
     const localPage = (() => {
       try {
         const stored = window.localStorage.getItem(storageKey)
-        return stored === 'signals' || stored === 'synthesis' || stored === 'threads'
+        return stored === 'radar' || stored === 'signals' || stored === 'synthesis' || stored === 'threads'
           ? stored
           : null
       } catch {
@@ -756,7 +1293,40 @@ function App() {
     [news],
   )
 
-  const globalNewsResults = useMemo(() => {
+  useEffect(() => {
+    if (!cloudConfigured) return
+    const needle = query.trim()
+    if (!searchOpen || !needle) {
+      setDatabaseSearchResults([])
+      setDatabaseSearchLoading(false)
+      setDatabaseSearchError('')
+      return
+    }
+    let active = true
+    const timeout = window.setTimeout(() => {
+      setDatabaseSearchLoading(true)
+      setDatabaseSearchError('')
+      void searchWorkspace(needle, searchCategory, searchContributor)
+        .then((results) => {
+          if (active) setDatabaseSearchResults(results)
+        })
+        .catch((error: unknown) => {
+          if (!active) return
+          setDatabaseSearchError(
+            error instanceof Error ? error.message : 'Database search unavailable',
+          )
+        })
+        .finally(() => {
+          if (active) setDatabaseSearchLoading(false)
+        })
+    }, 250)
+    return () => {
+      active = false
+      window.clearTimeout(timeout)
+    }
+  }, [query, searchCategory, searchContributor, searchOpen])
+
+  const localGlobalNewsResults = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return []
     return news
@@ -777,7 +1347,7 @@ function App() {
       .slice(0, 8)
   }, [news, query, searchCategory, searchContributor])
 
-  const globalTopicResults = useMemo(() => {
+  const localGlobalTopicResults = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return []
     return topics
@@ -794,7 +1364,7 @@ function App() {
       .slice(0, 6)
   }, [query, searchCategory, topics])
 
-  const globalTrendResults = useMemo(() => {
+  const localGlobalTrendResults = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return []
     return trends
@@ -813,6 +1383,61 @@ function App() {
       )
       .slice(0, 6)
   }, [query, searchCategory, trends])
+
+  const globalSearchResults = useMemo<WorkspaceSearchResult[]>(() => {
+    if (cloudConfigured && !databaseSearchError) return databaseSearchResults
+    return [
+      ...localGlobalNewsResults.map((item) => ({
+        entityType: 'news' as const,
+        id: item.id,
+        title: item.title,
+        category: item.category,
+        url: item.url,
+        contributor: item.capturedBy,
+        archived: Boolean(item.archivedAt),
+        evidenceCount: 0,
+        matchedAt: signalTime(item),
+      })),
+      ...localGlobalTrendResults.map((trend) => ({
+        entityType: 'trend' as const,
+        id: trend.id,
+        title: trend.title,
+        category: trend.category,
+        archived: trend.status === 'archived',
+        status: trend.status,
+        evidenceCount: trend.evidence.length,
+        matchedAt: trend.updatedAt,
+      })),
+      ...localGlobalTopicResults.map((topic) => ({
+        entityType: 'topic' as const,
+        id: topic.id,
+        title: topic.title,
+        category: topic.category,
+        archived: false,
+        status: topic.threadStatus,
+        kind: topic.kind,
+        ownerName: topic.ownerName,
+        evidenceCount: topic.supportingNews.length,
+        matchedAt: topic.updatedAt || topic.createdAt || '',
+      })),
+    ]
+  }, [
+    databaseSearchError,
+    databaseSearchResults,
+    localGlobalNewsResults,
+    localGlobalTopicResults,
+    localGlobalTrendResults,
+  ])
+
+  const globalNewsResults = globalSearchResults.filter(
+    (result) => result.entityType === 'news',
+  )
+  const globalTrendResults = globalSearchResults.filter(
+    (result) => result.entityType === 'trend',
+  )
+  const globalTopicResults = globalSearchResults.filter(
+    (result) => result.entityType === 'topic',
+  )
 
   const briefingTrends = useMemo(() => {
     return trends
@@ -898,14 +1523,29 @@ function App() {
     [trends],
   )
 
-  const trendMeetingQueue = useMemo(
+  const trendDiscussionQueue = useMemo(
     () => meetingEligibleTrends.filter(isTrendToDiscuss),
     [meetingEligibleTrends],
+  )
+  const staleTrendQueue = useMemo(() => {
+    const discussionIds = new Set(trendDiscussionQueue.map((trend) => trend.id))
+    return meetingEligibleTrends
+      .filter((trend) => !discussionIds.has(trend.id) && isTrendStale(trend))
+      .sort((a, b) => trendLastActivityAt(a).localeCompare(trendLastActivityAt(b)))
+  }, [meetingEligibleTrends, trendDiscussionQueue])
+  const trendMeetingQueue = useMemo(
+    () => [...trendDiscussionQueue, ...staleTrendQueue],
+    [staleTrendQueue, trendDiscussionQueue],
   )
   const trendMeetingItem =
     trendMeetingQueue[
       Math.min(trendMeetingIndex, trendMeetingQueue.length - 1)
     ]
+  const trendMeetingHealthCheck = Boolean(
+    trendMeetingItem &&
+      trendMeetingIndex >= trendDiscussionQueue.length &&
+      staleTrendQueue.some((trend) => trend.id === trendMeetingItem.id),
+  )
 
   const discussionNotes = useMemo(
     () =>
@@ -1375,7 +2015,7 @@ function App() {
       }
       setIdeaText('')
       setIdeaNewsId('')
-      if (linkedNewsId) {
+      if (linkedNewsId && !cloudConfigured) {
         setNews((current) =>
           current.map((item) =>
             item.id === linkedNewsId
@@ -1556,7 +2196,7 @@ function App() {
       topicLinks: [],
       trendLinks: [],
     }
-    setNews((current) => [item, ...current])
+    setNews((current) => upsertWorkspaceItem(current, item))
     setShowAddNote(false)
     setNoteTitle('')
     setNoteBody('')
@@ -1844,7 +2484,7 @@ function App() {
           version: saved.version,
           evidence,
         }
-        setTrends((current) => [created, ...current])
+        setTrends((current) => upsertWorkspaceItem(current, created))
         if (evidenceNewsIds.length > 0) {
           setNews((current) =>
             current.map((item) =>
@@ -2232,6 +2872,40 @@ function App() {
     }
   }
 
+  async function reviewStaleTrend(trend: Trend) {
+    const reviewedAt = new Date().toISOString()
+    try {
+      let version = trend.version
+      let updatedAt = trend.updatedAt
+      if (cloudConfigured) {
+        const result = await updateTrendItem(
+          trend.id,
+          { last_reviewed_at: reviewedAt },
+          trend.version,
+        )
+        version = result?.version || version
+        updatedAt = result?.updatedAt || updatedAt
+      }
+      setTrends((current) =>
+        current.map((candidate) =>
+          candidate.id === trend.id
+            ? {
+                ...candidate,
+                lastReviewedAt: reviewedAt,
+                version,
+                updatedAt,
+              }
+            : candidate,
+        ),
+      )
+      setNotice('Trend health review recorded. Keep watching.')
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not review Trend health',
+      )
+    }
+  }
+
   async function setTrendMeetingIncluded(trend: Trend, included: boolean) {
     const nominatedAt = included ? new Date().toISOString() : undefined
     const discussedAt = included ? undefined : new Date().toISOString()
@@ -2522,10 +3196,13 @@ function App() {
         setNotice(error instanceof Error ? error.message : 'Could not create Thesis')
         return
       }
-      setTheses((current) => [
-        ...current,
-        { ...thesisDraft, id, title: thesisDraft.title.trim(), version: 1 },
-      ])
+      setTheses((current) =>
+        upsertWorkspaceItem(
+          current,
+          { ...thesisDraft, id, title: thesisDraft.title.trim(), version: 1 },
+          false,
+        ),
+      )
       setSelectedThesisId(id)
       setNotice('Thesis created')
     } else {
@@ -2646,10 +3323,13 @@ function App() {
         )
         return
       }
-      setTopics((current) => [
-        ...current,
-        { ...topicDraft, id, title: topicDraft.title.trim(), version: 1 },
-      ])
+      setTopics((current) =>
+        upsertWorkspaceItem(
+          current,
+          { ...topicDraft, id, title: topicDraft.title.trim(), version: 1 },
+          false,
+        ),
+      )
       if (topicDraft.thesisId) {
         setTheses((current) =>
           current.map((item) =>
@@ -2871,7 +3551,7 @@ function App() {
         : [],
       trendLinks: [],
     }
-    setNews((current) => [item, ...current])
+    setNews((current) => upsertWorkspaceItem(current, item))
     if (topic) {
       setTopics((current) =>
         current.map((candidate) =>
@@ -3295,6 +3975,7 @@ function App() {
       )
     const newEvidence = trendNewEvidenceCount(trend)
     const needsReview = isTrendToDiscuss(trend)
+    const stale = isTrendStale(trend)
     return (
       <article
         className={`trend-card cat-${trend.category} ${
@@ -3361,9 +4042,11 @@ function App() {
         <header className="trend-card-head">
           <CategoryLabel category={trend.category} className="category-token" />
           <div className="trend-card-state">
-            <span className={`trend-review-state ${needsReview ? 'needs-review' : ''}`}>
+            <span className={`trend-review-state ${needsReview || stale ? 'needs-review' : ''} ${stale ? 'is-stale' : ''}`}>
               {trend.status === 'archived'
                 ? 'Archived'
+                : stale
+                  ? `Stale · ${trendInactiveDays(trend)}d`
                 : newEvidence > 0 && trend.lastDiscussedAt
                 ? `${newEvidence} new`
                 : needsReview
@@ -3498,7 +4181,7 @@ function App() {
             >
               Unarchive
             </button>
-          ) : needsReview ? (
+          ) : needsReview || stale ? (
             <button
               className="primary-button"
               type="button"
@@ -3510,7 +4193,7 @@ function App() {
                 setTrendMeetingMode(true)
               }}
             >
-              Review
+              {stale ? 'Health check' : 'Review'}
             </button>
           ) : null}
         </footer>
@@ -3850,8 +4533,8 @@ function App() {
                 >
                   <span>{item.title}</span>
                   <small>
-                    {categoryLabels[item.category]} · {item.capturedBy}
-                    {item.archivedAt ? ' · Archived' : ''}
+                    {categoryLabels[item.category]} · {item.contributor || 'Team'}
+                    {item.archived ? ' · Archived' : ''}
                   </small>
                 </a>
               ))}
@@ -3863,16 +4546,21 @@ function App() {
                   type="button"
                   key={trend.id}
                   onClick={() => {
+                    const source = trends.find((candidate) => candidate.id === trend.id)
+                    if (!source) {
+                      setNotice('This Trend is outside the current workspace snapshot. Refresh and try again.')
+                      return
+                    }
                     setWorkspacePage('synthesis')
                     setCreatingTrend(false)
-                    setTrendDraft({ ...trend })
+                    setTrendDraft({ ...source })
                     setSearchOpen(false)
                   }}
                 >
                   <span>{trend.title}</span>
                   <small>
-                    {categoryLabels[trend.category]} · {trend.evidence.length} signals
-                    {trend.status === 'archived' ? ' · Archived' : ''}
+                    {categoryLabels[trend.category]} · {trend.evidenceCount} signals
+                    {trend.archived ? ' · Archived' : ''}
                   </small>
                 </button>
               ))}
@@ -3884,17 +4572,28 @@ function App() {
                   type="button"
                   key={topic.id}
                   onClick={() => {
+                    const source = topics.find((candidate) => candidate.id === topic.id)
+                    if (!source) {
+                      setNotice('This Action Thread is outside the current workspace snapshot. Refresh and try again.')
+                      return
+                    }
                     setCreatingTopic(false)
-                    setTopicDraft({ ...topic })
+                    setTopicDraft({ ...source })
                     setSearchOpen(false)
                   }}
                 >
                   <span>{topic.title}</span>
-                  <small>{topicKindLabels[topic.kind]} · {topic.ownerName || 'Unassigned'}</small>
+                  <small>{topicKindLabels[topic.kind || 'insight']} · {topic.ownerName || 'Unassigned'}</small>
                 </button>
               ))}
             </div>
-            {globalNewsResults.length + globalTrendResults.length + globalTopicResults.length === 0 ? (
+            {databaseSearchLoading ? (
+              <p className="search-empty">Searching shared workspace…</p>
+            ) : null}
+            {databaseSearchError ? (
+              <p className="search-empty">Shared search unavailable. Showing loaded results.</p>
+            ) : null}
+            {!databaseSearchLoading && globalNewsResults.length + globalTrendResults.length + globalTopicResults.length === 0 ? (
               <p className="search-empty">No matching results.</p>
             ) : null}
           </div>
@@ -4045,6 +4744,13 @@ function App() {
         </a>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
+            className={workspacePage === 'radar' ? 'active' : ''}
+            type="button"
+            onClick={() => setWorkspacePage('radar')}
+          >
+            Industry Radar
+          </button>
+          <button
             className={workspacePage === 'signals' ? 'active' : ''}
             type="button"
             onClick={() => setWorkspacePage('signals')}
@@ -4138,9 +4844,16 @@ function App() {
 
       <main
         className={`dashboard ${
-          workspacePage === 'signals' ? 'signals-page' : 'synthesis-page'
+          workspacePage === 'radar'
+            ? 'radar-page'
+            : workspacePage === 'signals'
+              ? 'signals-page'
+              : 'synthesis-page'
         }`}
       >
+        {workspacePage === 'radar' ? (
+          <IndustryRadar canAdmin={canAdmin} canEdit={canEdit} onNotice={setNotice} />
+        ) : null}
         {workspacePage === 'signals' && (
           <section className="news-pane" aria-label="Live Signals">
             <div className="pane-heading">
@@ -5293,12 +6006,18 @@ function App() {
           >
             <header className="meeting-header">
               <div>
-                <span className="eyebrow">Team discussion</span>
-                <h2 id="trend-meeting-title">Trend review</h2>
+                <span className="eyebrow">
+                  {trendMeetingHealthCheck ? 'Trend health check' : 'Team discussion'}
+                </span>
+                <h2 id="trend-meeting-title">
+                  {trendMeetingHealthCheck ? 'Review stale Trends' : 'Trend review'}
+                </h2>
               </div>
               <div className="meeting-progress">
-                {trendMeetingQueue.length > 0
-                  ? `${Math.min(trendMeetingIndex + 1, trendMeetingQueue.length)} of ${trendMeetingQueue.length}`
+                {trendMeetingItem
+                  ? trendMeetingHealthCheck
+                    ? `Health check ${trendMeetingIndex - trendDiscussionQueue.length + 1} of ${staleTrendQueue.length}`
+                    : `Discussion ${trendMeetingIndex + 1} of ${trendDiscussionQueue.length}`
                   : 'Complete'}
               </div>
               <button
@@ -5315,6 +6034,11 @@ function App() {
                 <div className="meeting-signal-meta">
                   <CategoryLabel category={trendMeetingItem.category} />
                   <span>{trendMeetingItem.evidence.length} supporting signals</span>
+                  {trendMeetingHealthCheck ? (
+                    <span className="trend-stale-badge">
+                      Stale · {trendInactiveDays(trendMeetingItem)} days since activity
+                    </span>
+                  ) : null}
                   {trendMeetingItem.actionThreadIds.length > 0 ? (
                     <span className="state-in-thread">
                       Already in {trendMeetingItem.actionThreadIds.length} Action Thread{trendMeetingItem.actionThreadIds.length === 1 ? '' : 's'}
@@ -5419,7 +6143,9 @@ function App() {
                       className="primary-button"
                       type="button"
                       onClick={() =>
-                        void setTrendDiscussionOutcome(trendMeetingItem, 'discussed')
+                        void (trendMeetingHealthCheck
+                          ? reviewStaleTrend(trendMeetingItem)
+                          : setTrendDiscussionOutcome(trendMeetingItem, 'discussed'))
                       }
                     >
                       Keep watching

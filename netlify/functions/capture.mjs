@@ -79,6 +79,9 @@ export async function handler(event) {
     kind: String(payload.kind || 'save'),
     created_at: eventTime,
   }
+  const compactEvent = { ...normalizedEvent }
+  delete compactEvent.text
+  delete compactEvent.images
 
   const takeaway = String(payload.takeaway || payload.comment || '').slice(0, 2000)
   const contributorName = access.caller
@@ -95,7 +98,7 @@ export async function handler(event) {
       p_raw_text: String(payload.text || '').slice(0, 60000),
       p_image_url: String(payload.selected_image || '').slice(0, 2000),
       p_occurred_at: eventTime,
-      p_payload: normalizedEvent,
+      p_payload: compactEvent,
       p_capture_metadata: {
         images: Array.isArray(payload.images) ? payload.images.slice(0, 20) : [],
         comments: payload.comment
@@ -115,8 +118,14 @@ export async function handler(event) {
       200,
       {
         ok: true,
-        event: normalizedEvent,
-        news: result?.news || null,
+        event: compactEvent,
+        news: result?.news
+          ? {
+              id: result.news.id,
+              canonical_url: result.news.canonical_url,
+              editorial_status: result.news.editorial_status,
+            }
+          : null,
         already_existed: Boolean(result?.already_existed),
       },
       {},

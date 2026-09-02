@@ -26,7 +26,67 @@ export type TopicKind = 'pov' | 'insight' | 'strategy' | 'roadmap' | 'poc'
 
 export type NoteSourceType = 'captured_news' | 'manual_note'
 
-export type WorkspacePage = 'signals' | 'synthesis' | 'threads'
+export type WorkspacePage = 'radar' | 'signals' | 'synthesis' | 'threads'
+
+export type RadarSourceType =
+  | 'industry_news'
+  | 'official'
+  | 'product_discovery'
+  | 'investor'
+  | 'community'
+
+export type RadarConnectorType = 'rss' | 'producthunt' | 'hacker_news'
+
+export interface RadarSource {
+  id: string
+  name: string
+  domain: string
+  homepageUrl: string
+  feedUrl: string
+  sourceType: RadarSourceType
+  connectorType: RadarConnectorType
+  enabled: boolean
+  priority: number
+  displayOrder: number
+  lastFetchedAt?: string
+  lastSuccessAt?: string
+  lastError?: string
+  itemCount7d: number
+}
+
+export interface RadarItem {
+  id: string
+  sourceId: string
+  sourceName: string
+  sourceType: RadarSourceType
+  externalId: string
+  url: string
+  title: string
+  summary: string
+  author: string
+  publishedAt: string
+  storyKey: string
+  topicSlugs: string[]
+  engagement: {
+    score?: number
+    comments?: number
+    votes?: number
+  }
+}
+
+export interface RadarTopic {
+  slug: string
+  label: string
+  status: 'emerging' | 'rising' | 'sustained' | 'cooling'
+  mentionCount: number
+  eventCount: number
+  sourceCount: number
+  momentumPercent: number | null
+  score: number
+  sparkline: number[]
+  sourceTypes: RadarSourceType[]
+  evidence: RadarItem[]
+}
 
 export interface TopicAnalysis {
   keyQuestion: string
@@ -110,6 +170,7 @@ export interface Trend {
   discussionStatus: DiscussionStatus
   lastDiscussedAt?: string
   lastDiscussedBy?: string
+  lastReviewedAt?: string
   meetingNominatedAt?: string
   meetingNominatedBy?: string
   createdBy?: string
@@ -119,6 +180,23 @@ export interface Trend {
   deletedAt?: string
   evidence: TrendEvidence[]
   actionThreadIds: string[]
+}
+
+export type WorkspaceSearchEntity = 'news' | 'trend' | 'topic'
+
+export interface WorkspaceSearchResult {
+  entityType: WorkspaceSearchEntity
+  id: string
+  title: string
+  category: NewsCategory
+  url?: string
+  contributor?: string
+  archived: boolean
+  status?: string
+  kind?: TopicKind
+  ownerName?: string
+  evidenceCount: number
+  matchedAt: string
 }
 
 export interface Topic {

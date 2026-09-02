@@ -85,6 +85,37 @@ describe('capture API contract', () => {
     )
   })
 
+  it('does not duplicate article text and images in the audit payload or response', async () => {
+    const fetchMock = mockBackend({
+      rpc: {
+        already_existed: false,
+        news: {
+          id: 'n1',
+          canonical_url: 'https://example.com/compact',
+          editorial_status: 'pending',
+          raw_text: 'large response text',
+        },
+      },
+    })
+    const result = await handler(
+      request(
+        {
+          url: 'https://example.com/compact',
+          text: 'article body',
+          images: [{ url: 'https://example.com/image.jpg' }],
+        },
+        { 'x-capture-token': 'capture-secret' },
+      ),
+    )
+    const rpcBody = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(rpcBody.p_raw_text).toBe('article body')
+    expect(rpcBody.p_payload).not.toHaveProperty('text')
+    expect(rpcBody.p_payload).not.toHaveProperty('images')
+    const responseBody = JSON.parse(result.body)
+    expect(responseBody.event).not.toHaveProperty('text')
+    expect(responseBody.news).not.toHaveProperty('raw_text')
+  })
+
   it('allows token-authenticated extension captures from other origins', async () => {
     mockBackend()
     const result = await handler({
