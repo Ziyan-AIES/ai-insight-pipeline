@@ -32,7 +32,9 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Trends' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Expand Evidence' })).toBeInTheDocument()
-    expect(screen.getByText(/Qira Strategic/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Open dashboard home' }),
+    ).toHaveAttribute('href', '/?workspace=synthesis')
     const navigation = screen.getByRole('navigation', { name: 'Workspace' })
     expect(within(navigation).getAllByRole('button')).toHaveLength(2)
     expect(within(navigation).getByRole('button', { name: 'Live Signals' })).toBeInTheDocument()
@@ -278,11 +280,8 @@ describe('dashboard pilot shell', () => {
       expect(titles.indexOf('Trend Alpha')).toBeLessThan(titles.indexOf('Trend Beta'))
     })
     expect(
-      JSON.parse(
-        window.localStorage.getItem('signal-intelligence:trend-card-order:demo') ||
-          '[]',
-      ),
-    ).toHaveLength(3)
+      window.localStorage.getItem('signal-intelligence:trend-card-order:demo'),
+    ).toBeNull()
   })
 
   it('restores the last workspace separately for this viewer', async () => {

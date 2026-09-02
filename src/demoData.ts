@@ -191,6 +191,7 @@ export const demoTrends: Trend[] = [
   {
     id: 'trend-cross-app-agents',
     title: 'Assistants are moving into persistent cross-app workflows',
+    displayOrder: 1,
     category: 'interaction',
     observation:
       'Browser, desktop, and platform agents increasingly preserve identity, context, and permissions across surfaces.',
@@ -225,6 +226,7 @@ export const demoTrends: Trend[] = [
   {
     id: 'trend-ambient-control',
     title: 'Wearables are becoming ambient control layers',
+    displayOrder: 2,
     category: 'ai_hardware',
     observation:
       'Rings, glasses, and watches are converging on private, always-available input across devices.',
@@ -251,6 +253,7 @@ export const demoTrends: Trend[] = [
   {
     id: 'trend-agent-reliability',
     title: 'Agent reliability is becoming a product layer',
+    displayOrder: 3,
     category: 'ai_capability',
     observation:
       'Evaluation harnesses, traces, and recovery paths are moving from internal tooling into repeatable product infrastructure.',

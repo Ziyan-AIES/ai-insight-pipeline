@@ -22,6 +22,7 @@ import {
   persistNewsLink,
   persistTeamIdea,
   persistTopicNews,
+  persistTrendOrder,
   persistTrendNews,
   persistTrendTopic,
   recordWorkspaceView,
@@ -90,35 +91,6 @@ const addLinkDraftKey = 'signal-intelligence:add-link-draft'
 const liveSignalsViewStoragePrefix =
   'signal-intelligence:last-viewed:live-signals'
 const workspacePageStoragePrefix = 'signal-intelligence:workspace-page'
-const trendOrderStoragePrefix = 'signal-intelligence:trend-card-order'
-
-function trendOrderStorageKey(viewerId = 'local') {
-  return `${trendOrderStoragePrefix}:${viewerId}`
-}
-
-function loadTrendOrder(viewerId = 'local') {
-  try {
-    const value = window.localStorage.getItem(trendOrderStorageKey(viewerId))
-    if (!value) return []
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed)
-      ? parsed.filter((id): id is string => typeof id === 'string')
-      : []
-  } catch {
-    return []
-  }
-}
-
-function saveTrendOrder(order: string[], viewerId = 'local') {
-  try {
-    window.localStorage.setItem(
-      trendOrderStorageKey(viewerId),
-      JSON.stringify(order),
-    )
-  } catch {
-    // Display order remains available for this session when storage is blocked.
-  }
-}
 
 function explicitWorkspaceFromLocation(): WorkspacePage | null {
   try {
@@ -418,9 +390,6 @@ function App() {
   const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
   const [actionThreadsOpen, setActionThreadsOpen] = useState(true)
   const [closedThreadsOpen, setClosedThreadsOpen] = useState(false)
-  const [trendOrder, setTrendOrder] = useState<string[]>(() =>
-    loadTrendOrder(identity?.userId || 'demo'),
-  )
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
     useState<ThreadStatusFilter>('all')
@@ -846,7 +815,6 @@ function App() {
   }, [query, searchCategory, trends])
 
   const briefingTrends = useMemo(() => {
-    const order = new Map(trendOrder.map((id, index) => [id, index]))
     return trends
       .filter(
         (trend) =>
@@ -859,14 +827,12 @@ function App() {
       )
       .slice()
       .sort((a, b) => {
-        const aOrder = order.get(a.id)
-        const bOrder = order.get(b.id)
-        if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder
-        if (aOrder !== undefined) return 1
-        if (bOrder !== undefined) return -1
+        if (a.displayOrder !== b.displayOrder) {
+          return a.displayOrder - b.displayOrder
+        }
         return b.createdAt.localeCompare(a.createdAt)
       })
-  }, [trendCategory, trendOrder, trends])
+  }, [trendCategory, trends])
 
   const archivedTrends = useMemo(
     () =>
@@ -1789,6 +1755,7 @@ function App() {
     setTrendDraft({
       id: '',
       title: '',
+      displayOrder: 0,
       category: source?.category || 'interaction',
       observation: source ? firstSentences(noteTakeaway(source) || source.summary, 1) : '',
       initialRead: '',
@@ -1833,6 +1800,7 @@ function App() {
     if (creatingTrend) {
       let saved = {
         id: `trend-${Date.now()}`,
+        display_order: 0,
         created_at: trendDraft.createdAt,
         updated_at: trendDraft.updatedAt,
         version: 1,
@@ -1869,6 +1837,7 @@ function App() {
         const created: Trend = {
           ...trendDraft,
           id: saved.id,
+          displayOrder: saved.display_order,
           title: trendDraft.title.trim(),
           createdAt: saved.created_at,
           updatedAt: saved.updated_at,
@@ -2397,6 +2366,7 @@ function App() {
       ...(sourceTrend || {}),
       id: sourceTrend?.id || '',
       title: topic.title,
+      displayOrder: sourceTrend?.displayOrder || 0,
       category: topic.category,
       observation: topic.analysis.observed || topic.notes,
       initialRead: topic.analysis.currentView || topic.decisionSummary,
@@ -3267,9 +3237,8 @@ function App() {
     )
   }
 
-  function reorderTrendCards(sourceId: string, targetId: string) {
+  async function reorderTrendCards(sourceId: string, targetId: string) {
     if (!sourceId || !targetId || sourceId === targetId) return
-    const order = new Map(trendOrder.map((id, index) => [id, index]))
     const orderedIds = trends
       .filter(
         (trend) =>
@@ -3279,11 +3248,9 @@ function App() {
       )
       .slice()
       .sort((a, b) => {
-        const aOrder = order.get(a.id)
-        const bOrder = order.get(b.id)
-        if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder
-        if (aOrder !== undefined) return 1
-        if (bOrder !== undefined) return -1
+        if (a.displayOrder !== b.displayOrder) {
+          return a.displayOrder - b.displayOrder
+        }
         return b.createdAt.localeCompare(a.createdAt)
       })
       .map((trend) => trend.id)
@@ -3292,9 +3259,26 @@ function App() {
     if (sourceIndex < 0 || targetIndex < 0) return
     orderedIds.splice(sourceIndex, 1)
     orderedIds.splice(targetIndex, 0, sourceId)
-    setTrendOrder(orderedIds)
-    saveTrendOrder(orderedIds, identity?.userId || 'demo')
-    setNotice('Trend order updated')
+    setTrends((current) =>
+      current.map((trend) => {
+        const index = orderedIds.indexOf(trend.id)
+        return index < 0 ? trend : { ...trend, displayOrder: index + 1 }
+      }),
+    )
+    try {
+      if (cloudConfigured) {
+        await persistTrendOrder(orderedIds)
+        await reloadWorkspace(true)
+      }
+      setNotice('Team Trend order updated')
+    } catch (error: unknown) {
+      await reloadWorkspace(true)
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not update the team Trend order.',
+      )
+    }
   }
 
   function renderTrendCard(trend: Trend) {
@@ -3370,7 +3354,7 @@ function App() {
           if (!sourceTrendId || sourceTrendId === trend.id) return
           event.preventDefault()
           event.stopPropagation()
-          reorderTrendCards(sourceTrendId, trend.id)
+          void reorderTrendCards(sourceTrendId, trend.id)
           setDraggedTrendId('')
         }}
       >
@@ -4052,7 +4036,13 @@ function App() {
       }`}
     >
       <header className="top-navigation">
-        <p className="brand-title">Qira Strategic Market Intelligence</p>
+        <a
+          className="brand-title"
+          href="/?workspace=synthesis"
+          aria-label="Open dashboard home"
+        >
+          Qira Strategic Market Intelligence
+        </a>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
             className={workspacePage === 'signals' ? 'active' : ''}

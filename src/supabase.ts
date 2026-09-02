@@ -207,7 +207,8 @@ export async function loadWorkspace(includeDeleted = false) {
     .select(
       '*,trend_news(news_id,evidence_role,display_order,linked_at,deleted_at),trend_topics(topic_id,deleted_at)',
     )
-    .order('updated_at', { ascending: false })
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: false })
   if (!includeDeleted) {
     newsQuery = newsQuery.is('deleted_at', null)
     topicQuery = topicQuery.is('deleted_at', null)
@@ -403,6 +404,7 @@ export async function loadWorkspace(includeDeleted = false) {
   const trends: Trend[] = ((trendResult.data || []) as TrendRow[]).map((row) => ({
     id: row.id,
     title: row.title,
+    displayOrder: row.display_order ?? 0,
     category: row.category,
     observation: row.observation || '',
     initialRead: row.initial_read || '',
@@ -489,6 +491,7 @@ export async function loadWorkspace(includeDeleted = false) {
 type TrendRow = {
   id: string
   title: string
+  display_order?: number | null
   category: NewsCategory
   observation: string
   initial_read: string
@@ -893,15 +896,24 @@ export async function createTrend(input: {
       created_by: userId,
       updated_by: userId,
     })
-    .select('id,created_at,updated_at,version')
+    .select('id,display_order,created_at,updated_at,version')
     .single()
   if (error) throw error
   return data as {
     id: string
+    display_order: number
     created_at: string
     updated_at: string
     version: number
   }
+}
+
+export async function persistTrendOrder(trendIds: string[]) {
+  if (!supabase || trendIds.length === 0) return
+  const { error } = await supabase.rpc('reorder_trends', {
+    p_trend_ids: trendIds,
+  })
+  if (error) throw error
 }
 
 export async function updateTrendItem(

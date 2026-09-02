@@ -101,6 +101,7 @@ export interface TrendEvidence {
 export interface Trend {
   id: string
   title: string
+  displayOrder: number
   category: NewsCategory
   observation: string
   initialRead: string
