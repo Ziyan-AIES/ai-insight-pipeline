@@ -5039,6 +5039,289 @@ label input:disabled {
   }
 }
 
+/* Final navigation and Industry Radar authority. */
+.top-navigation .workspace-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 480px);
+  min-width: 0;
+}
+
+.top-navigation .workspace-nav button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.industry-radar {
+  width: min(1440px, 100%);
+  padding: 32px 34px 48px;
+  font-family: inherit;
+}
+
+.radar-hero h1,
+.radar-topic-detail h2,
+.radar-source-drawer h2 {
+  font-family: var(--font-editorial);
+}
+
+.radar-hero h1 {
+  font-size: clamp(32px, 3vw, 42px);
+  font-weight: 600;
+}
+
+.radar-hero p,
+.radar-source-drawer header p {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.radar-method-toggle {
+  min-height: 36px;
+  padding-inline: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.radar-control-bar {
+  min-height: 52px;
+  padding: 9px 11px;
+}
+
+.radar-window button,
+.radar-source-filters button {
+  min-height: 32px;
+  padding-inline: 11px;
+  font-size: 12px;
+}
+
+.radar-source-filters button:nth-last-child(-n + 2) {
+  display: block;
+}
+
+.radar-freshness {
+  font-size: 11px;
+}
+
+.radar-methodology {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(60, 50, 44, 0.1);
+  border-radius: 12px;
+  background: rgba(60, 50, 44, 0.1);
+}
+
+.radar-methodology > div {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 90px;
+  padding: 14px 15px;
+  background: #fbfaf7;
+}
+
+.radar-methodology strong {
+  color: #4e3c76;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.radar-methodology span {
+  color: #68615c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.radar-workbench {
+  grid-template-columns: minmax(590px, 1.08fr) minmax(430px, 0.92fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.radar-list-heading,
+.radar-topic-row {
+  grid-template-columns: minmax(245px, 1.5fr) 96px 170px 96px;
+}
+
+.radar-list-heading {
+  padding: 13px 17px 9px;
+  font-size: 10px;
+}
+
+.radar-topic-row {
+  min-height: 64px;
+  padding: 14px 12px;
+}
+
+.radar-topic-identity > small {
+  font-size: 10px;
+}
+
+.radar-topic-identity strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.radar-state {
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+.radar-momentum {
+  font-size: 14px;
+}
+
+.radar-evidence-count {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.radar-evidence-count strong {
+  font-size: 13px;
+}
+
+.radar-sparkline {
+  width: 86px;
+  height: 30px;
+}
+
+.radar-topic-detail {
+  padding: 22px;
+}
+
+.radar-topic-detail h2 {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.radar-topic-readout {
+  padding: 13px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.radar-type-mix span {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.radar-reading-heading strong {
+  font-size: 13px;
+}
+
+.radar-reading-heading span {
+  font-size: 11px;
+}
+
+.radar-reading-heading .primary-button {
+  min-height: 36px;
+  font-size: 11px;
+}
+
+.radar-evidence-item {
+  padding: 12px;
+}
+
+.radar-evidence-item a {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.radar-evidence-meta,
+.radar-evidence-item small {
+  font-size: 10px;
+}
+
+@media (min-width: 1051px) {
+  .top-navigation .workspace-nav {
+    width: clamp(390px, 36vw, 500px);
+  }
+}
+
+@media (max-width: 1160px) {
+  .radar-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .radar-topic-detail {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .radar-methodology {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .top-navigation .workspace-nav {
+    grid-template-columns: repeat(3, minmax(94px, 1fr));
+    width: min(100%, 420px);
+  }
+
+  .top-navigation .workspace-nav button {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+
+  .industry-radar {
+    padding: 24px 16px 36px;
+  }
+
+  .radar-hero h1 {
+    font-size: 34px;
+  }
+
+  .radar-hero-actions {
+    flex-wrap: wrap;
+  }
+
+  .radar-topic-row {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    min-height: 76px;
+    padding-block: 15px;
+  }
+
+  .radar-evidence-count {
+    padding-left: 31px;
+  }
+}
+
+@media (max-width: 560px) {
+  .top-navigation {
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+  }
+
+  .top-navigation .workspace-nav {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .top-search-shell {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .top-add-news {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .profile-shell {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .radar-methodology {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Timeline-first thread planning and expanded Live Signal previews */
 .dashboard.signals-page {
   overflow-x: hidden;
@@ -7655,5 +7938,64 @@ label input:disabled {
 
   .action-threads-collapsed-rail span {
     writing-mode: horizontal-tb;
+  }
+}
+
+/* Three workspace destinations always occupy one navigation row. */
+.top-navigation .workspace-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 480px);
+  min-width: 0;
+}
+
+.top-navigation .workspace-nav button {
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (min-width: 1051px) {
+  .top-navigation .workspace-nav {
+    width: clamp(390px, 36vw, 500px);
+  }
+}
+
+@media (max-width: 720px) {
+  .top-navigation .workspace-nav {
+    grid-template-columns: repeat(3, minmax(94px, 1fr));
+    width: min(100%, 420px);
+  }
+
+  .top-navigation .workspace-nav button {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 560px) {
+  .top-navigation {
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+  }
+
+  .top-navigation .workspace-nav {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .top-search-shell {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .top-add-news {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .profile-shell {
+    grid-column: 3;
+    grid-row: 2;
   }
 }

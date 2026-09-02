@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  createPinnedLookup,
   parseFeed,
   storySignature,
   titleSimilarity,
@@ -25,14 +26,25 @@ describe('Industry Radar ingestion helpers', () => {
   })
 
   it('classifies transparent topic rules and ignores unrelated posts', () => {
-    expect(topicSlugsFor('Enterprise AI coding agents add repository evals')).toEqual(
-      expect.arrayContaining(['ai-agents', 'ai-coding', 'enterprise-ai', 'ai-reliability']),
+    expect(topicSlugsFor('Autonomous coding agents add repository-scale agent evaluation')).toEqual(
+      expect.arrayContaining(['autonomous-coding', 'agent-evaluation']),
     )
+    expect(topicSlugsFor('Consumer AI products continue to grow')).toEqual([])
     expect(topicSlugsFor('Ten tips for a better vegetable garden')).toEqual([])
   })
 
   it('gives paraphrased event titles a stable similarity signal', () => {
     expect(titleSimilarity('OpenAI launches a new browser agent', 'OpenAI unveils its browser AI agent')).toBeGreaterThan(0.5)
     expect(storySignature('OpenAI launches a new browser agent')).toHaveLength(24)
+  })
+
+  it('returns the DNS shape requested by Undici while keeping the validated address pinned', () => {
+    const lookup = createPinnedLookup('203.0.113.10', 4)
+    const single = vi.fn()
+    const multiple = vi.fn()
+    lookup('example.com', { all: false }, single)
+    lookup('example.com', { all: true }, multiple)
+    expect(single).toHaveBeenCalledWith(null, '203.0.113.10', 4)
+    expect(multiple).toHaveBeenCalledWith(null, [{ address: '203.0.113.10', family: 4 }])
   })
 })

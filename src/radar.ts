@@ -14,20 +14,40 @@ export const radarSourceTypeLabels: Record<RadarSourceType, string> = {
 }
 
 export const radarTopicLabels: Record<string, string> = {
-  'ai-agents': 'AI agents and automation',
-  'ai-coding': 'AI coding tools',
-  'creative-ai': 'Generative media',
-  'voice-ai': 'Voice and audio AI',
-  'ai-search': 'AI search and browsers',
-  'enterprise-ai': 'Enterprise AI adoption',
-  'ai-hardware': 'AI hardware and robotics',
-  'open-models': 'Open models',
-  'model-capabilities': 'Model capabilities',
-  'ai-reliability': 'Data, evals and reliability',
-  'consumer-ai': 'Consumer AI products',
-  'ai-deals': 'AI funding and M&A',
-  'ai-policy': 'AI policy and safety',
-  'ai-products': 'New AI products',
+  'browser-agents': 'Browser agents',
+  'agent-orchestration': 'Multi-agent orchestration',
+  'autonomous-coding': 'Autonomous software engineering',
+  'agent-evaluation': 'Agent evaluation and reliability',
+  'ai-workspaces': 'Collaborative AI workspaces',
+  'ai-search-engines': 'AI search and answer engines',
+  'browser-model-inference': 'In-browser model inference',
+  'voice-agents': 'Real-time voice agents',
+  'speech-models': 'Speech and audio models',
+  'text-to-video': 'Text-to-video models',
+  'image-generation': 'Image generation models',
+  'humanoid-robotics': 'Humanoid robotics',
+  'robot-learning': 'Robot foundation models',
+  'ai-wearables': 'AI wearables and smart glasses',
+  'inference-chips': 'AI inference chips',
+  'on-device-ai': 'On-device AI',
+  'open-weight-models': 'Open-weight models',
+  'reasoning-models': 'Reasoning models',
+  'multimodal-models': 'Multimodal models',
+  'long-context-models': 'Long-context models',
+  'model-evaluation': 'Model evaluation and benchmarks',
+  'model-observability': 'Model observability and guardrails',
+  'content-authenticity': 'AI content authenticity',
+  'enterprise-customer-service': 'AI customer-service agents',
+  'enterprise-sales-ai': 'AI sales copilots',
+  'enterprise-workflow-automation': 'Enterprise AI workflow automation',
+  'ai-companions': 'AI companions',
+  'ai-shopping-assistants': 'AI shopping assistants',
+  'ai-creator-tools': 'AI creator tools',
+  'ai-funding-rounds': 'AI funding rounds',
+  'ai-acquisitions': 'AI acquisitions',
+  'ai-regulation': 'AI regulation',
+  'ai-copyright': 'AI copyright disputes',
+  'model-safety': 'Frontier-model safety',
 }
 
 function hoursAgo(hours: number) {
@@ -137,22 +157,22 @@ const demoEvidence = (
 })
 
 export const demoRadarItems: RadarItem[] = [
-  demoEvidence('r1', demoRadarSources[0], 'New agent products coordinate work across browser tabs', ['ai-agents', 'ai-products'], 3, 'agent-products-1', { votes: 846, comments: 73 }),
-  demoEvidence('r2', demoRadarSources[1], 'Browser companies race to turn tabs into agent workspaces', ['ai-agents', 'ai-search'], 8, 'browser-agents-1'),
-  demoEvidence('r3', demoRadarSources[2], 'Enterprises move from AI copilots to supervised agents', ['ai-agents', 'enterprise-ai'], 17, 'enterprise-agents-1'),
-  demoEvidence('r4', demoRadarSources[3], 'Ask HN: which coding agents survive real repositories?', ['ai-agents', 'ai-coding', 'ai-reliability'], 20, 'coding-agents-1', { score: 312, comments: 146 }),
-  demoEvidence('r5', demoRadarSources[4], 'The next enterprise software layer is agent orchestration', ['ai-agents', 'enterprise-ai'], 31, 'agent-orchestration-1'),
-  demoEvidence('r6', demoRadarSources[0], 'A visual coding assistant ships collaborative planning', ['ai-coding', 'ai-products'], 13, 'visual-coding-1', { votes: 529, comments: 38 }),
-  demoEvidence('r7', demoRadarSources[1], 'Open models close the gap for on-device assistants', ['open-models', 'model-capabilities'], 25, 'open-models-device-1'),
-  demoEvidence('r8', demoRadarSources[2], 'Evaluation platforms focus on agent reliability in production', ['ai-reliability', 'enterprise-ai'], 40, 'agent-evals-1'),
-  demoEvidence('r9', demoRadarSources[0], 'Voice-first AI tools find a new consumer audience', ['voice-ai', 'consumer-ai', 'ai-products'], 52, 'voice-consumer-1', { votes: 397, comments: 24 }),
-  demoEvidence('r10', demoRadarSources[1], 'AI wearables shift from assistants to ambient interfaces', ['ai-hardware', 'consumer-ai'], 70, 'ai-wearables-1'),
-  demoEvidence('r11', demoRadarSources[3], 'Show HN: open source voice model runs locally', ['voice-ai', 'open-models'], 76, 'local-voice-1', { score: 188, comments: 61 }),
-  demoEvidence('r12', demoRadarSources[4], 'Why inference economics will reshape AI applications', ['ai-hardware', 'enterprise-ai'], 110, 'inference-economics-1'),
-  demoEvidence('r13', demoRadarSources[1], 'Regulators focus on disclosure for consumer AI agents', ['ai-policy', 'ai-agents'], 140, 'agent-policy-1'),
-  demoEvidence('r14', demoRadarSources[2], 'AI infrastructure funding rebounds around inference', ['ai-deals', 'ai-hardware'], 155, 'infra-funding-1'),
-  demoEvidence('r15', demoRadarSources[1], 'Coding copilots add repository-scale planning', ['ai-coding'], 190, 'coding-planning-old'),
-  demoEvidence('r16', demoRadarSources[2], 'Companies test autonomous software engineering teams', ['ai-coding', 'ai-agents'], 250, 'coding-teams-old'),
+  demoEvidence('r1', demoRadarSources[0], 'New browser agents coordinate work across tabs', ['browser-agents', 'ai-workspaces'], 3, 'agent-products-1', { votes: 846, comments: 73 }),
+  demoEvidence('r2', demoRadarSources[1], 'Browser companies race to turn tabs into agent workspaces', ['browser-agents', 'ai-workspaces'], 8, 'browser-agents-1'),
+  demoEvidence('r3', demoRadarSources[2], 'Enterprises move to multi-agent workflow orchestration', ['agent-orchestration', 'enterprise-workflow-automation'], 17, 'enterprise-agents-1'),
+  demoEvidence('r4', demoRadarSources[3], 'Ask HN: which coding agents survive real repositories?', ['autonomous-coding', 'agent-evaluation'], 20, 'coding-agents-1', { score: 312, comments: 146 }),
+  demoEvidence('r5', demoRadarSources[4], 'The next enterprise layer is multi-agent orchestration', ['agent-orchestration', 'enterprise-workflow-automation'], 31, 'agent-orchestration-1'),
+  demoEvidence('r6', demoRadarSources[0], 'A coding agent ships collaborative workspace planning', ['autonomous-coding', 'ai-workspaces'], 13, 'visual-coding-1', { votes: 529, comments: 38 }),
+  demoEvidence('r7', demoRadarSources[1], 'Open-weight models close the gap for on-device assistants', ['open-weight-models', 'on-device-ai'], 25, 'open-models-device-1'),
+  demoEvidence('r8', demoRadarSources[2], 'Agent evaluation platforms focus on production reliability', ['agent-evaluation', 'model-evaluation'], 40, 'agent-evals-1'),
+  demoEvidence('r9', demoRadarSources[0], 'Real-time voice agents find a companion audience', ['voice-agents', 'ai-companions'], 52, 'voice-consumer-1', { votes: 397, comments: 24 }),
+  demoEvidence('r10', demoRadarSources[1], 'AI wearables shift toward on-device ambient interfaces', ['ai-wearables', 'on-device-ai'], 70, 'ai-wearables-1'),
+  demoEvidence('r11', demoRadarSources[3], 'Show HN: open-weight speech model runs locally', ['speech-models', 'open-weight-models', 'on-device-ai'], 76, 'local-voice-1', { score: 188, comments: 61 }),
+  demoEvidence('r12', demoRadarSources[4], 'AI inference chips reshape application economics', ['inference-chips'], 110, 'inference-economics-1'),
+  demoEvidence('r13', demoRadarSources[1], 'Regulators focus on disclosure for browser agents', ['ai-regulation', 'browser-agents'], 140, 'agent-policy-1'),
+  demoEvidence('r14', demoRadarSources[2], 'AI infrastructure funding rebounds around inference chips', ['ai-funding-rounds', 'inference-chips'], 155, 'infra-funding-1'),
+  demoEvidence('r15', demoRadarSources[1], 'Coding agents add repository-scale planning', ['autonomous-coding'], 190, 'coding-planning-old'),
+  demoEvidence('r16', demoRadarSources[2], 'Companies test autonomous software engineering teams', ['autonomous-coding', 'agent-orchestration'], 250, 'coding-teams-old'),
 ]
 
 function uniqueStoryCount(items: RadarItem[]) {
@@ -223,6 +243,7 @@ export function buildRadarTopics(
     const timestamp = new Date(item.publishedAt).getTime()
     if (!Number.isFinite(timestamp) || timestamp < previousStart) continue
     for (const slug of item.topicSlugs) {
+      if (!radarTopicLabels[slug]) continue
       const bucket = grouped.get(slug) || { current: [], previous: [] }
       if (timestamp >= currentStart) bucket.current.push(item)
       else bucket.previous.push(item)
@@ -231,16 +252,16 @@ export function buildRadarTopics(
   }
 
   return [...grouped.entries()]
-    .filter(([, bucket]) => bucket.current.length > 0)
+    .filter(([, bucket]) => uniqueStoryCount(bucket.current) >= 2)
     .map(([slug, bucket]) => {
-      const eventCount = uniqueStoryCount(bucket.current)
-      const previousEvents = uniqueStoryCount(bucket.previous)
+      const developmentCount = uniqueStoryCount(bucket.current)
+      const previousDevelopments = uniqueStoryCount(bucket.previous)
       const sourceCount = new Set(bucket.current.map((item) => item.sourceId)).size
-      const momentumPercent = previousEvents
-        ? Math.round(((eventCount - previousEvents) / previousEvents) * 100)
+      const momentumPercent = previousDevelopments
+        ? Math.round(((developmentCount - previousDevelopments) / previousDevelopments) * 100)
         : null
       const status: RadarTopic['status'] =
-        previousEvents === 0 && eventCount >= 2
+        previousDevelopments === 0
           ? 'emerging'
           : (momentumPercent || 0) >= 50
             ? 'rising'
@@ -260,19 +281,19 @@ export function buildRadarTopics(
       const momentumLift = momentumPercent === null ? 18 : Math.max(-15, Math.min(45, momentumPercent / 5))
       return {
         slug,
-        label: radarTopicLabels[slug] || slug.replaceAll('-', ' '),
+        label: radarTopicLabels[slug],
         status,
         mentionCount: bucket.current.length,
-        eventCount,
+        developmentCount,
         sourceCount,
         momentumPercent,
-        score: eventCount * 12 + sourceCount * 14 + momentumLift + engagement,
+        score: developmentCount * 12 + sourceCount * 14 + momentumLift + engagement,
         sparkline,
         sourceTypes: [...new Set(bucket.current.map((item) => item.sourceType))],
         evidence: diverseEvidence(bucket.current),
       }
     })
-    .sort((a, b) => b.score - a.score || b.eventCount - a.eventCount)
+    .sort((a, b) => b.score - a.score || b.developmentCount - a.developmentCount)
 }
 
 export function googleNewsUrl(topic: RadarTopic) {

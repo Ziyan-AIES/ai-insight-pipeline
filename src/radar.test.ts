@@ -21,7 +21,7 @@ function item(
     author: '',
     publishedAt: new Date(Date.UTC(2026, 8, 2) - hoursAgo * 3_600_000).toISOString(),
     storyKey,
-    topicSlugs: ['ai-agents'],
+    topicSlugs: ['autonomous-coding'],
     engagement: {},
   }
 }
@@ -38,12 +38,18 @@ describe('Industry Radar topic metrics', () => {
       new Date(Date.UTC(2026, 8, 2)),
     )
     expect(topics[0]).toMatchObject({
-      slug: 'ai-agents',
+      slug: 'autonomous-coding',
       mentionCount: 3,
-      eventCount: 2,
+      developmentCount: 2,
       sourceCount: 3,
       status: 'emerging',
     })
+  })
+
+  it('does not surface broad legacy buckets or one-off noise as trends', () => {
+    const broad = item('1', 'Generic AI product', 'source-a', 'one-event', 2)
+    broad.topicSlugs = ['consumer-ai', 'model-capabilities']
+    expect(buildRadarTopics([broad], 7, new Date(Date.UTC(2026, 8, 2)))).toEqual([])
   })
 
   it('selects one reading link per source and event', () => {

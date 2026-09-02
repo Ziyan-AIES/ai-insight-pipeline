@@ -82,16 +82,24 @@ Never commit real values.
 ## Industry Radar
 
 Industry Radar is a machine-observed layer upstream of Live Signals. It ranks
-topic activity over 7- or 30-day windows, compares it with the preceding
-window, and counts distinct underlying developments rather than every article.
+specific market movements over 7- or 30-day windows, compares them with the
+preceding window, and counts distinct underlying developments rather than every article.
 The evidence panel deliberately selects at most one article per source and per
 story so a batch-open reading set is varied instead of repetitive.
 
 Admins can add, enable, reorder, or remove sources in the Sources drawer.
 Pasting a website URL first probes its advertised RSS/Atom feeds; built-in
-connectors cover Product Hunt and Hacker News. Removed sources are soft-deleted
+connectors cover Product Hunt and Hacker News. Verified RSS coverage includes
+TechCrunch, OpenAI News, and Google AI. Removed sources are soft-deleted
 so existing evidence remains auditable. Collection runs every four hours and
 editors can also request a refresh from the page.
+
+The ingestion path does not call an LLM, Codex, or Cursor. A transparent
+fine-grained rule set assigns movements, near-title similarity consolidates
+overlapping coverage, and ranking combines distinct developments, independent
+source breadth, period-over-period momentum, and available engagement. A
+movement needs at least two distinct developments in the selected window before
+it is shown. The in-product **How it works** panel keeps this contract visible.
 
 Before enabling it in production:
 

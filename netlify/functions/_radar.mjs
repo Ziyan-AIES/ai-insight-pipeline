@@ -7,20 +7,43 @@ import { canonicalizeUrl, supabase } from './_supabase.mjs'
 const USER_AGENT = 'QiraIndustryRadar/0.1 (+https://aiinsightpipeline.netlify.app)'
 const MAX_FEED_BYTES = 2 * 1024 * 1024
 
+// Specific, auditable market movements. Broad evergreen buckets such as
+// "consumer AI" or "model capabilities" are deliberately excluded.
 const topicRules = [
-  ['ai-agents', /\b(agentic|agents?|copilots?|assistants?|autonomous|automation|orchestrat(?:e|ion))\b/i],
-  ['ai-coding', /\b(coding|code generation|developer tools?|software engineering|programming|ide\b|repository|vibe cod)/i],
-  ['creative-ai', /\b(image generation|video generation|generative (?:video|image|media)|avatars?|creative ai|text.to.video|diffusion)/i],
-  ['voice-ai', /\b(voice|speech|audio|text.to.speech|tts\b|speech.to.text|transcri)/i],
-  ['ai-search', /\b(ai search|search engine|browser|web search|answer engine|retrieval)/i],
-  ['enterprise-ai', /\b(enterprise|business|workplace|saas|workflow|customer service|sales|productivity)/i],
-  ['ai-hardware', /\b(gpu|chips?|semiconductor|inference hardware|data cent(?:er|re)|robotics?|robots?|wearables?|devices?)/i],
-  ['open-models', /\b(open source|open.source|open weights?|hugging face|llama|mistral)/i],
-  ['model-capabilities', /\b(llm|large language model|foundation model|reasoning model|multimodal|context window|benchmark)/i],
-  ['ai-reliability', /\b(evals?|evaluation|reliab|observability|hallucination|guardrails?|data quality|monitoring)/i],
-  ['consumer-ai', /\b(consumer|personal ai|companion|mobile app|creator|social|shopping)/i],
-  ['ai-deals', /\b(funding|raises? \$|valuation|acqui(?:res|red|sition)|merger|investment|venture capital|seed round|series [a-f])/i],
-  ['ai-policy', /\b(policy|regulat|safety|copyright|governance|lawmakers?|legislation|responsible ai)/i],
+  ['browser-agents', /\b(browser agents?|agentic browsers?|agents? (?:in|for) (?:the )?browser|browser-based agents?)\b/i],
+  ['agent-orchestration', /\b(agent orchestration|multi-agent|agent-to-agent|agentic workflow|orchestrat(?:e|ion).{0,30}agents?)\b/i],
+  ['autonomous-coding', /\b(coding agents?|agentic coding|autonomous (?:coding|software)|software engineering agents?|repository.{0,24}agents?|agents?.{0,24}repositories)\b/i],
+  ['agent-evaluation', /\b(agent evals?|agent evaluation|evaluat(?:e|ing|ion).{0,25}agents?|agent reliability|agent observability)\b/i],
+  ['ai-workspaces', /\b(ai-powered (?:project |team )?(?:workspace|collaboration)|agentic workspace|collaborative ai workspace)\b/i],
+  ['ai-search-engines', /\b(ai search|answer engines?|perplexity|search copilots?|generative search|ai-powered search)\b/i],
+  ['browser-model-inference', /\b(webllm|in-browser (?:llm|model|ai|inference)|browser-based (?:llm|model) inference)\b/i],
+  ['voice-agents', /\b(voice agents?|voice assistants?|conversational voice|real-time voice ai)\b/i],
+  ['speech-models', /\b(speech models?|text.to.speech|speech.to.text|tts\b|voice cloning|audio models?)\b/i],
+  ['text-to-video', /\b(text.to.video|video generation|generative video|ai video models?)\b/i],
+  ['image-generation', /\b(image generation|generative image|ai image models?|diffusion models?)\b/i],
+  ['humanoid-robotics', /\b(humanoid robots?|humanoid robotics)\b/i],
+  ['robot-learning', /\b(robot learning|robot foundation models?|vision.language.action|vla models?|physical ai)\b/i],
+  ['ai-wearables', /\b(ai wearables?|ai pins?|smart glasses|ai glasses|ambient devices?)\b/i],
+  ['inference-chips', /\b(inference chips?|ai accelerators?|gpus?.{0,24}inference|npus?|ai semiconductors?)\b/i],
+  ['on-device-ai', /\b(on-device ai|edge ai|local inference|offline (?:ai|llm)|models? run locally)\b/i],
+  ['open-weight-models', /\b(open weights?|open-weight|open source (?:ai )?models?|hugging face|llama|mistral)\b/i],
+  ['reasoning-models', /\b(reasoning models?|test-time compute|chain.of.thought|reasoning benchmarks?)\b/i],
+  ['multimodal-models', /\b(multimodal models?|vision.language models?|vlms?\b|omnimodal)\b/i],
+  ['long-context-models', /\b(long context|context windows?|million.token|extended context)\b/i],
+  ['model-evaluation', /\b(model evals?|model evaluation|ai benchmarks?|llm evaluation|benchmarking (?:ai )?models?)\b/i],
+  ['model-observability', /\b(model observability|llm observability|hallucination monitoring|ai monitoring|guardrails?)\b/i],
+  ['content-authenticity', /\b(ai provenance|content credentials|ai watermark|watermarking ai|detect(?:ing|ion).{0,25}ai.generated|made with (?:claude|chatgpt|gemini))\b/i],
+  ['enterprise-customer-service', /\b(ai customer service|customer service agents?|contact cent(?:er|re).{0,24}ai|support agents?.{0,24}ai)\b/i],
+  ['enterprise-sales-ai', /\b(ai sales agents?|sales copilots?|ai-powered sales|revenue intelligence.{0,20}ai)\b/i],
+  ['enterprise-workflow-automation', /\b(ai workflow automation|enterprise automation.{0,20}ai|agentic process automation|business workflow agents?)\b/i],
+  ['ai-companions', /\b(ai companions?|companion bots?|virtual companions?)\b/i],
+  ['ai-shopping-assistants', /\b(ai shopping|shopping assistants?|commerce agents?|agentic commerce)\b/i],
+  ['ai-creator-tools', /\b(ai creator tools?|creator copilots?|generative creator tools?)\b/i],
+  ['ai-funding-rounds', /\b(?:ai|artificial intelligence).{0,45}(?:funding|raises? \$|seed round|series [a-f]|valuation)|(?:funding|raises? \$|seed round|series [a-f]).{0,45}(?:ai|artificial intelligence)\b/i],
+  ['ai-acquisitions', /\b(?:ai|artificial intelligence).{0,45}(?:acqui(?:res|red|sition)|merger)|(?:acqui(?:res|red|sition)|merger).{0,45}(?:ai|artificial intelligence)\b/i],
+  ['ai-regulation', /\b(ai regulation|ai act|regulat(?:e|ing|ion).{0,24}(?:ai|models?)|lawmakers?.{0,24}ai)\b/i],
+  ['ai-copyright', /\b(ai copyright|copyright.{0,24}(?:ai|training data)|ai training.{0,24}copyright)\b/i],
+  ['model-safety', /\b(model safety|ai safety testing|alignment research|frontier model safety|responsible ai)\b/i],
 ]
 
 const aiGate = /\b(ai|artificial intelligence|machine learning|llm|gpt|claude|gemini|copilot|neural|generative|agents?|robots?|inference|foundation model)\b/i
@@ -107,7 +130,18 @@ async function publicTarget(value) {
   if (!addresses.length || addresses.some((entry) => privateHostname(entry.address))) {
     throw new Error('Source URL resolves to a private address')
   }
-  return { url, address: addresses[0].address, family: addresses[0].family }
+  const preferred = addresses.find((entry) => entry.family === 4) || addresses[0]
+  return { url, address: preferred.address, family: preferred.family }
+}
+
+export function createPinnedLookup(address, family) {
+  return (_hostname, options, callback) => {
+    if (options?.all) {
+      callback(null, [{ address, family }])
+      return
+    }
+    callback(null, address, family)
+  }
 }
 
 export async function fetchPublicText(value, accepted = /xml|rss|atom|html|text/i) {
@@ -115,15 +149,21 @@ export async function fetchPublicText(value, accepted = /xml|rss|atom|html|text/
   for (let redirect = 0; redirect <= 4; redirect += 1) {
     const { url, address, family } = await publicTarget(current)
     const dispatcher = new UndiciAgent({
-      connect: { lookup: (_hostname, _options, callback) => callback(null, address, family) },
+      connect: { lookup: createPinnedLookup(address, family) },
     })
     try {
-      const result = await undiciFetch(url, {
-        dispatcher,
-        redirect: 'manual',
-        headers: { 'user-agent': USER_AGENT, accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8' },
-        signal: AbortSignal.timeout(12000),
-      })
+      let result
+      try {
+        result = await undiciFetch(url, {
+          dispatcher,
+          redirect: 'manual',
+          headers: { 'user-agent': USER_AGENT, accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8' },
+          signal: AbortSignal.timeout(12000),
+        })
+      } catch (error) {
+        const detail = error?.cause?.message || error?.message || 'network error'
+        throw new Error(`Could not fetch ${url.hostname}: ${detail}`)
+      }
       if (result.status >= 300 && result.status < 400) {
         const location = result.headers.get('location')
         await result.body?.cancel()
@@ -203,12 +243,10 @@ export async function probeSource(value) {
   }
 }
 
-export function topicSlugsFor(value, sourceType = 'industry_news') {
+export function topicSlugsFor(value) {
   const text = plainText(value)
   if (!aiGate.test(text)) return []
   const topics = topicRules.filter(([, pattern]) => pattern.test(text)).map(([slug]) => slug)
-  if (!topics.length && sourceType === 'product_discovery') topics.push('ai-products')
-  if (!topics.length) topics.push('model-capabilities')
   return [...new Set(topics)]
 }
 

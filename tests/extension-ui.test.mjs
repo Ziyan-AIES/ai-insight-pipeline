@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.4.5')
+    expect(manifest.version).toBe('0.4.6')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
@@ -95,17 +95,12 @@ describe('extension session UI', () => {
     expect(contentSource).toMatch(/Saved to AI Signals/)
     expect(contentSource).toMatch(/Already saved · thought added/)
     expect(contentSource).toMatch(/Already saved · no duplicate created/)
-    expect(contentSource).toMatch(/Already captured/)
     expect(contentSource).toMatch(/captureLabel = state\.captureState === 'saved'/)
     expect(contentSource).toMatch(/'Captured'/)
-    expect(contentSource).toMatch(/type: 'bsw-capture-status'/)
-    expect(backgroundSource).toMatch(/\/api\/status\?url=/)
-    expect(contentSource).toMatch(
-      /addEventListener\('pointerenter', \(\) => void refreshCaptureStatus\(\)\)/,
-    )
-    expect(contentSource).not.toMatch(
-      /setInterval\(\(\) => \{\s*if \(location\.href === state\.captureStatusUrl\)/,
-    )
+    expect(contentSource).not.toMatch(/bsw-capture-status/)
+    expect(contentSource).not.toMatch(/refreshCaptureStatus/)
+    expect(backgroundSource).not.toMatch(/getCaptureStatus/)
+    expect(backgroundSource).not.toMatch(/\/api\/status\?url=/)
     expect(contentSource).toMatch(/\.map\(\(node\) => visibleText\(node\)\)/)
     expect(contentSource).toMatch(/Access expired/)
     expect(contentSource).toMatch(/Couldn't save/)

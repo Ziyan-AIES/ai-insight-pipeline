@@ -8,7 +8,7 @@ It uses the **same magic-link login and `team_members` list** as the dashboard. 
 
 After updating these files you **must reload the unpacked extension** in `chrome://extensions` (Developer mode → Reload). Existing tabs also need a refresh before the new capture UI appears.
 
-Version **0.4.3** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens a small composer where a team member can add an optional thought before saving; success, duplicate, access, and retry outcomes are explicit.
+Version **0.4.6** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens immediately without a preflight status request; the save endpoint remains the source of truth for deduplication and reports whether the URL already existed. Success, duplicate, access, and retry outcomes are explicit.
 
 Dashboard and extension keep credentials in their own browser security boundaries. A verified team identity creates a separate Supabase session for the other surface, so independent token refreshes cannot sign each other out. Opening either surface while the other is signed in should connect it automatically. Signing out from the Dashboard also signs out the extension.
 

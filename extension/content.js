@@ -22,10 +22,6 @@
     toastKind: 'ok',
     toastAction: '',
     captureState: 'idle',
-    captureStatusUrl: '',
-    captureStatusKnown: false,
-    captured: false,
-    statusBusy: false,
     busy: false,
     composerOpen: false,
     thought: '',
@@ -291,7 +287,6 @@
     `
     document.documentElement.appendChild(root)
     root.addEventListener('click', onActionClick)
-    root.addEventListener('pointerenter', () => void refreshCaptureStatus())
     root.addEventListener('input', (event) => {
       if (event.target.matches('.bsw-composer textarea')) state.thought = event.target.value
     })
@@ -315,9 +310,7 @@
         ? 'Captured'
         : state.captureState === 'saving'
           ? 'Saving…'
-          : state.captureState === 'checking'
-            ? 'Checking…'
-            : 'Capture'
+          : 'Capture'
       topSlot.innerHTML = actionMarkup(
         'save',
         captureLabel,
@@ -389,7 +382,6 @@
       state.composerOpen = true
       clearToast()
       renderDock()
-      void refreshCaptureStatus()
       document.getElementById(rootId)?.querySelector('.bsw-composer textarea')?.focus()
     }
     if (act === 'capture-cancel') {
@@ -404,11 +396,6 @@
 
   async function saveSignal() {
     if (state.busy) return
-    if (state.captureStatusKnown && state.captured && !state.thought.trim()) {
-      state.composerOpen = false
-      showToast('Already captured', 'ok')
-      return
-    }
     state.busy = true
     state.captureState = 'saving'
     clearToast()
@@ -431,9 +418,6 @@
         },
       })
       if (result?.ok) {
-        state.captureStatusUrl = page.url
-        state.captureStatusKnown = true
-        state.captured = true
         state.captureState = 'saved'
         const hadThought = Boolean(state.thought.trim())
         state.composerOpen = false
@@ -467,48 +451,6 @@
     }
   }
 
-  async function refreshCaptureStatus(force = false) {
-    if (
-      !state.dockEnabled ||
-      onDashboard ||
-      authMode() !== 'authorized' ||
-      state.statusBusy
-    ) return
-    const url = location.href
-    if (state.captureStatusUrl !== url) {
-      state.captureStatusKnown = false
-      state.captured = false
-    }
-    if (
-      !force &&
-      state.captureStatusKnown &&
-      state.captureStatusUrl === url
-    ) return
-    state.statusBusy = true
-    state.captureStatusUrl = url
-    if (state.captureState !== 'saving') state.captureState = 'checking'
-    renderDock()
-    try {
-      const result = await chrome.runtime.sendMessage({
-        type: 'bsw-capture-status',
-        url,
-      })
-      if (location.href !== url) return
-      if (result?.ok) {
-        state.captureStatusKnown = true
-        state.captured = Boolean(result.saved)
-      }
-      if (state.captureState !== 'saving') {
-        state.captureState = state.captured ? 'saved' : 'idle'
-      }
-    } catch {
-      if (state.captureState !== 'saving') state.captureState = 'idle'
-    } finally {
-      state.statusBusy = false
-      renderDock()
-    }
-  }
-
   function clearToast() {
     window.clearTimeout(showToast.timer)
     state.toast = ''
@@ -525,7 +467,7 @@
       state.toast = ''
       state.toastKind = 'ok'
       state.toastAction = ''
-      state.captureState = state.captured ? 'saved' : 'idle'
+      state.captureState = 'idle'
       renderDock()
     }, duration)
   }

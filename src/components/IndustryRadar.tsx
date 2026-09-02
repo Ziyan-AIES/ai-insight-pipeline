@@ -286,6 +286,7 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
   const [selectedSlug, setSelectedSlug] = useState('')
   const [selectedEvidence, setSelectedEvidence] = useState<string[]>([])
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [methodOpen, setMethodOpen] = useState(false)
   const [loading, setLoading] = useState(cloudConfigured)
   const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -372,9 +373,10 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         <div>
           <span className="eyebrow">External market sensing</span>
           <h1>Industry Radar</h1>
-          <p>Signals that are accelerating across independent news, product, company and market sources.</p>
+          <p>Specific market movements gaining breadth or speed across independent sources.</p>
         </div>
         <div className="radar-hero-actions">
+          <button className="text-action radar-method-toggle" type="button" aria-expanded={methodOpen} onClick={() => setMethodOpen((open) => !open)}>How it works</button>
           {canEdit ? <button className="secondary-button" type="button" disabled={refreshing} onClick={() => void refreshRadar()}>{refreshing ? 'Refreshing…' : 'Refresh now'}</button> : null}
           <button className="secondary-button" type="button" onClick={() => setSourcesOpen(true)}>Sources · {sources.filter((source) => source.enabled).length}</button>
         </div>
@@ -392,6 +394,15 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         <span className="radar-freshness"><i className={healthySources ? 'healthy' : 'pending'} />{healthySources}/{sources.length} healthy · checked {ageLabel(latestFetch)}</span>
       </div>
 
+      {methodOpen ? (
+        <section className="radar-methodology" aria-label="How Industry Radar works">
+          <div><strong>Collect</strong><span>Every 4 hours from RSS and supported APIs; Refresh now runs the same pipeline.</span></div>
+          <div><strong>Cluster</strong><span>Near-identical coverage is consolidated into one distinct development.</span></div>
+          <div><strong>Rank</strong><span>Development count, independent-source breadth, momentum and available engagement.</span></div>
+          <div><strong>AI use</strong><span>None. Topic matching and ranking are deterministic and auditable; no Codex or Cursor job is required.</span></div>
+        </section>
+      ) : null}
+
       {loadError ? (
         <div className="radar-setup-state">
           <strong>Industry Radar needs its database migration.</strong>
@@ -408,13 +419,13 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         <div className="radar-workbench">
           <div className="radar-topic-list" aria-label="Rising topics">
             <div className="radar-list-heading">
-              <span>Topic</span><span>Momentum</span><span>Evidence</span><span>Activity</span>
+              <span>Specific movement</span><span title="Change versus the preceding period">Momentum</span><span title="Distinct developments after similar coverage is consolidated">Coverage</span><span title="Mentions over the selected period">Activity</span>
             </div>
             {topics.map((topic, index) => (
               <button type="button" className={`radar-topic-row ${selectedTopic?.slug === topic.slug ? 'selected' : ''}`} onClick={() => setSelectedSlug(topic.slug)} key={topic.slug}>
                 <span className="radar-topic-identity"><small>#{index + 1}</small><span><strong>{topic.label}</strong><em className={`radar-state ${topic.status}`}>{topic.status}</em></span></span>
                 <span className={`radar-momentum ${topic.momentumPercent !== null && topic.momentumPercent < 0 ? 'negative' : ''}`}>{topic.momentumPercent === null ? 'New' : `${topic.momentumPercent > 0 ? '+' : ''}${topic.momentumPercent}%`}</span>
-                <span className="radar-evidence-count"><strong>{topic.eventCount}</strong> events · {topic.sourceCount} sources</span>
+                <span className="radar-evidence-count" title="Distinct developments after near-duplicate coverage is consolidated"><strong>{topic.developmentCount}</strong> developments · {topic.sourceCount} sources</span>
                 <Sparkline values={topic.sparkline} />
               </button>
             ))}
@@ -430,7 +441,7 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
                 <a className="secondary-button" href={googleNewsUrl(selectedTopic)} target="_blank" rel="noreferrer">Google News ↗</a>
               </header>
               <p className="radar-topic-readout">
-                {selectedTopic.eventCount} distinct developments across {selectedTopic.sourceCount} independent sources in the last {windowDays} days. {selectedTopic.mentionCount - selectedTopic.eventCount > 0 ? `${selectedTopic.mentionCount - selectedTopic.eventCount} near-duplicate reports were consolidated.` : 'No duplicate reporting inflated this count.'}
+                A development is one underlying story after similar reports are consolidated. This movement has {selectedTopic.developmentCount} developments across {selectedTopic.sourceCount} sources in the last {windowDays} days. {selectedTopic.mentionCount - selectedTopic.developmentCount > 0 ? `${selectedTopic.mentionCount - selectedTopic.developmentCount} overlapping reports were merged.` : 'No overlapping reports inflated this count.'}
               </p>
               <div className="radar-type-mix">
                 {selectedTopic.sourceTypes.map((type) => <span key={type}>{radarSourceTypeLabels[type]}</span>)}

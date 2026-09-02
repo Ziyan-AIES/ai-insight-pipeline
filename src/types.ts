@@ -79,7 +79,7 @@ export interface RadarTopic {
   label: string
   status: 'emerging' | 'rising' | 'sustained' | 'cooling'
   mentionCount: number
-  eventCount: number
+  developmentCount: number
   sourceCount: number
   momentumPercent: number | null
   score: number

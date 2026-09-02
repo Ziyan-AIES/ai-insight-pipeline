@@ -51,8 +51,10 @@ describe('dashboard pilot shell', () => {
 
     const radar = screen.getByRole('region', { name: 'Industry Radar' })
     expect(within(radar).getByRole('heading', { name: 'Industry Radar' })).toBeInTheDocument()
-    expect(within(radar).getAllByText('AI agents and automation')).toHaveLength(2)
-    expect(within(radar).getByText(/distinct developments/)).toBeInTheDocument()
+    expect(within(radar).getAllByText('Collaborative AI workspaces')).toHaveLength(2)
+    expect(within(radar).getByText(/A development is one underlying story/)).toBeInTheDocument()
+    fireEvent.click(within(radar).getByRole('button', { name: 'How it works' }))
+    expect(within(radar).getByText(/no Codex or Cursor job is required/i)).toBeInTheDocument()
 
     fireEvent.click(within(radar).getByRole('button', { name: /Sources ·/ }))
     const sources = screen.getByRole('dialog', { name: 'Sources' })
