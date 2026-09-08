@@ -23,6 +23,7 @@ describe('dashboard pilot shell', () => {
     window.sessionStorage.clear()
     window.localStorage.clear()
     window.history.replaceState(null, '', '/')
+    document.documentElement.removeAttribute('data-ai-signals-batch-open')
   })
 
   it('defaults a first-time user to the three-column Synthesis workspace', () => {
@@ -62,14 +63,49 @@ describe('dashboard pilot shell', () => {
     expect(within(sources).getByRole('button', { name: '+ Add source' })).toBeInTheDocument()
   })
 
-  it('opens a capped diversified Radar reading set from one user action', () => {
+  it('falls back to one browser tab and direct links without a batch-capable extension', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
     const radar = screen.getByRole('region', { name: 'Industry Radar' })
     fireEvent.click(within(radar).getByRole('button', { name: /Open selected/ }))
-    expect(open).toHaveBeenCalled()
-    expect(open.mock.calls.length).toBeLessThanOrEqual(5)
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(await within(radar).findByText('Open remaining sources')).toBeInTheDocument()
+    expect(within(radar).getAllByRole('link', { name: /·/ }).length).toBeGreaterThan(0)
+  })
+
+  it('delegates a capped diversified Radar reading set to the extension', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    document.documentElement.setAttribute('data-ai-signals-batch-open', '0.4.8')
+    let requestedUrls: string[] = []
+    const onRequest = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId: string; urls: string[] }>).detail
+      requestedUrls = detail.urls
+      window.dispatchEvent(
+        new CustomEvent('ai-signals:open-urls-result', {
+          detail: {
+            requestId: detail.requestId,
+            ok: true,
+            opened: detail.urls.length,
+            failedUrls: [],
+          },
+        }),
+      )
+    }
+    window.addEventListener('ai-signals:open-urls', onRequest)
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
+    const radar = screen.getByRole('region', { name: 'Industry Radar' })
+    fireEvent.click(within(radar).getByRole('button', { name: /Open selected/ }))
+
+    await waitFor(() => expect(requestedUrls.length).toBeGreaterThan(1))
+    expect(requestedUrls.length).toBeLessThanOrEqual(5)
+    expect(new Set(requestedUrls).size).toBe(requestedUrls.length)
+    expect(open).not.toHaveBeenCalled()
+    expect(await screen.findByText(`Opened ${requestedUrls.length} diversified sources`)).toBeInTheDocument()
+    expect(within(radar).queryByText('Open remaining sources')).toBeNull()
+    window.removeEventListener('ai-signals:open-urls', onRequest)
   })
 
   it('marks only previously reviewed inactive Trends as stale', () => {
@@ -297,6 +333,52 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Expand Action Threads' }))
     expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+  })
+
+  it('maximizes Trends and restores the exact previous side-column state', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
+    expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
+
+    fireEvent.doubleClick(screen.getByTestId('trend-column-heading'))
+    expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Action Threads' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Restore Trend layout' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore Trend layout' }))
+    expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+  })
+
+  it('discards the Trend layout snapshot when a side column is expanded manually', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize Trends' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
+
+    expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Maximize Trends' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Restore Trend layout' })).toBeNull()
+  })
+
+  it('restores and clears a temporary Trend layout when leaving Synthesis', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize Trends' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Synthesis' }))
+
+    expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Maximize Trends' })).toBeInTheDocument()
+  })
+
+  it('does not create a restore snapshot when both side columns are already closed', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Action Threads' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize Trends' }))
+
+    expect(screen.getByRole('button', { name: 'Maximize Trends' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Restore Trend layout' })).toBeNull()
   })
 
   it('reorders active Trend cards by dragging one card onto another', async () => {

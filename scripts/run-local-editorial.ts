@@ -26,6 +26,7 @@ const categories = new Set([
 
 type QueueItem = {
   id: string
+  version: number
   canonical_url: string
   title: string
   source: string
@@ -244,6 +245,7 @@ async function claimEditorialJob(
   externalRunId: string,
   batchSize: number,
 ) {
+  const leaseOwner = `local:${process.env.COMPUTERNAME || 'editorial-runner'}`
   const response = await fetch(
     `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/claim_editorial_job`,
     {
@@ -255,7 +257,7 @@ async function claimEditorialJob(
       },
       body: JSON.stringify({
         p_external_run_id: externalRunId,
-        p_lease_owner: `local:${process.env.COMPUTERNAME || 'editorial-runner'}`,
+        p_lease_owner: leaseOwner,
         p_batch_size: batchSize,
         p_lease_seconds: 1800,
       }),
@@ -264,17 +266,20 @@ async function claimEditorialJob(
   if (!response.ok) {
     throw new Error(`Editorial queue claim failed (${response.status})`)
   }
-  const result = (await response.json()) as { news?: QueueItem[] }
-  return result.news || []
+  const result = (await response.json()) as { run_id?: string; news?: QueueItem[] }
+  if (!result.run_id) throw new Error('Editorial claim did not return a run id')
+  return { runId: result.run_id, leaseOwner, news: result.news || [] }
 }
 
 async function recordEditorialFailure(
   env: ReturnType<typeof environment>,
   externalRunId: string,
+  claimRunId: string,
+  leaseOwner: string,
   message: string,
 ) {
   const response = await fetch(
-    `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/record_editorial_run_failure`,
+    `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/record_editorial_run_failure_guarded`,
     {
       method: 'POST',
       headers: {
@@ -284,6 +289,8 @@ async function recordEditorialFailure(
       },
       body: JSON.stringify({
         p_external_run_id: externalRunId,
+        p_claim_run_id: claimRunId,
+        p_lease_owner: leaseOwner,
         p_error_message: message.slice(0, 2000),
       }),
     },
@@ -297,6 +304,8 @@ let activeClaim:
   | {
       env: ReturnType<typeof environment>
       externalRunId: string
+      claimRunId: string
+      leaseOwner: string
     }
   | undefined
 
@@ -351,7 +360,7 @@ function objectArray(value: unknown) {
     : []
 }
 
-function validatePayload(
+export function validatePayload(
   payload: EditorialPayload,
   pending: QueueItem[],
   runId: string,
@@ -404,6 +413,8 @@ function validatePayload(
     return [
       {
         url: original.canonical_url,
+        id: original.id,
+        expected_version: original.version,
         title:
           typeof item.title === 'string' && item.title.trim()
             ? item.title.trim()
@@ -474,7 +485,7 @@ async function main() {
     25,
   )
   const select =
-    'id,canonical_url,title,source,raw_text,summary,category,captured_at,metadata'
+    'id,canonical_url,title,source,raw_text,summary,category,captured_at,metadata,version'
   let pending = await queryNews(env, {
     select,
     editorial_status: 'eq.pending',
@@ -499,12 +510,20 @@ async function main() {
     return
   }
   const externalRunId = `local-${new Date().toISOString()}-${crypto.randomUUID()}`
-  pending = await claimEditorialJob(env, externalRunId, batchSize)
-  activeClaim = { env, externalRunId }
+  const claim = await claimEditorialJob(env, externalRunId, batchSize)
+  pending = claim.news
+  activeClaim = {
+    env,
+    externalRunId,
+    claimRunId: claim.runId,
+    leaseOwner: claim.leaseOwner,
+  }
   if (!pending.length) {
     await recordEditorialFailure(
       env,
       externalRunId,
+      claim.runId,
+      claim.leaseOwner,
       'No items were claimable; another run may hold the queue lease.',
     )
     activeClaim = undefined
@@ -586,6 +605,8 @@ Return only valid JSON with this shape:
     await recordEditorialFailure(
       env,
       externalRunId,
+      claim.runId,
+      claim.leaseOwner,
       'No claimed item passed evidence validation.',
     )
     activeClaim = undefined
@@ -603,7 +624,12 @@ Return only valid JSON with this shape:
       'content-type': 'application/json',
       'x-editorial-token': env.EDITORIAL_WRITE_TOKEN,
     },
-    body: JSON.stringify({ ...payload, run_id: externalRunId }),
+    body: JSON.stringify({
+      ...payload,
+      run_id: externalRunId,
+      claim_run_id: claim.runId,
+      lease_owner: claim.leaseOwner,
+    }),
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -629,31 +655,40 @@ Return only valid JSON with this shape:
   }
 }
 
-main()
-  .then(() => {
-    process.exitCode = 0
-  })
-  .catch(async (error: unknown) => {
-  if (activeClaim) {
-    await recordEditorialFailure(
-      activeClaim.env,
-      activeClaim.externalRunId,
-      error instanceof Error ? error.message : String(error),
-    ).catch((releaseError) => {
-      console.error(
-        `Editorial lease could not be released: ${
-          releaseError instanceof Error ? releaseError.message : String(releaseError)
-        }`,
-      )
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main()
+    .then(() => {
+      process.exitCode = 0
     })
-    activeClaim = undefined
-  }
-  if (error instanceof CursorAgentError) {
-    console.error(
-      `Cursor agent could not start: ${error.message}; retryable=${error.isRetryable}`,
-    )
-  } else {
-    console.error(error instanceof Error ? error.message : String(error))
-  }
-  process.exitCode = 1
-})
+    .catch(async (error: unknown) => {
+      if (activeClaim) {
+        await recordEditorialFailure(
+          activeClaim.env,
+          activeClaim.externalRunId,
+          activeClaim.claimRunId,
+          activeClaim.leaseOwner,
+          error instanceof Error ? error.message : String(error),
+        ).catch((releaseError) => {
+          console.error(
+            `Editorial lease could not be released: ${
+              releaseError instanceof Error
+                ? releaseError.message
+                : String(releaseError)
+            }`,
+          )
+        })
+        activeClaim = undefined
+      }
+      if (error instanceof CursorAgentError) {
+        console.error(
+          `Cursor agent could not start: ${error.message}; retryable=${error.isRetryable}`,
+        )
+      } else {
+        console.error(error instanceof Error ? error.message : String(error))
+      }
+      process.exitCode = 1
+    })
+}

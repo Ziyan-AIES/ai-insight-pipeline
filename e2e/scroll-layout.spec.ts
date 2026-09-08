@@ -103,6 +103,44 @@ test('shows expanded Live Signal previews and a scrollable Trend editor', async 
   })
 })
 
+test('scrolls every Radar movement into view across responsive layouts', async ({ page }) => {
+  for (const viewport of [
+    { width: 1847, height: 829 },
+    { width: 980, height: 720 },
+    { width: 720, height: 720 },
+    { width: 540, height: 760 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Industry Radar' }).click()
+
+    const main = page.locator('.workspace-main')
+    const lastMovement = page.locator('.radar-topic-row').last()
+    const movementName = await lastMovement.locator('.radar-topic-identity strong').innerText()
+    const metrics = await main.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      overflowY: getComputedStyle(element).overflowY,
+    }))
+    expect(metrics.overflowY).toBe('auto')
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1)
+
+    await lastMovement.scrollIntoViewIfNeeded()
+    await expect(lastMovement).toBeInViewport({ ratio: 1 })
+    expect(await main.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    await lastMovement.click()
+    await expect(page.locator('.radar-topic-detail h2')).toHaveText(movementName)
+  }
+
+  await page.screenshot({
+    path: `${artifactDir}/radar_last_movement_reachable.png`,
+    fullPage: false,
+  })
+})
+
 test('keeps the top navigation and three-column workflow usable in narrow windows', async ({
   page,
 }) => {
@@ -137,6 +175,16 @@ test('keeps the top navigation and three-column workflow usable in narrow window
   expect(searchBox?.x ?? 0).toBeGreaterThan(workspaceNavBox?.x ?? 0)
   expect(addNewsBox?.x ?? 0).toBeGreaterThan(searchBox?.x ?? 0)
   expect(profileBox?.x ?? 0).toBeGreaterThan(addNewsBox?.x ?? 0)
+
+  const trendPane = page.getByRole('region', { name: 'Trends' })
+  const trendWidthBeforeMaximize = (await trendPane.boundingBox())?.width ?? 0
+  await page.getByRole('button', { name: 'Maximize Trends' }).click()
+  await expect(page.getByRole('button', { name: 'Restore Trend layout' })).toBeVisible()
+  const trendWidthWhileMaximized = (await trendPane.boundingBox())?.width ?? 0
+  expect(trendWidthWhileMaximized).toBeGreaterThan(trendWidthBeforeMaximize + 100)
+  await page.getByRole('button', { name: 'Restore Trend layout' }).click()
+  const trendWidthAfterRestore = (await trendPane.boundingBox())?.width ?? 0
+  expect(Math.abs(trendWidthAfterRestore - trendWidthBeforeMaximize)).toBeLessThan(3)
 
   await page.getByRole('button', { name: 'Collapse Action Threads' }).click()
   await expect(page.getByRole('button', { name: 'Expand Action Threads' })).toBeVisible()

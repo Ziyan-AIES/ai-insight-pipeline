@@ -2,6 +2,10 @@
   const DEFAULT_WORKSPACE_URL = 'https://aiinsightpipeline.netlify.app'
   const rootId = 'bsw-floating-tools'
   const QIRA_MARK_URL = chrome.runtime.getURL('qira-mark.svg')
+  const BATCH_OPEN_CAPABILITY_ATTRIBUTE = 'data-ai-signals-batch-open'
+  const BATCH_OPEN_REQUEST_EVENT = 'ai-signals:open-urls'
+  const BATCH_OPEN_RESULT_EVENT = 'ai-signals:open-urls-result'
+  let dashboardHandshakeReady = false
   const CATEGORY_KEYWORDS = {
     interaction: ['interaction', 'interface', 'ux', 'ui', 'assistant', 'browser', 'voice', 'multimodal'],
     ai_software: ['software', 'app', 'saas', 'copilot', 'agent', 'workflow', 'automation', 'cursor'],
@@ -26,21 +30,18 @@
     composerOpen: false,
     thought: '',
   }
-  const onDashboard = isWorkspacePage()
-
-  if (onDashboard) {
-    setupDashboardHandshake()
-  }
   mountDock()
 
   chrome.storage.local.get(null, (values) => {
     applyStorage(values)
+    ensureDashboardHandshake()
     renderDock()
   })
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return
     chrome.storage.local.get(null, (values) => {
       applyStorage(values)
+      ensureDashboardHandshake()
       renderDock()
     })
   })
@@ -369,14 +370,11 @@
   async function onActionClick(event) {
     const act = event.target.closest('[data-act]')?.dataset.act
     if (act === 'signin') {
-      chrome.runtime.sendMessage({ type: 'bsw-sign-in', apiBase: state.apiBase })
+      chrome.runtime.sendMessage({ type: 'bsw-sign-in' })
       showToast('Finish sign-in in the dashboard', 'ok', '', 3000)
     }
     if (act === 'dashboard') {
-      chrome.runtime.sendMessage({
-        type: 'bsw-open-dashboard',
-        apiBase: state.apiBase,
-      })
+      chrome.runtime.sendMessage({ type: 'bsw-open-dashboard' })
     }
     if (act === 'save') {
       state.composerOpen = true
@@ -534,9 +532,17 @@
     const clean = String(value || '').trim().replace(/\/+$/, '')
     if (!clean) return DEFAULT_WORKSPACE_URL
     try {
-      return new URL(clean).origin
+      const url = new URL(clean)
+      if (url.origin === DEFAULT_WORKSPACE_URL) return url.origin
+      if (
+        (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
+        (url.protocol === 'http:' || url.protocol === 'https:')
+      ) {
+        return url.origin
+      }
+      return DEFAULT_WORKSPACE_URL
     } catch {
-      return clean
+      return DEFAULT_WORKSPACE_URL
     }
   }
 
@@ -562,7 +568,13 @@
   }
 
   function isWorkspacePage() {
-    return /aiinsightpipeline\.netlify\.app$/i.test(location.hostname)
+    return location.origin === state.apiBase
+  }
+
+  function ensureDashboardHandshake() {
+    if (dashboardHandshakeReady || !isWorkspacePage()) return
+    dashboardHandshakeReady = true
+    setupDashboardHandshake()
   }
 
   function readSupabaseSession() {
@@ -587,7 +599,9 @@
   }
 
   function setupDashboardHandshake() {
+    const workspaceOrigin = location.origin
     let inFlight = false
+    document.documentElement.setAttribute(BATCH_OPEN_CAPABILITY_ATTRIBUTE, '0.4.8')
     async function syncHandoff() {
       if (inFlight) return
       inFlight = true
@@ -598,20 +612,20 @@
         ])
         const pending = values.bswPendingAuthState
         const tokens = readSupabaseSession()
-        const origin = normalizeWorkspaceUrl(
+        const configuredOrigin = normalizeWorkspaceUrl(
           values.bswApiBase || DEFAULT_WORKSPACE_URL,
         )
+        if (configuredOrigin !== workspaceOrigin) return
         if (tokens?.access_token && tokens.refresh_token) {
           chrome.runtime.sendMessage({
             type: 'bsw-adopt-dashboard-session',
-            apiBase: origin,
             accessToken: tokens.access_token,
           })
         }
         if (!pending) return
         chrome.runtime.sendMessage({ type: 'bsw-claim-now' })
         if (!tokens?.access_token) return
-        await fetch(`${origin}/api/extension-auth`, {
+        await fetch(`${workspaceOrigin}/api/extension-auth`, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
@@ -620,7 +634,6 @@
           body: JSON.stringify({
             action: 'complete',
             state: pending,
-            refresh_token: tokens.refresh_token || '',
           }),
         })
         chrome.runtime.sendMessage({ type: 'bsw-claim-now' })
@@ -636,11 +649,36 @@
       chrome.runtime.sendMessage({
         type: 'bsw-complete-dashboard-session',
         state,
-        apiBase: window.location.origin,
       })
     })
     window.addEventListener('ai-signals:dashboard-sign-out', () => {
       chrome.runtime.sendMessage({ type: 'bsw-sign-out' })
+    })
+    window.addEventListener(BATCH_OPEN_REQUEST_EVENT, (event) => {
+      const requestId = String(event.detail?.requestId || '')
+      const urls = Array.isArray(event.detail?.urls) ? event.detail.urls : []
+      if (!/^[a-z0-9-]{16,80}$/i.test(requestId)) return
+      void chrome.runtime
+        .sendMessage({ type: 'bsw-open-urls', urls })
+        .then((result) => {
+          window.dispatchEvent(
+            new CustomEvent(BATCH_OPEN_RESULT_EVENT, {
+              detail: {
+                requestId,
+                ok: result?.ok === true,
+                opened: Number(result?.opened || 0),
+                failedUrls: Array.isArray(result?.failedUrls) ? result.failedUrls : [],
+              },
+            }),
+          )
+        })
+        .catch(() => {
+          window.dispatchEvent(
+            new CustomEvent(BATCH_OPEN_RESULT_EVENT, {
+              detail: { requestId, ok: false, opened: 0, failedUrls: urls },
+            }),
+          )
+        })
     })
     void syncHandoff()
     const timer = window.setInterval(() => {

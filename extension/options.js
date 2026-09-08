@@ -56,18 +56,15 @@ document.getElementById('signIn').addEventListener('click', async () => {
   statusEl.textContent = 'Opening workspace sign-in…'
   const apiBase = await workspaceUrl()
   await chrome.storage.local.set({ [STORAGE_KEYS.apiBase]: apiBase })
-  chrome.runtime.sendMessage({ type: 'bsw-sign-in', apiBase }, (result) => {
+  chrome.runtime.sendMessage({ type: 'bsw-sign-in' }, (result) => {
     statusEl.textContent = result?.ok
       ? 'Finish sign-in in the workspace tab, then return here.'
       : 'Could not start sign-in'
   })
 })
 
-document.getElementById('openDashboard').addEventListener('click', async () => {
-  chrome.runtime.sendMessage({
-    type: 'bsw-open-dashboard',
-    apiBase: await workspaceUrl(),
-  })
+document.getElementById('openDashboard').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'bsw-open-dashboard' })
 })
 
 document.getElementById('signOut').addEventListener('click', () => {

@@ -464,6 +464,11 @@ function App() {
   const [archivedTrendsOpen, setArchivedTrendsOpen] = useState(false)
   const [evidenceInboxOpen, setEvidenceInboxOpen] = useState(false)
   const [actionThreadsOpen, setActionThreadsOpen] = useState(true)
+  const [trendColumnMaximized, setTrendColumnMaximized] = useState(false)
+  const trendLayoutSnapshot = useRef<{
+    evidenceInboxOpen: boolean
+    actionThreadsOpen: boolean
+  } | null>(null)
   const [closedThreadsOpen, setClosedThreadsOpen] = useState(false)
   const [topicKindFilter, setTopicKindFilter] = useState<TopicKindFilter>('all')
   const [threadStatusFilter, setThreadStatusFilter] =
@@ -1013,6 +1018,50 @@ function App() {
 
     return change.table === 'editorial_job_runs' || change.table === 'news_votes'
   }, [])
+
+  const discardTrendLayoutSnapshot = useCallback(() => {
+    trendLayoutSnapshot.current = null
+    setTrendColumnMaximized(false)
+  }, [])
+
+  const expandEvidenceInbox = useCallback(() => {
+    discardTrendLayoutSnapshot()
+    setEvidenceInboxOpen(true)
+  }, [discardTrendLayoutSnapshot])
+
+  const expandActionThreads = useCallback(() => {
+    discardTrendLayoutSnapshot()
+    setActionThreadsOpen(true)
+  }, [discardTrendLayoutSnapshot])
+
+  const toggleTrendColumnMaximized = useCallback(() => {
+    if (trendColumnMaximized) {
+      const snapshot = trendLayoutSnapshot.current
+      trendLayoutSnapshot.current = null
+      setTrendColumnMaximized(false)
+      if (snapshot) {
+        setEvidenceInboxOpen(snapshot.evidenceInboxOpen)
+        setActionThreadsOpen(snapshot.actionThreadsOpen)
+      }
+      return
+    }
+    if (!evidenceInboxOpen && !actionThreadsOpen) return
+    trendLayoutSnapshot.current = { evidenceInboxOpen, actionThreadsOpen }
+    setTrendColumnMaximized(true)
+    setEvidenceInboxOpen(false)
+    setActionThreadsOpen(false)
+  }, [actionThreadsOpen, evidenceInboxOpen, trendColumnMaximized])
+
+  useEffect(() => {
+    if (workspacePage === 'synthesis' || !trendColumnMaximized) return
+    const snapshot = trendLayoutSnapshot.current
+    trendLayoutSnapshot.current = null
+    setTrendColumnMaximized(false)
+    if (snapshot) {
+      setEvidenceInboxOpen(snapshot.evidenceInboxOpen)
+      setActionThreadsOpen(snapshot.actionThreadsOpen)
+    }
+  }, [trendColumnMaximized, workspacePage])
 
   useEffect(() => {
     void reloadWorkspace()
@@ -4159,7 +4208,7 @@ function App() {
             className="secondary-button"
             type="button"
             onClick={() => {
-              setEvidenceInboxOpen(true)
+              expandEvidenceInbox()
               setEvidenceScope('all')
               if (trend.evidence.length > 0) {
                 setEvidenceCategory('all')
@@ -4948,7 +4997,7 @@ function App() {
                   className="evidence-collapsed-rail"
                   type="button"
                   aria-label="Expand Evidence"
-                  onClick={() => setEvidenceInboxOpen(true)}
+                  onClick={expandEvidenceInbox}
                 >
                   <span>Evidence</span>
                   <strong>{news.filter((item) => !item.deletedAt && !item.archivedAt).length}</strong>
@@ -4960,9 +5009,36 @@ function App() {
                 className="news-pane trend-briefing-pane workflow-column"
                 aria-label="Trends"
               >
-                <div className="workflow-column-heading">
+                <div
+                  className="workflow-column-heading trend-column-heading"
+                  data-testid="trend-column-heading"
+                  onDoubleClick={(event) => {
+                    const target = event.target as HTMLElement
+                    if (
+                      target.closest(
+                        'button, a, input, select, textarea, [role="button"], [draggable="true"]',
+                      )
+                    ) {
+                      return
+                    }
+                    toggleTrendColumnMaximized()
+                  }}
+                >
                   <h1>Trends</h1>
                   <div className="heading-actions">
+                    <button
+                      className="secondary-button trend-maximize-button"
+                      type="button"
+                      aria-label={
+                        trendColumnMaximized
+                          ? 'Restore Trend layout'
+                          : 'Maximize Trends'
+                      }
+                      onClick={toggleTrendColumnMaximized}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                    >
+                      {trendColumnMaximized ? 'Restore' : 'Maximize'}
+                    </button>
                     <button
                       className="secondary-button"
                       type="button"
@@ -5058,7 +5134,7 @@ function App() {
                       <button
                         className="primary-button"
                         type="button"
-                        onClick={() => setEvidenceInboxOpen(true)}
+                        onClick={expandEvidenceInbox}
                       >
                         Expand Evidence
                       </button>
@@ -5084,7 +5160,7 @@ function App() {
                 className="action-threads-collapsed-rail"
                 type="button"
                 aria-label="Expand Action Threads"
-                onClick={() => setActionThreadsOpen(true)}
+                onClick={expandActionThreads}
               >
                 <i aria-hidden="true">‹</i>
                 <span>Action Threads</span>

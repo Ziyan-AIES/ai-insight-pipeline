@@ -1,6 +1,7 @@
 import {
   DEFAULT_WORKSPACE_URL,
   STORAGE_KEYS,
+  isAllowedWorkspaceOrigin,
   normalizeWorkspaceUrl,
 } from './shared.js'
 
@@ -9,6 +10,7 @@ const REFRESH_ALARM = 'bsw-refresh-session'
 const CLAIM_PERIOD_MINUTES = 1
 const REFRESH_PERIOD_MINUTES = 30
 const HANDSHAKE_TTL_MS = 24 * 60 * 60 * 1000
+const MAX_BATCH_OPEN_URLS = 5
 
 chrome.runtime.onInstalled.addListener(() => {
   void resumeBackgroundWork()
@@ -22,42 +24,45 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 })
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab?.url) return
-  if (!/extension_auth=1|aiinsightpipeline\.netlify\.app/i.test(tab.url)) return
-  void claimPendingSession()
+  void claimFromTrustedTabUpdate(tab.url)
 })
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message.type !== 'string') return false
   if (message.type === 'bsw-sign-in') {
-    void startSignIn(message.apiBase).then(sendResponse)
+    void startSignIn().then(sendResponse)
     return true
   }
   if (message.type === 'bsw-sign-out') {
-    void signOut().then(() => sendResponse({ ok: true }))
+    void signOutFromSender(sender).then(sendResponse)
     return true
   }
   if (message.type === 'bsw-refresh-session') {
-    void refreshSession().then(sendResponse)
+    void refreshFromSender(sender).then(sendResponse)
     return true
   }
   if (message.type === 'bsw-claim-now') {
-    void claimPendingSession().then(sendResponse)
+    void claimFromSender(sender).then(sendResponse)
     return true
   }
   if (message.type === 'bsw-get-session') {
-    void getStoredSession().then(sendResponse)
+    void sessionForSender(sender).then(sendResponse)
     return true
   }
   if (message.type === 'bsw-adopt-dashboard-session') {
-    void adoptDashboardSession(message).then(sendResponse)
+    void adoptDashboardSession(message, sender).then(sendResponse)
     return true
   }
   if (message.type === 'bsw-complete-dashboard-session') {
-    void completeDashboardSession(message).then(sendResponse)
+    void completeDashboardSession(message, sender).then(sendResponse)
+    return true
+  }
+  if (message.type === 'bsw-open-urls') {
+    void openUrlsFromSender(message, sender).then(sendResponse)
     return true
   }
   if (message.type === 'bsw-open-dashboard') {
-    void openDashboard(message.apiBase).then(sendResponse)
+    void openDashboard().then(sendResponse)
     return true
   }
   if (message.type === 'bsw-capture') {
@@ -80,8 +85,8 @@ async function resumeBackgroundWork() {
   }
 }
 
-async function startSignIn(apiBase) {
-  const origin = normalizeWorkspaceUrl(apiBase || (await storedApiBase()))
+async function startSignIn() {
+  const origin = await storedApiBase()
   const state = randomState()
   await chrome.storage.local.set({
     [STORAGE_KEYS.apiBase]: origin,
@@ -215,8 +220,9 @@ async function applyClaim(origin, body) {
   })
 }
 
-async function adoptDashboardSession(message) {
-  const origin = normalizeWorkspaceUrl(message.apiBase || (await storedApiBase()))
+async function adoptDashboardSession(message, sender) {
+  const origin = await storedApiBase()
+  if (!isTrustedWorkspaceSender(sender, origin)) return untrustedSender()
   const accessToken = String(message.accessToken || '')
   if (!accessToken) return { ok: false, status: 401 }
   try {
@@ -247,9 +253,10 @@ async function adoptDashboardSession(message) {
   }
 }
 
-async function completeDashboardSession(message) {
+async function completeDashboardSession(message, sender) {
   const state = String(message.state || '')
-  const origin = normalizeWorkspaceUrl(message.apiBase || (await storedApiBase()))
+  const origin = await storedApiBase()
+  if (!isTrustedWorkspaceSender(sender, origin)) return untrustedSender()
   if (!/^[a-f0-9]{32,}$/i.test(state)) return { ok: false, status: 400 }
   let stored = await getStoredSession()
   if (!stored.authorized || !stored.accessToken || !stored.refreshToken) {
@@ -266,8 +273,67 @@ async function completeDashboardSession(message) {
   return { ok: result.ok, status: result.status, ...body }
 }
 
-async function openDashboard(apiBase) {
-  const origin = normalizeWorkspaceUrl(apiBase || (await storedApiBase()))
+async function openUrlsFromSender(message, sender) {
+  const origin = await storedApiBase()
+  if (!isTrustedWorkspaceSender(sender, origin) || !Number.isInteger(sender?.tab?.id)) {
+    return untrustedSender()
+  }
+  if (
+    !Array.isArray(message.urls) ||
+    message.urls.length === 0 ||
+    message.urls.length > MAX_BATCH_OPEN_URLS
+  ) {
+    return { ok: false, status: 400, opened: 0, failedUrls: [] }
+  }
+
+  const urls = []
+  for (const candidate of message.urls) {
+    const normalized = normalizeExternalUrl(candidate)
+    if (!normalized) {
+      return { ok: false, status: 400, opened: 0, failedUrls: [] }
+    }
+    if (!urls.includes(normalized)) urls.push(normalized)
+  }
+
+  const failedUrls = []
+  let nextIndex = Number.isInteger(sender.tab.index) ? sender.tab.index + 1 : null
+  for (const url of urls) {
+    try {
+      const createOptions = {
+        url,
+        active: false,
+        openerTabId: sender.tab.id,
+      }
+      if (Number.isInteger(sender.tab.windowId)) createOptions.windowId = sender.tab.windowId
+      if (nextIndex !== null) createOptions.index = nextIndex
+      await chrome.tabs.create(createOptions)
+      if (nextIndex !== null) nextIndex += 1
+    } catch {
+      failedUrls.push(url)
+    }
+  }
+  const opened = urls.length - failedUrls.length
+  return {
+    ok: failedUrls.length === 0,
+    status: failedUrls.length === 0 ? 200 : 502,
+    opened,
+    failedUrls,
+  }
+}
+
+function normalizeExternalUrl(value) {
+  if (typeof value !== 'string' || value.length > 4096) return ''
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return ''
+    return parsed.href
+  } catch {
+    return ''
+  }
+}
+
+async function openDashboard() {
+  const origin = await storedApiBase()
   const stored = await getStoredSession()
   if (!stored.authorized || !stored.accessToken || !stored.refreshToken) {
     const url = `${origin}/#extension_auth_error=${encodeURIComponent('Extension session is not active. Sign in once with your work email.')}`
@@ -325,12 +391,85 @@ function postDashboardSession(origin, state, stored) {
       'content-type': 'application/json',
       authorization: `Bearer ${stored.accessToken}`,
     },
-    body: JSON.stringify({
-      action: 'complete',
-      state,
-      refresh_token: stored.refreshToken,
-    }),
+    body: JSON.stringify({ action: 'complete', state }),
   })
+}
+
+async function signOutFromSender(sender) {
+  const origin = await storedApiBase()
+  if (!isTrustedControlSender(sender, origin)) return untrustedSender()
+  await signOut()
+  return { ok: true }
+}
+
+async function refreshFromSender(sender) {
+  const origin = await storedApiBase()
+  if (!isTrustedControlSender(sender, origin)) return untrustedSender()
+  return refreshSession()
+}
+
+async function claimFromSender(sender) {
+  const origin = await storedApiBase()
+  if (!isTrustedWorkspaceSender(sender, origin)) return untrustedSender()
+  return claimPendingSession()
+}
+
+async function claimFromTrustedTabUpdate(tabUrl) {
+  const origin = await storedApiBase()
+  if (!isTrustedWorkspaceUrl(tabUrl, origin)) return
+  await claimPendingSession()
+}
+
+async function sessionForSender(sender) {
+  const origin = await storedApiBase()
+  if (!isTrustedControlSender(sender, origin)) return untrustedSender()
+  return getStoredSession()
+}
+
+function senderUrl(sender) {
+  return String(sender?.url || sender?.tab?.url || '')
+}
+
+function senderOrigin(sender) {
+  try {
+    return new URL(senderUrl(sender)).origin
+  } catch {
+    return ''
+  }
+}
+
+function isExtensionSender(sender) {
+  return (
+    sender?.id === chrome.runtime.id &&
+    senderUrl(sender).startsWith(chrome.runtime.getURL(''))
+  )
+}
+
+function isTrustedWorkspaceSender(sender, expectedOrigin) {
+  return (
+    sender?.id === chrome.runtime.id &&
+    isAllowedWorkspaceOrigin(expectedOrigin) &&
+    senderOrigin(sender) === expectedOrigin
+  )
+}
+
+function isTrustedControlSender(sender, expectedOrigin) {
+  return isExtensionSender(sender) || isTrustedWorkspaceSender(sender, expectedOrigin)
+}
+
+function isTrustedWorkspaceUrl(value, expectedOrigin) {
+  try {
+    return (
+      isAllowedWorkspaceOrigin(expectedOrigin) &&
+      new URL(value).origin === expectedOrigin
+    )
+  } catch {
+    return false
+  }
+}
+
+function untrustedSender() {
+  return { ok: false, status: 403, error: 'Untrusted extension message source' }
 }
 
 async function refreshSession() {

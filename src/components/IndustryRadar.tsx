@@ -31,6 +31,59 @@ type IndustryRadarProps = {
 }
 
 const sourceTypes = Object.keys(radarSourceTypeLabels) as RadarSourceType[]
+const batchOpenCapabilityAttribute = 'data-ai-signals-batch-open'
+const batchOpenRequestEvent = 'ai-signals:open-urls'
+const batchOpenResultEvent = 'ai-signals:open-urls-result'
+const batchOpenTimeoutMs = 1500
+
+type BatchOpenResult = {
+  ok: boolean
+  opened: number
+  failedUrls: string[]
+}
+
+function extensionCanBatchOpen() {
+  return document.documentElement.hasAttribute(batchOpenCapabilityAttribute)
+}
+
+function normalizedHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : ''
+  } catch {
+    return ''
+  }
+}
+
+function requestExtensionBatchOpen(urls: string[]) {
+  return new Promise<BatchOpenResult | null>((resolve) => {
+    const requestId = `radar-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    let settled = false
+    const finish = (result: BatchOpenResult | null) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeout)
+      window.removeEventListener(batchOpenResultEvent, onResult)
+      resolve(result)
+    }
+    const onResult = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<BatchOpenResult> & { requestId?: string }>).detail
+      if (detail?.requestId !== requestId) return
+      finish({
+        ok: detail.ok === true,
+        opened: Number.isFinite(detail.opened) ? Math.max(0, Number(detail.opened)) : 0,
+        failedUrls: Array.isArray(detail.failedUrls)
+          ? detail.failedUrls.filter((url): url is string => typeof url === 'string')
+          : [],
+      })
+    }
+    const timeout = window.setTimeout(() => finish(null), batchOpenTimeoutMs)
+    window.addEventListener(batchOpenResultEvent, onResult)
+    window.dispatchEvent(
+      new CustomEvent(batchOpenRequestEvent, { detail: { requestId, urls } }),
+    )
+  })
+}
 
 function ageLabel(value?: string) {
   if (!value) return 'Not checked yet'
@@ -285,6 +338,7 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
   const [sourceFilter, setSourceFilter] = useState<RadarSourceType | 'all'>('all')
   const [selectedSlug, setSelectedSlug] = useState('')
   const [selectedEvidence, setSelectedEvidence] = useState<string[]>([])
+  const [batchOpenFallback, setBatchOpenFallback] = useState<RadarItem[]>([])
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [methodOpen, setMethodOpen] = useState(false)
   const [loading, setLoading] = useState(cloudConfigured)
@@ -325,23 +379,61 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
   useEffect(() => {
     if (!selectedTopic) {
       setSelectedEvidence([])
+      setBatchOpenFallback([])
       return
     }
     if (selectedTopic.slug !== selectedSlug) setSelectedSlug(selectedTopic.slug)
     setSelectedEvidence(selectedTopic.evidence.slice(0, 4).map((item) => item.id))
+    setBatchOpenFallback([])
   }, [selectedTopic, selectedSlug])
 
-  function openEvidence(topic: RadarTopic) {
-    const urls = topic.evidence
+  async function openEvidence(topic: RadarTopic) {
+    const selectedItems = topic.evidence
       .filter((item) => selectedEvidence.includes(item.id))
+      .filter((item) => Boolean(normalizedHttpUrl(item.url)))
+      .filter(
+        (item, index, all) =>
+          all.findIndex(
+            (candidate) => normalizedHttpUrl(candidate.url) === normalizedHttpUrl(item.url),
+          ) === index,
+      )
       .slice(0, 5)
-      .map((item) => item.url)
-    if (!urls.length) {
+    if (!selectedItems.length) {
       onNotice('Select at least one article')
       return
     }
-    for (const url of urls) window.open(url, '_blank', 'noopener,noreferrer')
-    onNotice(`Opened ${urls.length} diversified sources`)
+    setBatchOpenFallback([])
+    const urls = selectedItems.map((item) => normalizedHttpUrl(item.url))
+
+    if (extensionCanBatchOpen()) {
+      const result = await requestExtensionBatchOpen(urls)
+      if (result?.ok && result.opened === urls.length) {
+        onNotice(`Opened ${result.opened} diversified sources`)
+        return
+      }
+      const failedUrlSet = new Set(
+        result?.failedUrls.map((url) => normalizedHttpUrl(url)) || [],
+      )
+      const failed = failedUrlSet.size
+        ? selectedItems.filter((item) => failedUrlSet.has(normalizedHttpUrl(item.url)))
+        : selectedItems
+      setBatchOpenFallback(failed)
+      onNotice(
+        result
+          ? `Opened ${result.opened} of ${urls.length} sources · open the rest below`
+          : 'AI Signals did not respond · open the selected sources below',
+      )
+      return
+    }
+
+    window.open(urls[0], '_blank', 'noopener,noreferrer')
+    const remaining = selectedItems.slice(1)
+    setBatchOpenFallback(remaining)
+    onNotice(
+      remaining.length
+        ? `Sent the first source to the browser · open ${remaining.length} remaining below`
+        : 'Opened selected source',
+    )
   }
 
   async function refreshRadar() {
@@ -448,8 +540,24 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
               </div>
               <div className="radar-reading-heading">
                 <div><strong>Diversified reading set</strong><span>One link per source and underlying story</span></div>
-                <button className="primary-button" type="button" onClick={() => openEvidence(selectedTopic)}>Open selected · {selectedEvidence.length}</button>
+                <button className="primary-button" type="button" onClick={() => void openEvidence(selectedTopic)}>Open selected · {selectedEvidence.length}</button>
               </div>
+              {batchOpenFallback.length ? (
+                <div className="radar-open-fallback" role="status">
+                  <div>
+                    <strong>Open remaining sources</strong>
+                    <span>Use these direct links if browser or extension batch opening is unavailable.</span>
+                  </div>
+                  <div className="radar-open-fallback-links">
+                    {batchOpenFallback.map((item) => (
+                      <a href={item.url} target="_blank" rel="noreferrer" key={item.id}>
+                        {item.sourceName} · {item.title}
+                      </a>
+                    ))}
+                  </div>
+                  <button type="button" aria-label="Dismiss remaining source links" onClick={() => setBatchOpenFallback([])}>×</button>
+                </div>
+              ) : null}
               <div className="radar-evidence-list">
                 {selectedTopic.evidence.map((item) => {
                   const engagement = engagementLabel(item)

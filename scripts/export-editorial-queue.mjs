@@ -7,7 +7,7 @@ if (!url || !key) {
 }
 
 const response = await fetch(
-  `${url}/rest/v1/news_items?select=id,canonical_url,title,source,raw_text,summary,category,captured_at,metadata&editorial_status=eq.pending&order=captured_at.asc`,
+  `${url}/rest/v1/news_items?select=id,canonical_url,title,source,raw_text,summary,category,captured_at,metadata,version&editorial_status=eq.pending&order=captured_at.asc`,
   {
     headers: {
       apikey: key,

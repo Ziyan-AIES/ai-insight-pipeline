@@ -27,6 +27,38 @@ const categories = new Set([
   'industry_events',
 ])
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function editorialRequestHash(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+function isEditorialConflict(error) {
+  return /40001|editorial (?:snapshot|lease|version|item).*conflict/i.test(
+    String(error?.message || error),
+  )
+}
+
+function needsConcurrencyMigration(error) {
+  return /PGRST202|apply_editorial_sync_guarded/i.test(
+    String(error?.message || error),
+  )
+}
+
+function requireNewsId(value) {
+  const id = String(value || '')
+  if (!uuidPattern.test(id)) throw new Error('invalid news id')
+  return id
+}
+
+function requireExpectedVersion(value) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error('invalid expected version')
+  }
+  return value
+}
+
 export async function handler(event) {
   const options = handleOptions(event)
   if (options) return options
@@ -77,9 +109,26 @@ export async function handler(event) {
     )
   }
 
+  const runId = String(body.run_id || '').slice(0, 200)
+  const claimRunId = String(body.claim_run_id || '')
+  const leaseOwner = String(body.lease_owner || '').slice(0, 200)
+  if (!runId || !uuidPattern.test(claimRunId) || !leaseOwner) {
+    return response(
+      400,
+      {
+        ok: false,
+        error: 'run_id, claim_run_id, and lease_owner are required',
+      },
+      {},
+      event,
+    )
+  }
+
   let rows
   try {
     rows = body.news.map((item) => ({
+      news_id: requireNewsId(item.id),
+      expected_version: requireExpectedVersion(item.expected_version),
       canonical_url: canonicalizeUrl(item.url),
       title: String(item.title || 'Untitled').slice(0, 500),
       source: String(item.source || '').slice(0, 200),
@@ -117,42 +166,77 @@ export async function handler(event) {
   } catch {
     return response(
       400,
-      { ok: false, error: 'Every news item requires a valid URL' },
+      {
+        ok: false,
+        error: 'Every news item requires a valid id, version, and URL',
+      },
       {},
       event,
     )
   }
 
-  const runId = String(
-    body.run_id ||
-      rows[0]?.editorial_metadata?.editorial_audit?.run_id ||
-      crypto.randomUUID(),
-  ).slice(0, 200)
+  const readouts = (body.readouts || []).map((item) => ({
+    period_type: item.period_type,
+    period_key: String(item.period_key || '').slice(0, 100),
+    lede: String(item.lede || '').slice(0, 2000),
+    bullets: Array.isArray(item.bullets) ? item.bullets.slice(0, 5) : [],
+    generated_by: String(item.generated_by || 'cursor-automation').slice(0, 200),
+  }))
+  const requestHash = editorialRequestHash({
+    runId,
+    claimRunId,
+    leaseOwner,
+    news: rows,
+    readouts,
+  })
 
   try {
-    const result = await supabaseRpc('apply_editorial_sync', {
+    const result = await supabaseRpc('apply_editorial_sync_guarded', {
       p_news: rows,
-      p_readouts: (body.readouts || []).map((item) => ({
-        period_type: item.period_type,
-        period_key: String(item.period_key || '').slice(0, 100),
-        lede: String(item.lede || '').slice(0, 2000),
-        bullets: Array.isArray(item.bullets) ? item.bullets.slice(0, 5) : [],
-        generated_by: String(
-          item.generated_by || 'cursor-automation',
-        ).slice(0, 200),
-      })),
+      p_readouts: readouts,
       p_external_run_id: runId,
+      p_claim_run_id: claimRunId,
+      p_lease_owner: leaseOwner,
+      p_request_hash: requestHash,
     })
 
     return response(200, { ok: true, ...result }, {}, event)
   } catch (error) {
     console.error('editorial sync failed', error)
-    await supabaseRpc('record_editorial_run_failure', {
+    await supabaseRpc('record_editorial_run_failure_guarded', {
       p_external_run_id: runId,
+      p_claim_run_id: claimRunId,
+      p_lease_owner: leaseOwner,
       p_error_message: 'Editorial sync failed',
     }).catch((failureError) => {
       console.error('editorial run failure could not be recorded', failureError)
     })
+    if (isEditorialConflict(error)) {
+      return response(
+        409,
+        {
+          ok: false,
+          error: 'Editorial snapshot changed; export the queue again',
+          code: 'EDITORIAL_CONFLICT',
+          run_id: runId,
+        },
+        {},
+        event,
+      )
+    }
+    if (needsConcurrencyMigration(error)) {
+      return response(
+        503,
+        {
+          ok: false,
+          error: 'Editorial concurrency migration is not available',
+          code: 'EDITORIAL_SCHEMA_REQUIRED',
+          run_id: runId,
+        },
+        {},
+        event,
+      )
+    }
     return response(
       500,
       { ok: false, error: 'Editorial sync failed', run_id: runId },

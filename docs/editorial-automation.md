@@ -30,6 +30,9 @@ the repository, logs, prompts, or task arguments.
 
 ## Local commands
 
+- `npm run editorial:export` emits a read-only diagnostic queue snapshot with
+  news IDs and versions. It does not claim a lease, so its output cannot be
+  submitted directly to the guarded sync endpoint.
 - `npm run editorial:check` validates the five variables, Cursor API access, and
   the pending Supabase queue without invoking a model or writing data.
 - `npm run editorial:local` runs one editorial batch immediately.
@@ -47,7 +50,8 @@ reliable.
 
 ## Agent instructions
 
-1. Run `npm run editorial:export` and parse the JSON queue.
+1. Use `npm run editorial:local` or `npm run editorial:drain`; the runner claims
+   the queue and retains the trusted row versions and lease identity.
 2. If the queue is empty, keep existing curation unchanged and still verify the current period readout.
 3. For each pending item:
    - preserve deliberate human edits;
@@ -62,9 +66,9 @@ reliable.
    - leave implications empty when Qira relevance is generic, speculative, or
      only repeats the summary.
 4. Generate or update the current week-to-date readout with a one- or two-sentence lede and two or three specific bullets.
-5. POST the reviewed payload to `EDITORIAL_SYNC_URL` with
-   `x-editorial-token`. The current local runner may use the compatibility
-   `x-extension-token` path during rotation. Never print either token.
+5. Let the runner POST the validated payload to `EDITORIAL_SYNC_URL` with
+   `x-editorial-token`. Do not handcraft the concurrency fields or copy them
+   from model output. Never print the token.
 6. Query Supabase after the write and verify:
    - every submitted URL is `processed`;
    - no existing Topic or News–Topic relation was removed;
@@ -86,6 +90,11 @@ The local runner separates acquisition, reasoning, validation, and publication:
    of receiving an invented summary.
 5. The sync endpoint merges AI fields into existing metadata so contributor,
    archive, and capture information remain intact.
+6. The endpoint checks every claimed news ID, URL, row version, internal run
+   UUID, lease owner, and lease expiry before writing. One mismatch returns
+   `409 EDITORIAL_CONFLICT` and rolls back the complete batch.
+7. A normalized request hash makes an identical retry idempotent. A different
+   payload with an old run ID is rejected.
 
 Each processed item records source-backed evidence, one optional Qira
 directional implication, and an audit record containing the run identifier,
@@ -119,6 +128,26 @@ with status, processed/readout counts, timestamps, and a bounded error message.
 The runner claims work through the service-only `claim_editorial_job` RPC using
 `FOR UPDATE SKIP LOCKED` and expiring item leases before invoking a model.
 
+## Concurrency migration rollout
+
+Do not apply both B05 migration phases to production before deploying the new
+caller. Use this order:
+
+1. Apply `20260908090000_editorial_concurrency_guards_phase1.sql`. It adds the
+   guarded apply/failure RPCs and keeps the old RPCs available.
+2. Deploy the updated `editorial-sync.mjs` and `run-local-editorial.ts` caller.
+   Run `npm run editorial:check`, then process one controlled item and confirm
+   the job completes through `apply_editorial_sync_guarded`.
+3. Promote
+   `supabase/deferred/20260908090100_editorial_concurrency_guards_phase3.sql`
+   into `supabase/migrations` in a separate reviewed change, then apply it. It
+   removes the old unguarded apply and failure RPCs so a stale runner fails
+   closed. The file is intentionally deferred, preventing a normal `db push`
+   from applying it before the caller is verified.
+
+If step 2 must be rolled back, keep phase 1 and restore the previous caller.
+Do not apply phase 3 until the guarded caller is verified in production.
+
 ## Payload shape
 
 The sync endpoint accepts:
@@ -127,6 +156,8 @@ The sync endpoint accepts:
 {
   "news": [
     {
+      "id": "claimed-news-uuid",
+      "expected_version": 17,
       "url": "https://example.com/article",
       "title": "Edited title",
       "source": "Publisher",
@@ -146,6 +177,9 @@ The sync endpoint accepts:
       "captured_at": "2026-08-03T10:00:00Z"
     }
   ],
+  "run_id": "trusted-external-run-id",
+  "claim_run_id": "trusted-claim-uuid",
+  "lease_owner": "trusted-runner-owner",
   "readouts": [
     {
       "period_type": "week",
@@ -156,3 +190,7 @@ The sync endpoint accepts:
   ]
 }
 ```
+
+The runner injects `id`, `expected_version`, `run_id`, `claim_run_id`, and
+`lease_owner` from the claim snapshot after validating model output. They are
+transport fields, not fields the model is allowed to choose.

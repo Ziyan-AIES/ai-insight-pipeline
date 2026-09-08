@@ -8,7 +8,11 @@ It uses the **same magic-link login and `team_members` list** as the dashboard. 
 
 After updating these files you **must reload the unpacked extension** in `chrome://extensions` (Developer mode → Reload). Existing tabs also need a refresh before the new capture UI appears.
 
-Version **0.4.6** uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens immediately without a preflight status request; the save endpoint remains the source of truth for deduplication and reports whether the URL already existed. Success, duplicate, access, and retry outcomes are explicit.
+Version **0.4.7** restricts session handoffs to the exact configured AI Signals workspace origin. The background worker derives every credential destination from trusted extension storage and rejects session-control messages from lookalike sites. It no longer sends a refresh token in the dashboard handoff completion request.
+
+Version **0.4.8** has been uploaded to the Chrome Web Store. On the trusted Radar page it can open a user-selected set of up to five HTTP(S) sources as ordered background tabs. Older or unavailable extensions fall back to one browser-open attempt plus direct links for every remaining source. Store review/publication and installed-version acceptance remain to be recorded.
+
+The extension uses the official Qira color logomark on a compact white orb. Hover reveals Capture above the orb and Dashboard below it. Capture opens immediately without a preflight status request; the save endpoint remains the source of truth for deduplication and reports whether the URL already existed. Success, duplicate, access, and retry outcomes are explicit.
 
 Dashboard and extension keep credentials in their own browser security boundaries. A verified team identity creates a separate Supabase session for the other surface, so independent token refreshes cannot sign each other out. Opening either surface while the other is signed in should connect it automatically. Signing out from the Dashboard also signs out the extension.
 

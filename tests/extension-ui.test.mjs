@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.4.6')
+    expect(manifest.version).toBe('0.4.8')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)
@@ -61,12 +61,19 @@ describe('extension session UI', () => {
     expect(contentSource).toMatch(/ai-signals:request-dashboard-session/)
     expect(contentSource).toMatch(/bsw-adopt-dashboard-session/)
     expect(contentSource).toMatch(/ai-signals:dashboard-sign-out/)
+    expect(contentSource).toMatch(/location\.origin === state\.apiBase/)
+    expect(contentSource).toMatch(/configuredOrigin !== workspaceOrigin/)
+    expect(contentSource).not.toMatch(/aiinsightpipeline\\\.netlify\\\.app\$\/i/)
     expect(backgroundSource).toMatch(/bsw-complete-dashboard-session/)
     expect(backgroundSource).toMatch(/bsw-open-dashboard/)
     expect(backgroundSource).toMatch(/#dashboard_auth=1&state=/)
     expect(backgroundSource).toMatch(/action: 'clone'/)
     expect(backgroundSource).toMatch(/action: 'dashboard'/)
     expect(backgroundSource).toMatch(/extension_auth_error=/)
+    expect(backgroundSource).toMatch(/isTrustedWorkspaceSender/)
+    expect(backgroundSource).toMatch(/Untrusted extension message source/)
+    expect(backgroundSource).toMatch(/body: JSON\.stringify\(\{ action: 'complete', state \}\)/)
+    expect(backgroundSource).not.toMatch(/action: 'complete',[\s\S]{0,100}refresh_token:/)
     expect(contentSource).not.toMatch(/window\.open\(state\.apiBase/)
     expect(optionsSource).toMatch(/bsw-open-dashboard/)
     expect(contentSource).not.toMatch(/bswWriteToken/)
@@ -74,6 +81,16 @@ describe('extension session UI', () => {
     expect(optionsHtml).not.toMatch(/Display name/)
     expect(optionsSource).not.toMatch(/bswWriteToken/)
     expect(optionsSource).toMatch(/Waiting for work-email sign-in/)
+  })
+
+  it('exposes the trusted workspace batch-open bridge', () => {
+    expect(manifest.permissions).toContain('tabs')
+    expect(contentSource).toMatch(/data-ai-signals-batch-open/)
+    expect(contentSource).toMatch(/ai-signals:open-urls-result/)
+    expect(contentSource).toMatch(/type: 'bsw-open-urls'/)
+    expect(backgroundSource).toMatch(/openUrlsFromSender/)
+    expect(backgroundSource).toMatch(/active: false/)
+    expect(backgroundSource).toMatch(/openerTabId: sender\.tab\.id/)
   })
 
   it('blocks capture when the signed-in account is not authorized', () => {

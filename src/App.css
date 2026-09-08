@@ -4726,6 +4726,20 @@ label input:disabled {
   margin-bottom: 10px;
 }
 
+.trend-column-heading {
+  cursor: zoom-in;
+  user-select: none;
+}
+
+.trend-column-heading:has(.trend-maximize-button[aria-label="Restore Trend layout"]) {
+  cursor: zoom-out;
+}
+
+.trend-column-heading button {
+  cursor: pointer;
+  user-select: auto;
+}
+
 .workflow-column-heading h1 {
   margin: 0;
   color: var(--color-ink);
@@ -7998,4 +8012,72 @@ label input:disabled {
     grid-column: 3;
     grid-row: 2;
   }
+}
+
+/* Radar owns one page-level scroll container so long movement lists remain reachable. */
+.page-radar .workspace-main {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.dashboard.radar-page {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.radar-open-fallback {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  margin: 10px 0 12px;
+  padding: 11px 12px;
+  border: 1px solid #d8cfeb;
+  border-radius: 10px;
+  background: #f5f1fb;
+}
+
+.radar-open-fallback > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.radar-open-fallback strong {
+  color: #3f315f;
+  font-size: 12px;
+}
+
+.radar-open-fallback span {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.radar-open-fallback > button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.radar-open-fallback > button:hover {
+  background: #e9e1f5;
+  color: var(--color-ink);
+}
+
+.radar-open-fallback-links {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+}
+
+.radar-open-fallback-links a {
+  color: #54407f;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
