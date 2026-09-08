@@ -10,6 +10,8 @@ export const STORAGE_KEYS = {
   dockEnabled: 'bswDockEnabled',
   pendingState: 'bswPendingAuthState',
   pendingStartedAt: 'bswPendingStartedAt',
+  handoffError: 'bswHandoffError',
+  sessionGeneration: 'bswSessionGeneration',
 }
 
 export function isAllowedWorkspaceOrigin(value) {

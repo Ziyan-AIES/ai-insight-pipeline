@@ -198,12 +198,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ action: 'claim', state }),
           })
+          const body = (await result.json().catch(() => ({}))) as {
+            authorized?: boolean
+            access_token?: string
+            refresh_token?: string
+            code?: string
+            retry_needed?: boolean
+          }
+          if (body.retry_needed) {
+            clearDashboardSessionHandshake()
+            setMessage(
+              body.code === 'handoff_expired'
+                ? 'Extension sign-in expired. Start sign-in again from the extension.'
+                : 'That extension sign-in was already used. Start a new sign-in from the extension.',
+            )
+            return
+          }
           if (result.ok) {
-            const body = (await result.json().catch(() => ({}))) as {
-              authorized?: boolean
-              access_token?: string
-              refresh_token?: string
-            }
             if (
               body.authorized !== false &&
               body.access_token &&

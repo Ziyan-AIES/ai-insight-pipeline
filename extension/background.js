@@ -11,68 +11,79 @@ const CLAIM_PERIOD_MINUTES = 1
 const REFRESH_PERIOD_MINUTES = 30
 const HANDSHAKE_TTL_MS = 24 * 60 * 60 * 1000
 const MAX_BATCH_OPEN_URLS = 5
+const NETWORK_TIMEOUT_MS = 15000
+let refreshInFlight = null
 
 chrome.runtime.onInstalled.addListener(() => {
-  void resumeBackgroundWork()
+  void resumeBackgroundWork().catch(() => undefined)
 })
 chrome.runtime.onStartup.addListener(() => {
-  void resumeBackgroundWork()
+  void resumeBackgroundWork().catch(() => undefined)
 })
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === CLAIM_ALARM) void claimPendingSession()
-  if (alarm.name === REFRESH_ALARM) void refreshSession()
+  if (alarm.name === CLAIM_ALARM) void claimPendingSession().catch(() => undefined)
+  if (alarm.name === REFRESH_ALARM) void refreshSession().catch(() => undefined)
 })
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab?.url) return
-  void claimFromTrustedTabUpdate(tab.url)
+  void claimFromTrustedTabUpdate(tab.url).catch(() => undefined)
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message.type !== 'string') return false
   if (message.type === 'bsw-sign-in') {
-    void startSignIn().then(sendResponse)
-    return true
+    return replyToMessage(startSignIn(), sendResponse)
   }
   if (message.type === 'bsw-sign-out') {
-    void signOutFromSender(sender).then(sendResponse)
-    return true
+    return replyToMessage(signOutFromSender(sender), sendResponse)
   }
   if (message.type === 'bsw-refresh-session') {
-    void refreshFromSender(sender).then(sendResponse)
-    return true
+    return replyToMessage(refreshFromSender(sender), sendResponse)
   }
   if (message.type === 'bsw-claim-now') {
-    void claimFromSender(sender).then(sendResponse)
-    return true
+    return replyToMessage(claimFromSender(sender), sendResponse)
   }
   if (message.type === 'bsw-get-session') {
-    void sessionForSender(sender).then(sendResponse)
-    return true
+    return replyToMessage(sessionForSender(sender), sendResponse)
   }
   if (message.type === 'bsw-adopt-dashboard-session') {
-    void adoptDashboardSession(message, sender).then(sendResponse)
-    return true
+    return replyToMessage(adoptDashboardSession(message, sender), sendResponse)
   }
   if (message.type === 'bsw-complete-dashboard-session') {
-    void completeDashboardSession(message, sender).then(sendResponse)
-    return true
+    return replyToMessage(completeDashboardSession(message, sender), sendResponse)
   }
   if (message.type === 'bsw-open-urls') {
-    void openUrlsFromSender(message, sender).then(sendResponse)
-    return true
+    return replyToMessage(openUrlsFromSender(message, sender), sendResponse)
   }
   if (message.type === 'bsw-open-dashboard') {
-    void openDashboard().then(sendResponse)
-    return true
+    return replyToMessage(openDashboard(), sendResponse)
   }
   if (message.type === 'bsw-capture') {
-    void captureFromPage(message.payload).then(sendResponse)
-    return true
+    return replyToMessage(captureFromPage(message.payload), sendResponse)
   }
   return false
 })
 
-void resumeBackgroundWork()
+function replyToMessage(promise, sendResponse) {
+  void Promise.resolve(promise).then(sendResponse, (error) => {
+    sendResponse({
+      ok: false,
+      status: 0,
+      retryable: true,
+      error: String(error?.message || 'Network request failed'),
+    })
+  })
+  return true
+}
+
+function fetchWithTimeout(url, options = {}) {
+  return globalThis.fetch(url, {
+    ...options,
+    signal: options.signal || AbortSignal.timeout(NETWORK_TIMEOUT_MS),
+  })
+}
+
+void resumeBackgroundWork().catch(() => undefined)
 
 async function resumeBackgroundWork() {
   const stored = await getStoredSession()
@@ -86,12 +97,15 @@ async function resumeBackgroundWork() {
 }
 
 async function startSignIn() {
-  const origin = await storedApiBase()
+  const stored = await getStoredSession()
+  const origin = stored.apiBase
   const state = randomState()
   await chrome.storage.local.set({
     [STORAGE_KEYS.apiBase]: origin,
     [STORAGE_KEYS.pendingState]: state,
     [STORAGE_KEYS.pendingStartedAt]: Date.now(),
+    [STORAGE_KEYS.handoffError]: '',
+    [STORAGE_KEYS.sessionGeneration]: stored.sessionGeneration + 1,
   })
   await chrome.alarms.create(CLAIM_ALARM, { periodInMinutes: CLAIM_PERIOD_MINUTES })
   const url = `${origin}/?extension_auth=1&state=${encodeURIComponent(state)}`
@@ -116,15 +130,33 @@ async function claimPendingSession() {
     return { ok: false, expired: true }
   }
   try {
-    const result = await fetch(`${stored.apiBase}/api/extension-auth`, {
+    const result = await fetchWithTimeout(`${stored.apiBase}/api/extension-auth`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'claim', state }),
     })
+    const body = await result.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+    }
     if (result.status === 404) return { ok: false, pending: true }
-    const body = await result.json().catch(() => ({}))
-    if (!result.ok) return { ok: false, pending: true }
-    await applyClaim(stored.apiBase, body)
+    if (body.code === 'handoff_expired' || body.code === 'handoff_consumed') {
+      const error = body.code === 'handoff_expired'
+        ? 'Sign-in expired. Start sign-in again.'
+        : 'This sign-in link was already used. Start sign-in again.'
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.pendingState]: '',
+        [STORAGE_KEYS.handoffError]: error,
+      })
+      await chrome.alarms.clear(CLAIM_ALARM)
+      return { ok: false, status: result.status, retryNeeded: true, error }
+    }
+    if (!result.ok) return { ok: false, status: result.status, retryable: true }
+    if (body.authorized !== false && (!body.access_token || !body.refresh_token)) {
+      return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+    }
+    const applied = await applyClaim(stored.apiBase, body, stored.sessionGeneration)
+    if (!applied) return { ok: false, status: 409, stale: true }
     await chrome.alarms.clear(CLAIM_ALARM)
     if (body.authorized && body.refresh_token) {
       await chrome.alarms.create(REFRESH_ALARM, {
@@ -132,8 +164,14 @@ async function claimPendingSession() {
       })
     }
     return { ok: true, authorized: body.authorized !== false }
-  } catch {
-    return { ok: false, pending: true }
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      pending: true,
+      retryable: true,
+      error: String(error?.message || 'Network request failed'),
+    }
   }
 }
 
@@ -164,15 +202,21 @@ async function captureFromPage(payload) {
         )
       }
     }
-    const parsed = await result.json().catch(() => ({}))
+    const parsed = await result.json().catch(() => null)
+    if (!parsed || typeof parsed !== 'object') {
+      return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+    }
     if (result.status === 403 || parsed.code === 'not_authorized') {
-      await chrome.storage.local.set({
-        [STORAGE_KEYS.accessToken]: '',
-        [STORAGE_KEYS.refreshToken]: '',
-        [STORAGE_KEYS.identity]: null,
-        [STORAGE_KEYS.authorized]: false,
-        [STORAGE_KEYS.email]: parsed.email || stored.email || '',
-      })
+      const current = await getStoredSession()
+      if (current.sessionGeneration === stored.sessionGeneration) {
+        await chrome.storage.local.set({
+          [STORAGE_KEYS.accessToken]: '',
+          [STORAGE_KEYS.refreshToken]: '',
+          [STORAGE_KEYS.identity]: null,
+          [STORAGE_KEYS.authorized]: false,
+          [STORAGE_KEYS.email]: parsed.email || stored.email || '',
+        })
+      }
     }
     return {
       ok: result.ok,
@@ -186,7 +230,7 @@ async function captureFromPage(payload) {
 }
 
 async function postCapture(apiBase, accessToken, body) {
-  return fetch(`${apiBase}/api/capture`, {
+  return fetchWithTimeout(`${apiBase}/api/capture`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -196,7 +240,12 @@ async function postCapture(apiBase, accessToken, body) {
   })
 }
 
-async function applyClaim(origin, body) {
+async function applyClaim(origin, body, expectedGeneration) {
+  const current = await getStoredSession()
+  if (
+    expectedGeneration !== undefined &&
+    current.sessionGeneration !== expectedGeneration
+  ) return false
   if (body.authorized === false) {
     await chrome.storage.local.set({
       [STORAGE_KEYS.apiBase]: origin,
@@ -206,8 +255,9 @@ async function applyClaim(origin, body) {
       [STORAGE_KEYS.authorized]: false,
       [STORAGE_KEYS.email]: body.email || '',
       [STORAGE_KEYS.pendingState]: '',
+      [STORAGE_KEYS.handoffError]: '',
     })
-    return
+    return true
   }
   await chrome.storage.local.set({
     [STORAGE_KEYS.apiBase]: origin,
@@ -217,16 +267,19 @@ async function applyClaim(origin, body) {
     [STORAGE_KEYS.authorized]: true,
     [STORAGE_KEYS.email]: body.identity?.email || '',
     [STORAGE_KEYS.pendingState]: '',
+    [STORAGE_KEYS.handoffError]: '',
   })
+  return true
 }
 
 async function adoptDashboardSession(message, sender) {
   const origin = await storedApiBase()
+  const stored = await getStoredSession()
   if (!isTrustedWorkspaceSender(sender, origin)) return untrustedSender()
   const accessToken = String(message.accessToken || '')
   if (!accessToken) return { ok: false, status: 401 }
   try {
-    const result = await fetch(`${origin}/api/extension-auth`, {
+    const result = await fetchWithTimeout(`${origin}/api/extension-auth`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -234,16 +287,23 @@ async function adoptDashboardSession(message, sender) {
       },
       body: JSON.stringify({ action: 'clone' }),
     })
-    const body = await result.json().catch(() => ({}))
+    const body = await result.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+    }
     if (!result.ok || body.authorized === false) {
       return { ok: false, status: result.status, authorized: false }
     }
-    await applyClaim(origin, {
+    if (!body.access_token || !body.refresh_token) {
+      return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+    }
+    const applied = await applyClaim(origin, {
       authorized: true,
       access_token: body.access_token || '',
       refresh_token: body.refresh_token || '',
       identity: body.identity || null,
-    })
+    }, stored.sessionGeneration)
+    if (!applied) return { ok: false, status: 409, stale: true }
     await chrome.alarms.create(REFRESH_ALARM, {
       periodInMinutes: REFRESH_PERIOD_MINUTES,
     })
@@ -269,7 +329,10 @@ async function completeDashboardSession(message, sender) {
     stored = await getStoredSession()
     result = await postDashboardSession(origin, state, stored)
   }
-  const body = await result.json().catch(() => ({}))
+  const body = await result.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+  }
   return { ok: result.ok, status: result.status, ...body }
 }
 
@@ -369,12 +432,15 @@ async function createDashboardHandoff(origin, state) {
     stored = await getStoredSession()
     result = await postDashboardHandoff(origin, state, stored.accessToken)
   }
-  const body = await result.json().catch(() => ({}))
+  const body = await result.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+  }
   return { ok: result.ok, status: result.status, ...body }
 }
 
 function postDashboardHandoff(origin, state, accessToken) {
-  return fetch(`${origin}/api/extension-auth`, {
+  return fetchWithTimeout(`${origin}/api/extension-auth`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -385,7 +451,7 @@ function postDashboardHandoff(origin, state, accessToken) {
 }
 
 function postDashboardSession(origin, state, stored) {
-  return fetch(`${origin}/api/extension-auth`, {
+  return fetchWithTimeout(`${origin}/api/extension-auth`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -472,19 +538,44 @@ function untrustedSender() {
   return { ok: false, status: 403, error: 'Untrusted extension message source' }
 }
 
-async function refreshSession() {
+function refreshSession() {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = refreshSessionOnce().finally(() => {
+    refreshInFlight = null
+  })
+  return refreshInFlight
+}
+
+async function refreshSessionOnce() {
   const stored = await getStoredSession()
   if (!stored.refreshToken) return { ok: false, status: 401 }
-  const result = await fetch(`${stored.apiBase}/api/extension-auth`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      action: 'refresh',
-      refresh_token: stored.refreshToken,
-    }),
-  })
-  const body = await result.json().catch(() => ({}))
+  let result
+  try {
+    result = await fetchWithTimeout(`${stored.apiBase}/api/extension-auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'refresh',
+        refresh_token: stored.refreshToken,
+      }),
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      retryable: true,
+      error: String(error?.message || 'Network request failed'),
+    }
+  }
+  const body = await result.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+  }
   if (result.status === 403 || body.code === 'not_authorized') {
+    const current = await getStoredSession()
+    if (current.sessionGeneration !== stored.sessionGeneration) {
+      return { ok: false, status: 409, stale: true }
+    }
     await chrome.storage.local.set({
       [STORAGE_KEYS.accessToken]: '',
       [STORAGE_KEYS.refreshToken]: '',
@@ -496,11 +587,20 @@ async function refreshSession() {
     return { ok: false, status: 403, email: body.email || stored.email }
   }
   if (!result.ok) return { ok: false, status: result.status }
-  await applyClaim(stored.apiBase, body)
+  if (!body.access_token || !body.refresh_token) {
+    return { ok: false, status: 502, retryable: true, error: 'Invalid server response' }
+  }
+  const applied = await applyClaim(
+    stored.apiBase,
+    body,
+    stored.sessionGeneration,
+  )
+  if (!applied) return { ok: false, status: 409, stale: true }
   return { ok: true, ...body }
 }
 
 async function signOut() {
+  const stored = await getStoredSession()
   await chrome.alarms.clear(CLAIM_ALARM)
   await chrome.alarms.clear(REFRESH_ALARM)
   await chrome.storage.local.set({
@@ -510,6 +610,8 @@ async function signOut() {
     [STORAGE_KEYS.authorized]: false,
     [STORAGE_KEYS.email]: '',
     [STORAGE_KEYS.pendingState]: '',
+    [STORAGE_KEYS.handoffError]: '',
+    [STORAGE_KEYS.sessionGeneration]: stored.sessionGeneration + 1,
   })
 }
 
@@ -525,6 +627,8 @@ async function getStoredSession() {
     dockEnabled: values[STORAGE_KEYS.dockEnabled] !== false,
     pendingState: values[STORAGE_KEYS.pendingState] || '',
     pendingStartedAt: Number(values[STORAGE_KEYS.pendingStartedAt] || 0),
+    handoffError: values[STORAGE_KEYS.handoffError] || '',
+    sessionGeneration: Number(values[STORAGE_KEYS.sessionGeneration] || 0),
   }
 }
 

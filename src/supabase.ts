@@ -807,17 +807,61 @@ export async function toggleNewsVote(newsId: string) {
   }
 }
 
-export async function persistDiscussionOrder(newsIds: string[]) {
-  if (!supabase) return
-  const client = supabase
-  await Promise.all(
-    newsIds.map((id, index) =>
-      client
-        .from('news_items')
-        .update({ discussion_order: index + 1 })
-        .eq('id', id),
-    ),
-  )
+export async function persistDiscussionOrder(items: NewsItem[]) {
+  if (!supabase) return []
+  if (items.some((item) => !item.version)) {
+    throw new Error('Discussion order is stale. Reload and try again.')
+  }
+  const { data, error } = await supabase.rpc('persist_discussion_order', {
+    p_items: items.map((item, index) => ({
+      id: item.id,
+      position: index + 1,
+      expected_version: item.version,
+    })),
+  })
+  if (error) throw error
+  if (!Array.isArray(data) || data.length !== items.length) {
+    throw new Error('The discussion order was not fully saved.')
+  }
+  return data as Array<{
+    id: string
+    discussion_order: number
+    version: number
+  }>
+}
+
+export type ManualEditorialField =
+  | 'title'
+  | 'summary'
+  | 'takeaway'
+  | 'team_synthesis'
+  | 'category'
+
+export function markManualEditorialFields(
+  metadata: Record<string, unknown> | undefined,
+  fields: ManualEditorialField[],
+  editor: { userId?: string; name: string },
+  editedAt = new Date().toISOString(),
+) {
+  const current = metadata || {}
+  const existing =
+    current.manual_field_locks &&
+    typeof current.manual_field_locks === 'object' &&
+    !Array.isArray(current.manual_field_locks)
+      ? (current.manual_field_locks as Record<string, unknown>)
+      : {}
+  const marker = {
+    edited_at: editedAt,
+    edited_by: editor.name,
+    ...(editor.userId ? { edited_by_user_id: editor.userId } : {}),
+  }
+  return {
+    ...current,
+    manual_field_locks: {
+      ...existing,
+      ...Object.fromEntries(fields.map((field) => [field, marker])),
+    },
+  }
 }
 
 export async function updateNewsItem(
@@ -837,27 +881,42 @@ export async function updateNewsItem(
     metadata?: Record<string, unknown>
   },
   expectedVersion?: number,
+  manualFields: ManualEditorialField[] = [],
 ) {
   if (!supabase) return
   const session = await supabase.auth.getSession()
   const user = session.data.session?.user || null
   const editorName = sessionUserLabel(user)
   const payload: Record<string, unknown> = { ...patch }
-  if (patch.metadata) {
+  if (patch.metadata || manualFields.length > 0) {
     payload.metadata = {
-      ...patch.metadata,
+      ...(manualFields.length > 0
+        ? markManualEditorialFields(patch.metadata, manualFields, {
+            userId: user?.id,
+            name: editorName,
+          })
+        : patch.metadata),
       last_edited_by: editorName,
     }
   }
   let query = supabase.from('news_items').update(payload).eq('id', id)
   if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
-  const { data, error } = await query.select('version').maybeSingle()
+  const { data, error } = await query.select('version,metadata').maybeSingle()
   if (error) throw error
   if (!data) throw new Error('This news item changed elsewhere. Reload and try again.')
-  return { editorName, version: data.version as number }
+  return {
+    editorName,
+    version: data.version as number,
+    metadata: (data.metadata || {}) as Record<string, unknown>,
+  }
 }
 
-export async function updateNewsCategory(id: string, category: NewsCategory) {
+export async function updateNewsCategory(
+  id: string,
+  category: NewsCategory,
+  expectedVersion?: number,
+  metadata?: Record<string, unknown>,
+) {
   if (!supabase) {
     return {
       category,
@@ -865,17 +924,31 @@ export async function updateNewsCategory(id: string, category: NewsCategory) {
       updatedAt: new Date().toISOString(),
     }
   }
+  const session = await supabase.auth.getSession()
+  const user = session.data.session?.user || null
+  const editorName = sessionUserLabel(user)
+  const markedMetadata = markManualEditorialFields(
+    metadata,
+    ['category'],
+    { userId: user?.id, name: editorName },
+  )
   const apply = (version?: number) => {
     let query = supabase
       .from('news_items')
-      .update({ category })
+      .update({
+        category,
+        metadata: { ...markedMetadata, last_edited_by: editorName },
+      })
       .eq('id', id)
     if (version !== undefined) query = query.eq('version', version)
-    return query.select('category, version, updated_at').maybeSingle()
+    return query.select('category, version, updated_at, metadata').maybeSingle()
   }
-  let { data, error } = await apply()
+  let { data, error } = await apply(expectedVersion)
   if (error) throw error
   if (!data) {
+    if (expectedVersion !== undefined) {
+      throw new Error('This news item changed elsewhere. Reload and try again.')
+    }
     const latest = await supabase
       .from('news_items')
       .select('version')
@@ -893,6 +966,7 @@ export async function updateNewsCategory(id: string, category: NewsCategory) {
     category: data.category as NewsCategory,
     version: data.version as number,
     updatedAt: data.updated_at as string,
+    metadata: (data.metadata || {}) as Record<string, unknown>,
   }
 }
 

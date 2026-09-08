@@ -23,6 +23,7 @@ function backgroundHarness(overrides = {}, options = {}) {
     [STORAGE_KEYS.accessToken]: 'FAKE_ACCESS',
     [STORAGE_KEYS.refreshToken]: 'FAKE_REFRESH',
     [STORAGE_KEYS.authorized]: true,
+    [STORAGE_KEYS.sessionGeneration]: 0,
     ...overrides,
   }
   const requests = []
@@ -89,8 +90,11 @@ function backgroundHarness(overrides = {}, options = {}) {
     Uint8Array,
     chrome,
     crypto: globalThis.crypto,
-    fetch: async (url, options = {}) => {
-      requests.push({ url: String(url), options })
+    fetch: async (url, requestOptions = {}) => {
+      if (options.fetchImpl) {
+        return options.fetchImpl(String(url), requestOptions, requests)
+      }
+      requests.push({ url: String(url), options: requestOptions })
       return {
         ok: true,
         status: 200,
@@ -330,5 +334,97 @@ describe('extension credential destination boundary', () => {
       failedUrls: [failedUrl],
     })
     expect(harness.createdTabs).toHaveLength(1)
+  })
+
+  it('returns a retryable response when a network request rejects', async () => {
+    const harness = backgroundHarness({}, {
+      fetchImpl: async (url, requestOptions, requests) => {
+        requests.push({ url, options: requestOptions })
+        throw new Error('Network unavailable')
+      },
+    })
+    const response = await harness.send(
+      { type: 'bsw-refresh-session' },
+      {
+        id: 'test-extension-id',
+        url: 'chrome-extension://test-extension-id/options.html',
+      },
+    )
+    expect(response).toMatchObject({
+      ok: false,
+      status: 0,
+      retryable: true,
+      error: 'Network unavailable',
+    })
+  })
+
+  it('deduplicates concurrent refreshes in one worker', async () => {
+    let release
+    const responseReady = new Promise((resolve) => { release = resolve })
+    const harness = backgroundHarness({}, {
+      fetchImpl: async (url, requestOptions, requests) => {
+        requests.push({ url, options: requestOptions })
+        await responseReady
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              authorized: true,
+              access_token: 'NEW_ACCESS',
+              refresh_token: 'NEW_REFRESH',
+              identity: { email: 'person@example.com' },
+            }
+          },
+        }
+      },
+    })
+    const sender = {
+      id: 'test-extension-id',
+      url: 'chrome-extension://test-extension-id/options.html',
+    }
+    const first = harness.send({ type: 'bsw-refresh-session' }, sender)
+    const second = harness.send({ type: 'bsw-refresh-session' }, sender)
+    await Promise.resolve()
+    release()
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect(harness.requests).toHaveLength(1)
+    expect(harness.values[STORAGE_KEYS.accessToken]).toBe('NEW_ACCESS')
+  })
+
+  it('does not restore a session when refresh finishes after sign-out', async () => {
+    let release
+    const responseReady = new Promise((resolve) => { release = resolve })
+    const harness = backgroundHarness({}, {
+      fetchImpl: async (url, requestOptions, requests) => {
+        requests.push({ url, options: requestOptions })
+        await responseReady
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              authorized: true,
+              access_token: 'LATE_ACCESS',
+              refresh_token: 'LATE_REFRESH',
+              identity: { email: 'person@example.com' },
+            }
+          },
+        }
+      },
+    })
+    const sender = {
+      id: 'test-extension-id',
+      url: 'chrome-extension://test-extension-id/options.html',
+    }
+    const refresh = harness.send({ type: 'bsw-refresh-session' }, sender)
+    await Promise.resolve()
+    await harness.send({ type: 'bsw-sign-out' }, sender)
+    release()
+    await refresh
+    expect(harness.values[STORAGE_KEYS.accessToken]).toBe('')
+    expect(harness.values[STORAGE_KEYS.refreshToken]).toBe('')
+    expect(harness.values[STORAGE_KEYS.authorized]).toBe(false)
+    expect(harness.values[STORAGE_KEYS.sessionGeneration]).toBe(1)
   })
 })

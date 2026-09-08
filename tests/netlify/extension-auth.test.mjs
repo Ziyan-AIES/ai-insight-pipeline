@@ -54,16 +54,40 @@ function mockBackend({ user, member } = {}) {
     if (href.includes('team_members')) {
       return new Response(JSON.stringify(member ? [member] : []), { status: 200 })
     }
+    if (href.includes('/rest/v1/rpc/claim_extension_auth_handoff')) {
+      const { p_state_hash: stateHash } = JSON.parse(options.body)
+      const row = handoffs.get(stateHash)
+      if (!row) {
+        return new Response(JSON.stringify({ status: 'pending' }), { status: 200 })
+      }
+      if (row.claimed_at) {
+        return new Response(JSON.stringify({ status: 'consumed' }), { status: 200 })
+      }
+      if (new Date(row.expires_at).getTime() <= Date.now()) {
+        row.claimed_at = new Date().toISOString()
+        row.access_token = ''
+        row.refresh_token = ''
+        return new Response(JSON.stringify({ status: 'expired' }), { status: 200 })
+      }
+      const claimed = { ...row, status: 'claimed' }
+      row.claimed_at = new Date().toISOString()
+      row.access_token = ''
+      row.refresh_token = ''
+      return new Response(JSON.stringify(claimed), { status: 200 })
+    }
     if (href.includes('extension_auth_handoffs')) {
       const parsed = new URL(href)
       const stateEq = parsed.searchParams.get('state_hash')
       const stateHash = stateEq ? stateEq.replace(/^eq\./, '') : ''
       if (method === 'DELETE') {
-        handoffs.delete(stateHash)
+        if (stateHash) handoffs.delete(stateHash)
         return new Response('[]', { status: 200 })
       }
       if (method === 'POST') {
         const row = JSON.parse(options.body)
+        if (handoffs.has(row.state_hash) && String(options.headers?.prefer || '').includes('ignore-duplicates')) {
+          return new Response('[]', { status: 200 })
+        }
         handoffs.set(row.state_hash, row)
         return new Response(JSON.stringify([row]), { status: 201 })
       }
@@ -105,8 +129,8 @@ describe('extension auth handshake', () => {
     })
     const stored = [...handoffs.values()][0]
     const ttlMs = new Date(stored.expires_at).getTime() - Date.now()
-    expect(ttlMs).toBeGreaterThan(23 * 60 * 60 * 1000)
-    expect(ttlMs).toBeLessThan(25 * 60 * 60 * 1000)
+    expect(ttlMs).toBeGreaterThan(9 * 60 * 1000)
+    expect(ttlMs).toBeLessThan(11 * 60 * 1000)
 
     const claim = await handler(
       post({ action: 'claim', state: 'handshake-state-123456' }),
@@ -117,6 +141,19 @@ describe('extension auth handshake', () => {
       access_token: 'independent-access-token',
       refresh_token: 'independent-refresh-token',
       identity: { email: 'person@example.com', displayName: 'Pilot Person' },
+    })
+    expect([...handoffs.values()][0]).toMatchObject({
+      access_token: '',
+      refresh_token: '',
+    })
+
+    const replay = await handler(
+      post({ action: 'claim', state: 'handshake-state-123456' }),
+    )
+    expect(replay.statusCode).toBe(409)
+    expect(JSON.parse(replay.body)).toMatchObject({
+      code: 'handoff_consumed',
+      retry_needed: true,
     })
   })
 

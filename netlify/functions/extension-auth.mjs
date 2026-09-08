@@ -9,6 +9,7 @@ import {
   requireAllowedOrigin,
   response,
   supabase,
+  supabaseRpc,
 } from './_supabase.mjs'
 
 export const config = {
@@ -21,6 +22,7 @@ export const config = {
 }
 
 const DASHBOARD_SESSION_MARKER = '__dashboard_session__'
+const CREDENTIAL_HANDOFF_TTL_MS = 10 * 60 * 1000
 
 function hashState(state) {
   return crypto.createHash('sha256').update(String(state || '')).digest('hex')
@@ -98,12 +100,14 @@ async function storeHandoff({
   refreshToken = '',
 }) {
   const stateHash = hashState(state)
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-  await supabase('extension_auth_handoffs?state_hash=eq.' + stateHash, {
-    method: 'DELETE',
-  }).catch(() => null)
-  await supabase('extension_auth_handoffs', {
+  const expiresAt = new Date(Date.now() + CREDENTIAL_HANDOFF_TTL_MS).toISOString()
+  await supabase(
+    `extension_auth_handoffs?expires_at=lt.${encodeURIComponent(new Date().toISOString())}`,
+    { method: 'DELETE' },
+  ).catch(() => null)
+  await supabase('extension_auth_handoffs?on_conflict=state_hash', {
     method: 'POST',
+    headers: { prefer: 'resolution=ignore-duplicates,return=representation' },
     body: JSON.stringify({
       state_hash: stateHash,
       user_id: userId,
@@ -264,16 +268,31 @@ export async function handler(event) {
         return response(400, { ok: false, error: 'Invalid handshake' }, {}, event)
       }
       const stateHash = hashState(state)
-      const rows = await supabase(
-        `extension_auth_handoffs?state_hash=eq.${stateHash}&select=access_token,refresh_token,user_id,email,authorized,expires_at,claimed_at`,
-      )
-      const row = Array.isArray(rows) ? rows[0] : null
-      if (!row || row.claimed_at || new Date(row.expires_at).getTime() < Date.now()) {
+      const row = await supabaseRpc('claim_extension_auth_handoff', {
+        p_state_hash: stateHash,
+      })
+      if (!row || row.status === 'pending') {
         return response(404, { ok: false, pending: true }, {}, event)
       }
-      await supabase(`extension_auth_handoffs?state_hash=eq.${stateHash}`, {
-        method: 'DELETE',
-      })
+      if (row.status === 'expired') {
+        return response(
+          410,
+          { ok: false, code: 'handoff_expired', retry_needed: true },
+          {},
+          event,
+        )
+      }
+      if (row.status === 'consumed') {
+        return response(
+          409,
+          { ok: false, code: 'handoff_consumed', retry_needed: true },
+          {},
+          event,
+        )
+      }
+      if (row.status !== 'claimed') {
+        throw new Error('Unexpected handoff claim status')
+      }
       if (!row.authorized || !row.access_token) {
         return response(
           200,

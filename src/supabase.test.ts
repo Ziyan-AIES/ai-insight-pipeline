@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalizeUrl, captureContributorName } from './supabase'
+import {
+  canonicalizeUrl,
+  captureContributorName,
+  markManualEditorialFields,
+} from './supabase'
 
 describe('dashboard URL canonicalization', () => {
   it('matches extension tracking-parameter behavior', () => {
@@ -33,5 +37,38 @@ describe('news contributor display', () => {
     expect(captureContributorName({}, 'original-user', members)).toBe(
       'Current user',
     )
+  })
+})
+
+describe('manual editorial field markers', () => {
+  it('marks only changed fields and preserves older markers', () => {
+    const result = markManualEditorialFields(
+      {
+        source_type: 'captured_news',
+        manual_field_locks: {
+          title: { edited_at: '2026-09-01T00:00:00.000Z', edited_by: 'A' },
+        },
+      },
+      ['category', 'summary'],
+      { userId: 'user-1', name: 'Editor' },
+      '2026-09-08T02:00:00.000Z',
+    )
+
+    expect(result).toEqual({
+      source_type: 'captured_news',
+      manual_field_locks: {
+        title: { edited_at: '2026-09-01T00:00:00.000Z', edited_by: 'A' },
+        category: {
+          edited_at: '2026-09-08T02:00:00.000Z',
+          edited_by: 'Editor',
+          edited_by_user_id: 'user-1',
+        },
+        summary: {
+          edited_at: '2026-09-08T02:00:00.000Z',
+          edited_by: 'Editor',
+          edited_by_user_id: 'user-1',
+        },
+      },
+    })
   })
 })

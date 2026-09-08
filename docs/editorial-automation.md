@@ -130,6 +130,11 @@ The runner claims work through the service-only `claim_editorial_job` RPC using
 
 ## Concurrency migration rollout
 
+Production status on 2026-09-08: phase 1 is applied and the guarded caller is
+deployed from `main`. Phase 3 remains deferred until one controlled production
+item completes through `apply_editorial_sync_guarded` and its job/lease state is
+verified.
+
 Do not apply both B05 migration phases to production before deploying the new
 caller. Use this order:
 

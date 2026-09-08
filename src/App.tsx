@@ -544,6 +544,7 @@ function App() {
   const lastReconcileAt = useRef(0)
   const recordedSignalViewFor = useRef('')
   const restoredWorkspaceFor = useRef('')
+  const discussionOrderSaving = useRef(false)
   const selectedActivityType = newsDraft
     ? ('news_items' as const)
     : topicDraft && !creatingTopic
@@ -576,12 +577,13 @@ function App() {
     if (!cloudConfigured) return
     try {
       const workspace = await loadWorkspace(canAdmin)
-      if (!workspace) return
+      if (!workspace) return false
       setNews(workspace.news)
       setTopics(workspace.topics)
       setTrends(workspace.trends)
       setTheses(workspace.theses)
       setSyncState('synced')
+      return true
     } catch (error: unknown) {
       setSyncState('error')
       if (!quiet) {
@@ -591,6 +593,7 @@ function App() {
             : 'Could not load the team workspace.',
         )
       }
+      return false
     }
   }, [canAdmin])
 
@@ -2184,6 +2187,7 @@ function App() {
 
 
   async function reorderDiscussionNotes(fromId: string, targetIndex: number) {
+    if (discussionOrderSaving.current) return
     const current = discussionNotes.filter((item) => item.id !== fromId)
     const moved = discussionNotes.find((item) => item.id === fromId)
     if (!moved) return
@@ -2192,18 +2196,36 @@ function App() {
       moved,
       ...current.slice(targetIndex),
     ]
+    const previous = discussionNotes
     setNews((items) =>
       items.map((item) => {
         const index = next.findIndex((candidate) => candidate.id === item.id)
         return index >= 0 ? { ...item, discussionOrder: index + 1 } : item
       }),
     )
+    discussionOrderSaving.current = true
     try {
-      await persistDiscussionOrder(next.map((item) => item.id))
+      const saved = await persistDiscussionOrder(next)
+      const savedById = new Map(saved.map((item) => [item.id, item]))
+      setNews((items) => items.map((item) => {
+        const row = savedById.get(item.id)
+        return row
+          ? { ...item, discussionOrder: row.discussion_order, version: row.version }
+          : item
+      }))
     } catch (error) {
+      setNews((items) => items.map((item) => {
+        const prior = previous.find((candidate) => candidate.id === item.id)
+        return prior ? { ...item, discussionOrder: prior.discussionOrder } : item
+      }))
+      const restored = await reloadWorkspace(true)
       setNotice(
-        error instanceof Error ? error.message : 'Could not save discussion order',
+        restored
+          ? error instanceof Error ? error.message : 'Could not save discussion order'
+          : 'Discussion order was not saved and the server order could not be reloaded.',
       )
+    } finally {
+      discussionOrderSaving.current = false
     }
   }
 
@@ -2255,6 +2277,15 @@ function App() {
 
   async function saveNewsDraft() {
     if (!newsDraft) return
+    const original = news.find((item) => item.id === newsDraft.id)
+    const manualFields = original
+      ? ([
+          original.title !== newsDraft.title ? 'title' : '',
+          original.summary !== newsDraft.summary ? 'summary' : '',
+          original.takeaway !== newsDraft.takeaway ? 'takeaway' : '',
+          original.category !== newsDraft.category ? 'category' : '',
+        ].filter(Boolean) as Array<'title' | 'summary' | 'takeaway' | 'category'>)
+      : []
     const metadata = {
       ...(newsDraft.metadata || {}),
       contributor_name: newsDraft.capturedBy.trim() || 'Team member',
@@ -2273,6 +2304,7 @@ function App() {
           metadata,
         },
         newsDraft.version,
+        manualFields,
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not save news')
@@ -2282,7 +2314,7 @@ function App() {
     const updatedDraft = {
       ...newsDraft,
       capturedBy: newsDraft.capturedBy.trim() || 'Team member',
-      metadata: {
+      metadata: result?.metadata || {
         ...metadata,
         ...(editorName ? { last_edited_by: editorName } : {}),
       },
@@ -2310,7 +2342,12 @@ function App() {
     window.setTimeout(() => setDropHighlight(''), 400)
     if (!cloudConfigured) return
     try {
-      const result = await updateNewsCategory(newsId, category)
+      const result = await updateNewsCategory(
+        newsId,
+        category,
+        item.version,
+        item.metadata,
+      )
       setNews((current) =>
         current.map((candidate) =>
           candidate.id === newsId
@@ -2319,6 +2356,7 @@ function App() {
                 category: result.category,
                 version: result.version ?? candidate.version,
                 updatedAt: result.updatedAt || candidate.updatedAt,
+                metadata: result.metadata || candidate.metadata,
               }
             : candidate,
         ),

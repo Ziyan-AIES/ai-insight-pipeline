@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
-    expect(manifest.version).toBe('0.4.8')
+    expect(manifest.version).toBe('0.4.9')
     expect(manifest.permissions).toContain('alarms')
     expect(manifest.web_accessible_resources.some((entry) => entry.resources.includes('qira-mark.svg'))).toBe(true)
     expect(contentSource).toMatch(/chrome\.runtime\.getURL\('qira-mark\.svg'\)/)

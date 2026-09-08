@@ -19,6 +19,7 @@ async function load() {
   const signedIn = Boolean(values[STORAGE_KEYS.identity] || values[STORAGE_KEYS.email])
   const authorized = values[STORAGE_KEYS.authorized] === true
   const pending = Boolean(values[STORAGE_KEYS.pendingState])
+  const handoffError = String(values[STORAGE_KEYS.handoffError] || '')
   const identity = values[STORAGE_KEYS.identity] || {}
 
   signedOutEl.hidden = signedIn
@@ -37,7 +38,9 @@ async function load() {
     ? 'Capture enabled'
     : 'Ask a workspace admin to add this account to the team.'
 
-  if (!signedIn && pending) {
+  if (!signedIn && handoffError) {
+    statusEl.textContent = handoffError
+  } else if (!signedIn && pending) {
     statusEl.textContent =
       'Waiting for work-email sign-in on the dashboard. This page updates automatically.'
   } else if (!signedIn) {
