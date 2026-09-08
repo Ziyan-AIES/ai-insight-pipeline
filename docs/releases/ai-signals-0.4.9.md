@@ -46,10 +46,11 @@ The ZIP root contains only `background.js`, `content.js`, `manifest.json`, `opti
 - Manifest JSON parsed as `AI Signals` version `0.4.9`; the worker's local `./shared.js` import is present in the package.
 - Extension security regressions cover rejected network promises, concurrent refresh deduplication, and a refresh finishing after sign-out.
 - Function regressions cover atomic claim, one-time replay rejection, credential TTL, and token scrubbing.
+- GitHub Quality passed both app and database jobs; 5 pgTAP files ran 54 database assertions.
 
 ## Submission and installed-version acceptance
 
-Web/API companion deployed: pending
+Web/API companion deployed: 2026-09-08, Netlify production deploy `6aa002ec96dbad0008c42c24`, state `ready`, commit `ebed8cc19642781bc8eda6f110461fb4498dd8d3`
 Upload time: pending
 Submission time: pending
 Review state: not uploaded
