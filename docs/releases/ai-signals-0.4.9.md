@@ -49,7 +49,9 @@ The ZIP root contains only `background.js`, `content.js`, `manifest.json`, `opti
 - A reusable real unpacked Manifest V3 worker regression covers the signed-out handoff, a failed Capture with thought preservation and successful retry, two background source tabs, and sign-out credential clearing. It runs through `npm run test:extension` and in GitHub Quality.
 - Extension security regressions cover rejected network promises, concurrent refresh deduplication, and a refresh finishing after sign-out.
 - Function regressions cover atomic claim, one-time replay rejection, credential TTL, and token scrubbing.
-- GitHub Quality passed both app and database jobs; 5 pgTAP files ran 54 database assertions.
+- GitHub Quality run `34269296267` passed both app and database jobs on commit
+  `722c2db`: 125 unit tests, 6 Chromium E2E tests, the real worker regression,
+  and 5 pgTAP files with 56 database assertions.
 
 ## Submission and installed-version acceptance
 
