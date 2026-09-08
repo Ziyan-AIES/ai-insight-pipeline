@@ -1,6 +1,6 @@
 begin;
 
-select plan(15);
+select plan(17);
 
 select has_function(
   'public',
@@ -13,6 +13,18 @@ select has_function(
   'record_editorial_run_failure_guarded',
   array['text', 'uuid', 'text', 'text'],
   'guarded editorial failure release exists'
+);
+select hasnt_function(
+  'public',
+  'apply_editorial_sync',
+  array['jsonb', 'jsonb', 'text'],
+  'legacy unguarded editorial apply is removed'
+);
+select hasnt_function(
+  'public',
+  'record_editorial_run_failure',
+  array['text', 'text'],
+  'legacy unguarded failure release is removed'
 );
 insert into public.editorial_job_runs (
   id, external_run_id, status, lease_owner, lease_expires_at, claimed_count

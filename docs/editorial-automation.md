@@ -130,10 +130,14 @@ The runner claims work through the service-only `claim_editorial_job` RPC using
 
 ## Concurrency migration rollout
 
-Production status on 2026-09-08: phase 1 is applied and the guarded caller is
-deployed from `main`. Phase 3 remains deferred until one controlled production
-item completes through `apply_editorial_sync_guarded` and its job/lease state is
-verified.
+Production status on 2026-09-09: the guarded caller completed a controlled
+production item through `apply_editorial_sync_guarded` with one processed item
+and one readout. The validation exposed a production-only spelling drift in the
+manually applied function (`jsonb_array_lements`); migration
+`20260909080000_editorial_concurrency_guard_runtime_fix.sql` recreates the
+reviewed definition. Phase 3 is now applied and the legacy unguarded RPCs are
+removed. The controlled news, readout, and job rows were deleted after the
+verification.
 
 Do not apply both B05 migration phases to production before deploying the new
 caller. Use this order:
@@ -143,15 +147,12 @@ caller. Use this order:
 2. Deploy the updated `editorial-sync.mjs` and `run-local-editorial.ts` caller.
    Run `npm run editorial:check`, then process one controlled item and confirm
    the job completes through `apply_editorial_sync_guarded`.
-3. Promote
-   `supabase/deferred/20260908090100_editorial_concurrency_guards_phase3.sql`
-   into `supabase/migrations` in a separate reviewed change, then apply it. It
-   removes the old unguarded apply and failure RPCs so a stale runner fails
-   closed. The file is intentionally deferred, preventing a normal `db push`
-   from applying it before the caller is verified.
+3. Apply `20260909090000_editorial_concurrency_guards_phase3.sql`. It removes
+   the old unguarded apply and failure RPCs so a stale runner fails closed. This
+   step was promoted from the deferred migration only after step 2 passed.
 
-If step 2 must be rolled back, keep phase 1 and restore the previous caller.
-Do not apply phase 3 until the guarded caller is verified in production.
+The rollout is complete. Any future rollback must keep the guarded request
+contract because the legacy RPCs are no longer present.
 
 ## Payload shape
 

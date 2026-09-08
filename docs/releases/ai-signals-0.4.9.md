@@ -1,7 +1,7 @@
 # AI Signals 0.4.9 candidate ledger
 
-Status: **local candidate; not uploaded to Chrome Web Store**
-Prepared: 2026-09-08 (Asia/Shanghai)
+Status: **upload-ready; upload blocked on Google sign-in in the available browser session**
+Prepared: 2026-09-09 (Asia/Shanghai)
 Chrome Web Store item: `bgmhnlbjfdnbfpjgmcmedjebcpjoppjc` (unlisted)
 Previous upload: 0.4.8, review/publication state not yet recorded
 
@@ -46,7 +46,7 @@ The ZIP root contains only `background.js`, `content.js`, `manifest.json`, `opti
 - ZIP root allowlist: exactly seven expected files; no nested repository paths or unrelated files.
 - Manifest JSON parsed as `AI Signals` version `0.4.9`; the worker's local `./shared.js` import is present in the package.
 - The content script now runs in jsdom with empty extension storage; the signed-out dock renders and clicking the Qira orb sends `bsw-sign-in`.
-- A real unpacked Manifest V3 worker loaded `AI Signals@0.4.9`; on an empty-storage HTTP page the orb exposed `Sign in to AI Signals`, and clicking it opened the production workspace with a fresh redacted `extension_auth` state.
+- A reusable real unpacked Manifest V3 worker regression covers the signed-out handoff, a failed Capture with thought preservation and successful retry, two background source tabs, and sign-out credential clearing. It runs through `npm run test:extension` and in GitHub Quality.
 - Extension security regressions cover rejected network promises, concurrent refresh deduplication, and a refresh finishing after sign-out.
 - Function regressions cover atomic claim, one-time replay rejection, credential TTL, and token scrubbing.
 - GitHub Quality passed both app and database jobs; 5 pgTAP files ran 54 database assertions.
@@ -56,6 +56,6 @@ The ZIP root contains only `background.js`, `content.js`, `manifest.json`, `opti
 Web/API companion deployed: 2026-09-08, Netlify production deploy `6aa002ec96dbad0008c42c24`, state `ready`, commit `ebed8cc19642781bc8eda6f110461fb4498dd8d3`
 Upload time: pending
 Submission time: pending
-Review state: not uploaded
+Review state: not uploaded; developer dashboard requires an authenticated Google session
 Published time: pending
 Installed Chrome version verified: pending
