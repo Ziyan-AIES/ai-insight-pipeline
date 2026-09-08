@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const contentSource = readFileSync(join(root, 'extension/content.js'), 'utf8')
@@ -10,6 +10,11 @@ const optionsHtml = readFileSync(join(root, 'extension/options.html'), 'utf8')
 const backgroundSource = readFileSync(join(root, 'extension/background.js'), 'utf8')
 const qiraMark = readFileSync(join(root, 'extension/qira-mark.svg'), 'utf8')
 const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 'utf8'))
+
+afterEach(() => {
+  document.getElementById('bsw-floating-tools')?.remove()
+  vi.unstubAllGlobals()
+})
 
 describe('extension session UI', () => {
   it('bumps the unpacked extension version', () => {
@@ -52,6 +57,10 @@ describe('extension session UI', () => {
 
   it('signs in through the dashboard handshake without a name or token', () => {
     expect(contentSource).toMatch(/actionMarkup\('signin', 'Sign in'/)
+    expect(contentSource).toMatch(/orb\.dataset\.act = 'signin'/)
+    expect(contentSource).toMatch(/orb\.setAttribute\('aria-label', 'Sign in to AI Signals'\)/)
+    expect(contentSource).toMatch(/mode === 'pending'[\s\S]*actionMarkup\('dashboard', 'Finish sign-in'/)
+    expect(contentSource).toMatch(/act === 'menu'[\s\S]*classList\.toggle\('bsw-hold'\)/)
     expect(contentSource).toContain('aria-label="${label}"')
     expect(contentSource).toMatch(/setupDashboardHandshake/)
     expect(contentSource).toMatch(/bsw-claim-now/)
@@ -81,6 +90,39 @@ describe('extension session UI', () => {
     expect(optionsHtml).not.toMatch(/Display name/)
     expect(optionsSource).not.toMatch(/bswWriteToken/)
     expect(optionsSource).toMatch(/Waiting for work-email sign-in/)
+  })
+
+  it('renders a signed-out dock and starts sign-in from the Qira orb', async () => {
+    const messages = []
+    const storageListeners = []
+    vi.stubGlobal('chrome', {
+      runtime: {
+        getURL: (path) => `chrome-extension://test/${path}`,
+        sendMessage: (message) => {
+          messages.push(message)
+          return Promise.resolve({ ok: true })
+        },
+      },
+      storage: {
+        local: {
+          get: (_keys, callback) => callback({}),
+        },
+        onChanged: {
+          addListener: (listener) => storageListeners.push(listener),
+        },
+      },
+    })
+
+    Function(contentSource)()
+    const orb = document.querySelector('#bsw-floating-tools .bsw-orb')
+
+    expect(orb).toBeVisible()
+    expect(orb).toHaveAttribute('aria-label', 'Sign in to AI Signals')
+    expect(document.querySelector('.bsw-slot-top')).toHaveTextContent('Sign in')
+
+    orb.click()
+    expect(messages).toContainEqual({ type: 'bsw-sign-in' })
+    expect(storageListeners).toHaveLength(1)
   })
 
   it('exposes the trusted workspace batch-open bridge', () => {

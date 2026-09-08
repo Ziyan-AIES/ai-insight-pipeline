@@ -297,7 +297,7 @@
     const root = document.getElementById(rootId)
     if (!root) return
     const mode = authMode()
-    if (!state.dockEnabled || (onDashboard && mode === 'authorized')) {
+    if (!state.dockEnabled || (isWorkspacePage() && mode === 'authorized')) {
       root.hidden = true
       return
     }
@@ -306,7 +306,11 @@
     const bottomSlot = root.querySelector('.bsw-slot-bottom')
     const toast = root.querySelector('.bsw-toast')
     const composer = root.querySelector('.bsw-composer')
+    const orb = root.querySelector('.bsw-orb')
     if (mode === 'authorized') {
+      orb.dataset.act = 'menu'
+      orb.title = 'AI Signals actions'
+      orb.setAttribute('aria-label', 'Open AI Signals actions')
       const captureLabel = state.captureState === 'saved'
         ? 'Captured'
         : state.captureState === 'saving'
@@ -320,9 +324,21 @@
       )
       bottomSlot.innerHTML = actionMarkup('dashboard', 'Dashboard', dashboardIcon())
     } else if (mode === 'unauthorized') {
+      orb.dataset.act = 'signin'
+      orb.title = 'Sign in again to AI Signals'
+      orb.setAttribute('aria-label', 'Sign in again to AI Signals')
       topSlot.innerHTML = actionMarkup('signin', 'Sign in again', signInIcon())
       bottomSlot.innerHTML = actionMarkup('dashboard', 'Dashboard', dashboardIcon())
+    } else if (mode === 'pending') {
+      orb.dataset.act = 'dashboard'
+      orb.title = 'Finish AI Signals sign-in'
+      orb.setAttribute('aria-label', 'Finish AI Signals sign-in')
+      topSlot.innerHTML = actionMarkup('dashboard', 'Finish sign-in', signInIcon())
+      bottomSlot.innerHTML = ''
     } else {
+      orb.dataset.act = 'signin'
+      orb.title = 'Sign in to AI Signals'
+      orb.setAttribute('aria-label', 'Sign in to AI Signals')
       topSlot.innerHTML = actionMarkup('signin', 'Sign in', signInIcon())
       bottomSlot.innerHTML = ''
     }
@@ -369,6 +385,9 @@
 
   async function onActionClick(event) {
     const act = event.target.closest('[data-act]')?.dataset.act
+    if (act === 'menu') {
+      document.getElementById(rootId)?.classList.toggle('bsw-hold')
+    }
     if (act === 'signin') {
       chrome.runtime.sendMessage({ type: 'bsw-sign-in' })
       showToast('Finish sign-in in the dashboard', 'ok', '', 3000)
