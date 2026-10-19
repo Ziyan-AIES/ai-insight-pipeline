@@ -138,6 +138,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const handshake = useMemo(extensionHandshake, [])
   const dashboardHandshake = useMemo(dashboardSessionHandshake, [])
   const [session, setSession] = useState<Session | null>(null)
+  const [researchAccess, setResearchAccess] = useState(false)
   const [identity, setIdentity] = useState<TeamIdentity | null>(null)
   const [loading, setLoading] = useState(cloudConfigured)
   const [email, setEmail] = useState('')
@@ -353,14 +354,26 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (supabase) await supabase.auth.signOut()
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    setResearchAccess(false)
+    if (identity && supabase && typeof supabase.rpc === 'function') {
+      void Promise.resolve(supabase.rpc('can_access_research_workspace')).then(({ data, error }) => {
+        if (!cancelled) setResearchAccess(!error && data === true)
+      }).catch(() => { if (!cancelled) setResearchAccess(false) })
+    }
+    return () => { cancelled = true }
+  }, [identity])
+
   const context = useMemo<AuthContextValue>(
     () => ({
       identity,
-      canEdit: !cloudConfigured || identity?.role !== 'member',
+      canEdit: !cloudConfigured || identity?.role === 'editor' || identity?.role === 'admin',
+      canResearch: !cloudConfigured || researchAccess,
       canAdmin: !cloudConfigured || identity?.role === 'admin',
       signOut: signOutEverywhere,
     }),
-    [identity, signOutEverywhere],
+    [identity, signOutEverywhere, researchAccess],
   )
 
   async function requestLink() {

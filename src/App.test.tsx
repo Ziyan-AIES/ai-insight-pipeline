@@ -10,11 +10,11 @@ function selectJuly2026() {
 }
 
 function openLiveSignals() {
-  fireEvent.click(screen.getByRole('button', { name: 'Live Signals' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Selected Sources' }))
 }
 
 function openBriefing() {
-  fireEvent.click(screen.getByRole('button', { name: 'Synthesis' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Trends' }))
 }
 
 describe('dashboard pilot shell', () => {
@@ -39,19 +39,19 @@ describe('dashboard pilot shell', () => {
       screen.getByRole('link', { name: 'Open dashboard home' }),
     ).toHaveAttribute('href', '/?workspace=synthesis')
     const navigation = screen.getByRole('navigation', { name: 'Workspace' })
-    expect(within(navigation).getAllByRole('button')).toHaveLength(3)
-    expect(within(navigation).getByRole('button', { name: 'Industry Radar' })).toBeInTheDocument()
-    expect(within(navigation).getByRole('button', { name: 'Live Signals' })).toBeInTheDocument()
-    expect(within(navigation).getByRole('button', { name: 'Synthesis' })).toBeInTheDocument()
+    expect(within(navigation).getAllByRole('button')).toHaveLength(4)
+    expect(within(navigation).getByRole('button', { name: 'Signal Reference' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('button', { name: 'Selected Sources' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('button', { name: 'Trends' })).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
   })
 
   it('opens Industry Radar with deduplicated topics and transparent source coverage', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Signal Reference' }))
 
-    const radar = screen.getByRole('region', { name: 'Industry Radar' })
-    expect(within(radar).getByRole('heading', { name: 'Industry Radar' })).toBeInTheDocument()
+    const radar = screen.getByRole('region', { name: 'Signal Reference' })
+    expect(within(radar).getByRole('heading', { name: 'Signal Reference' })).toBeInTheDocument()
     expect(within(radar).getAllByText('Collaborative AI workspaces')).toHaveLength(2)
     expect(within(radar).getByText(/A development is one underlying story/)).toBeInTheDocument()
     fireEvent.click(within(radar).getByRole('button', { name: 'How it works' }))
@@ -66,8 +66,8 @@ describe('dashboard pilot shell', () => {
   it('falls back to one browser tab and direct links without a batch-capable extension', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
-    const radar = screen.getByRole('region', { name: 'Industry Radar' })
+    fireEvent.click(screen.getByRole('button', { name: 'Signal Reference' }))
+    const radar = screen.getByRole('region', { name: 'Signal Reference' })
     fireEvent.click(within(radar).getByRole('button', { name: /Open selected/ }))
     expect(open).toHaveBeenCalledTimes(1)
     expect(await within(radar).findByText('Open remaining sources')).toBeInTheDocument()
@@ -95,8 +95,8 @@ describe('dashboard pilot shell', () => {
     window.addEventListener('ai-signals:open-urls', onRequest)
 
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
-    const radar = screen.getByRole('region', { name: 'Industry Radar' })
+    fireEvent.click(screen.getByRole('button', { name: 'Signal Reference' }))
+    const radar = screen.getByRole('region', { name: 'Signal Reference' })
     fireEvent.click(within(radar).getByRole('button', { name: /Open selected/ }))
 
     await waitFor(() => expect(requestedUrls.length).toBeGreaterThan(1))
@@ -364,8 +364,8 @@ describe('dashboard pilot shell', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
     fireEvent.click(screen.getByRole('button', { name: 'Maximize Trends' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Industry Radar' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Synthesis' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Signal Reference' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Trends' }))
 
     expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
@@ -421,13 +421,13 @@ describe('dashboard pilot shell', () => {
   it('restores the last workspace separately for this viewer', async () => {
     window.localStorage.setItem('signal-intelligence:workspace-page:demo', 'signals')
     render(<App />)
-    expect(await screen.findByRole('region', { name: 'Live Signals' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Selected Sources' })).toBeInTheDocument()
   })
 
   it('shows up to three Live Signals per category with a stationary View all footer', () => {
     render(<App />)
     openLiveSignals()
-    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const live = screen.getByRole('region', { name: 'Selected Sources' })
     const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     const scroll = panel!.querySelector('.signal-scroll')
@@ -456,7 +456,7 @@ describe('dashboard pilot shell', () => {
   it('opens a category drawer from View all', () => {
     render(<App />)
     openLiveSignals()
-    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const live = screen.getByRole('region', { name: 'Selected Sources' })
     const panel = within(live).getByText('Entry & Interaction').closest('section')
     expect(panel).toBeTruthy()
     fireEvent.click(within(panel as HTMLElement).getByRole('button', { name: /View all/ }))
@@ -504,7 +504,7 @@ describe('dashboard pilot shell', () => {
         name: 'All',
       }),
     )
-    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const live = screen.getByRole('region', { name: 'Selected Sources' })
     const panel = within(live)
       .getByText('Entry & Interaction')
       .closest('section')
@@ -529,7 +529,7 @@ describe('dashboard pilot shell', () => {
     )
     render(<App />)
     openLiveSignals()
-    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const live = screen.getByRole('region', { name: 'Selected Sources' })
     expect(within(live).getAllByText('New').length).toBeGreaterThan(0)
   })
 
@@ -738,7 +738,7 @@ describe('dashboard pilot shell', () => {
   it('keeps every signal visible in the expandable Evidence column', () => {
     render(<App />)
     openLiveSignals()
-    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const live = screen.getByRole('region', { name: 'Selected Sources' })
     expect(within(live).queryByRole('group', { name: 'Discussion state' })).toBeNull()
     expect(within(live).queryByText('Awaiting review')).toBeNull()
     expect(within(live).queryByText('Reviewed')).toBeNull()
@@ -797,7 +797,7 @@ describe('dashboard pilot shell', () => {
     render(<App />)
     openLiveSignals()
     selectJuly2026()
-    const live = screen.getByRole('region', { name: 'Live Signals' })
+    const live = screen.getByRole('region', { name: 'Selected Sources' })
     const heading = within(live).getByRole('link', {
       name: /Granola brings ambient meeting memory/,
     })

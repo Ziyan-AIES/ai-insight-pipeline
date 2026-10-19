@@ -13,6 +13,7 @@ export type AuthContextValue = {
   identity: TeamIdentity | null
   canEdit: boolean
   canAdmin: boolean
+  canResearch?: boolean
   signOut: () => Promise<void>
 }
 

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import './styles/sonata.css'
+import { ResearchLibrary } from './components/ResearchLibrary'
 import { CategoryLabel } from './components/CategoryLabel'
 import { IndustryRadar } from './components/IndustryRadar'
 import { demoNews, demoTheses, demoTopics, demoTrends } from './demoData'
@@ -429,7 +431,8 @@ function ActivityHistory({ events }: { events: ActivityEvent[] }) {
 }
 
 function App() {
-  const { identity, canEdit, canAdmin, signOut } = useTeamAuth()
+  const { identity, canEdit, canAdmin, canResearch, signOut } = useTeamAuth()
+  const canResearchWorkspace = !cloudConfigured || canResearch === true
   const initialAddLinkDraft = useMemo(loadAddLinkDraft, [])
   const [news, setNews] = useState(cloudConfigured ? [] : demoNews)
   const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
@@ -445,6 +448,14 @@ function App() {
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     workspaceFromLocation,
   )
+  const [researchWorkspace, setResearchWorkspace] = useState(() => workspaceFromLocation() === 'threads' && new URLSearchParams(window.location.search).get('reader') !== '1')
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (workspacePage === 'threads' && !researchWorkspace) url.searchParams.set('reader', '1')
+    else url.searchParams.delete('reader')
+    window.history.replaceState(null, '', url)
+  }, [researchWorkspace, workspacePage])
+  useEffect(() => { if (!canResearchWorkspace) setResearchWorkspace(false) }, [canResearchWorkspace])
   const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(false)
   const [timeMode, setTimeMode] = useState<DashboardTimeMode>('all')
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -4817,7 +4828,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell focus-${focus} page-${workspacePage} ${
+      className={`app-shell ${researchWorkspace ? 'sonata-workspace' : 'sonata-reader'} focus-${focus} page-${workspacePage} ${
         headerHidden ? 'banner-hidden' : ''
       }`}
     >
@@ -4827,35 +4838,37 @@ function App() {
           href="/?workspace=synthesis"
           aria-label="Open dashboard home"
         >
-          Qira Strategic Market Intelligence
+          Sonata<small>Qira Market Intelligence</small>
         </a>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
             className={workspacePage === 'radar' ? 'active' : ''}
             type="button"
-            onClick={() => setWorkspacePage('radar')}
+            onClick={() => { setResearchWorkspace(false); setWorkspacePage('radar') }}
           >
-            Industry Radar
+            Signal Reference
           </button>
           <button
             className={workspacePage === 'signals' ? 'active' : ''}
             type="button"
-            onClick={() => setWorkspacePage('signals')}
+            onClick={() => { setResearchWorkspace(false); setWorkspacePage('signals') }}
           >
-            Live Signals
+            Selected Sources
           </button>
           <button
             className={
-              workspacePage === 'synthesis' || workspacePage === 'threads'
+              workspacePage === 'synthesis'
                 ? 'active'
                 : ''
             }
             type="button"
-            onClick={() => setWorkspacePage('synthesis')}
+            onClick={() => { setResearchWorkspace(false); setWorkspacePage('synthesis') }}
           >
-            Synthesis
+            Trends
           </button>
+          <button type="button" className={workspacePage === 'threads' && !researchWorkspace ? 'active' : ''} onClick={() => { setResearchWorkspace(false); setWorkspacePage('threads') }}>Research</button>
         </nav>
+        {canResearchWorkspace && <button className="sonata-workspace-button" type="button" onClick={() => { setResearchWorkspace(true); setWorkspacePage('threads') }}>Workspace ↗</button>}
         {renderGlobalSearch()}
         <button
           className="top-add-news"
@@ -4942,13 +4955,14 @@ function App() {
           <IndustryRadar canAdmin={canAdmin} canEdit={canEdit} onNotice={setNotice} />
         ) : null}
         {workspacePage === 'signals' && (
-          <section className="news-pane" aria-label="Live Signals">
+          <section className="news-pane" aria-label="Selected Sources">
             <div className="pane-heading">
               <div>
-                <span className="eyebrow">What is happening now</span>
-                <h1>Live Signals</h1>
+                <span className="eyebrow">Deliberately selected by people</span>
+                <h1>Selected Sources</h1>
               </div>
             </div>
+            <div className="sonata-source-note">Sources deliberately selected by team members. Automated reference items are separate. <a href="/extension">Browser extension &amp; installation ↗</a> · Request access: <a href="mailto:lizy76@lenovo.com">lizy76@lenovo.com</a></div>
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -5013,7 +5027,8 @@ function App() {
           </section>
         )}
 
-        {(workspacePage === 'synthesis' || workspacePage === 'threads') && (
+        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
+        {(workspacePage === 'synthesis' || (workspacePage === 'threads' && researchWorkspace)) && (
           <div
             className={`synthesis-workbench ${
               workspacePage === 'threads'
@@ -5228,7 +5243,7 @@ function App() {
                         type="button"
                         title="Open Action Threads dashboard"
                         aria-label="Open Action Threads dashboard"
-                        onClick={() => setWorkspacePage('threads')}
+                        onClick={() => { setResearchWorkspace(true); setWorkspacePage('threads') }}
                       >
                         View all
                       </button>
@@ -5238,7 +5253,7 @@ function App() {
                     <button
                       className="text-action breadcrumb-link"
                       type="button"
-                      onClick={() => setWorkspacePage('synthesis')}
+                      onClick={() => { setResearchWorkspace(false); setWorkspacePage('synthesis') }}
                     >
                       ← Synthesis
                     </button>

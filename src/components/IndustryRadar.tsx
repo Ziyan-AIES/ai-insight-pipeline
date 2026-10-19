@@ -460,12 +460,12 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
     .at(-1)
 
   return (
-    <section className="industry-radar" aria-label="Industry Radar">
+    <section className="industry-radar" aria-label="Signal Reference">
       <header className="radar-hero">
         <div>
           <span className="eyebrow">External market sensing</span>
-          <h1>Industry Radar</h1>
-          <p>Specific market movements gaining breadth or speed across independent sources.</p>
+          <h1>Signal Reference</h1>
+          <p>RSS and supported feeds, grouped by keywords and deterministic rules. Reference only: these are not team-endorsed trends.</p>
         </div>
         <div className="radar-hero-actions">
           <button className="text-action radar-method-toggle" type="button" aria-expanded={methodOpen} onClick={() => setMethodOpen((open) => !open)}>How it works</button>
