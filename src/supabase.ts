@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { parseNativeAnalysis } from './analysis'
+import { parseResearchProducts } from './products'
 import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
 import type {
   ActivityEvent,
@@ -159,7 +160,7 @@ function noteTakeaway(
   return ''
 }
 
-function parseTopicAnalysis(value: unknown): TopicAnalysis {
+export function parseTopicAnalysis(value: unknown): TopicAnalysis {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { ...emptyTopicAnalysis }
   }
@@ -170,6 +171,7 @@ function parseTopicAnalysis(value: unknown): TopicAnalysis {
     currentView: String(record.currentView || record.current_view || ''),
     implications: String(record.implications || ''),
     watch: String(record.watch || ''),
+    ...(Array.isArray(record.products) ? {products: parseResearchProducts(record.products)} : {}),
   }
 }
 

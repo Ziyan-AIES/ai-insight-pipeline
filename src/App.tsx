@@ -27,6 +27,7 @@ import {
   persistTeamIdea,
   persistTopicNews,
   parseTopicOutputs,
+  parseTopicAnalysis,
   persistTrendOrder,
   persistTrendNews,
   persistTrendTopic,
@@ -87,6 +88,7 @@ import type {
   WorkspaceSearchResult,
   WorkspacePage,
   TopicOutput,
+  ResearchProduct,
 } from './types'
 
 type TopicKindFilter = 'all' | TopicKind
@@ -163,14 +165,7 @@ function realtimeTopicAnalysis(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { ...emptyTopicAnalysis }
   }
-  const analysis = value as Record<string, unknown>
-  return {
-    keyQuestion: String(analysis.keyQuestion || analysis.key_question || ''),
-    observed: String(analysis.observed || ''),
-    currentView: String(analysis.currentView || analysis.current_view || ''),
-    implications: String(analysis.implications || ''),
-    watch: String(analysis.watch || ''),
-  }
+  return parseTopicAnalysis(value)
 }
 
 function upsertWorkspaceItem<T extends { id: string }>(
@@ -4050,6 +4045,18 @@ function App() {
     }
   }
 
+  async function saveResearchProduct(topic: Topic, item: ResearchProduct) {
+    if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
+    const currentTopic = topics.find(candidate => candidate.id === topic.id)
+    if (!currentTopic) throw new Error('Research topic not found. Reload and try again.')
+    if (topic.version !== undefined && currentTopic.version !== topic.version) throw new Error('This research changed elsewhere. Reload before saving the product.')
+    const old = currentTopic.analysis.products || []
+    const products = old.some(product => product.id === item.id) ? old.map(product => product.id === item.id ? item : product) : [...old,item]
+    const analysis = {...currentTopic.analysis,products}
+    const version = cloudConfigured ? await updateTopicItem(topic.id,{analysis},currentTopic.version) : currentTopic.version
+    setTopics(current => current.map(candidate => candidate.id === topic.id ? {...candidate,analysis,version:version ?? candidate.version} : candidate))
+    setNotice('Product saved.')
+  }
   async function publishAnalysis(topic: Topic, item: TopicOutput) {
     if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
     const outputs = topic.outputs.some(output => output.id === item.id) ? topic.outputs.map(output => output.id === item.id ? item : output) : [...topic.outputs,item]
@@ -4925,7 +4932,7 @@ function App() {
               </div>
               {renderTimeFilter()}
             </div>
-            <div className="sonata-source-note">Sources deliberately selected by team members. Automated reference items are separate. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Install from Chrome Web Store ↗</a> · Request access: <a href="mailto:lizy76@lenovo.com">lizy76@lenovo.com</a></div>
+            <div className="sonata-source-note">Sources are selected by team members. Use <strong>+ Add News</strong> at the top right, or save an article in one click with our Chrome extension. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Get the Chrome extension</a></div>
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -4990,7 +4997,7 @@ function App() {
           </section>
         )}
 
-        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} canLink={canEdit} viewerId={identity?.userId || 'demo'} onLink={(topic,id) => void linkNewsToTopic(id,topic.id)} onUnlink={(topic,id) => void unlinkSignal(topic.id,id)} onCapture={topic => { setTargetTopicId(topic.id); setShowAddLink(true) }} onPublish={publishAnalysis} onReorder={reorderResearch} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
+        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} canLink={canEdit} viewerId={identity?.userId || 'demo'} onLink={(topic,id) => void linkNewsToTopic(id,topic.id)} onUnlink={(topic,id) => void unlinkSignal(topic.id,id)} onCapture={topic => { setTargetTopicId(topic.id); setShowAddLink(true) }} onSaveProduct={saveResearchProduct} onPublish={publishAnalysis} onReorder={reorderResearch} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
         {(workspacePage === 'synthesis' || (workspacePage === 'threads' && researchWorkspace)) && (
           <div
             className={`synthesis-workbench ${

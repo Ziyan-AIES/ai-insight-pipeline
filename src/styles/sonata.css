@@ -115,3 +115,35 @@
 .app-shell .news-card.live-card{background:#fdfcfe;border-color:#ded7eb}.app-shell .column-filter button.active{background:#e9e3f3;color:#3d3255}.app-shell .column-drop-zone{font-size:12px;color:#63518b}
 .app-shell .column-drop-zone{min-height:56px}
 .app-shell .shared-sources .unlink-button,.app-shell .research-source-card .unlink-button{opacity:1;position:static}
+/* Closed Research uses a centered reading canvas and one page scroll. */
+.app-shell.page-threads .dashboard{display:block!important}
+.app-shell .sonata-research-heading>.sources-toggle{position:static;right:auto;bottom:auto;margin-top:4px}
+@media(min-width:761px){
+  .sonata-reader.page-threads .workspace-main:has(.research-browser:not(.sources-open)){display:block;overflow-y:auto}
+  .sonata-reader.page-threads .dashboard:has(.research-browser:not(.sources-open)){height:auto;min-height:100%;overflow:visible}
+  .sonata-reader.page-threads .research-browser:not(.sources-open){display:block;height:auto;min-height:100%;overflow:visible}
+  .sonata-reader.page-threads .research-browser:not(.sources-open)>.sonata-research{width:min(100%,1280px);max-width:1280px;height:auto;min-height:0;margin-inline:auto;overflow:visible;padding:20px 32px 56px}
+  .sonata-reader.page-threads .research-browser.sources-open{display:grid;grid-template-columns:minmax(265px,1fr) minmax(0,2fr);height:100%;overflow:hidden}
+  .sonata-reader.page-threads .research-browser.sources-open>.sonata-research{max-width:none;margin:0;height:100%;overflow-y:auto}
+}
+/* Each source category repeats its own tint; the page has one continuous background. */
+.app-shell.page-signals{background:#f1eff6}
+.app-shell.page-signals .workspace-main{background:#f1eff6;overflow-y:auto}
+.app-shell .dashboard.signals-page{height:auto;min-height:100%;overflow:visible;background:transparent}
+.app-shell.page-signals .news-pane{height:auto;min-height:100%;overflow:visible;background:transparent;border:0}
+.app-shell.page-signals .signals-grid{overflow:visible;grid-template-rows:auto auto;align-items:stretch;gap:26px}
+.app-shell.page-signals .category-panel,.app-shell.page-signals .category-panel.accepting-signal{padding:19px;border:1px solid color-mix(in srgb,var(--cat-accent) 22%,#ded7eb);border-top:3px solid color-mix(in srgb,var(--cat-accent) 65%,#9c8aaa);background:linear-gradient(180deg,color-mix(in srgb,var(--cat-accent) 17%,#f1eff6) 0%,#f8f6fc 200px,#fdfcfe 100%);border-radius:14px;box-shadow:0 5px 20px #4b3d6c05}
+.app-shell.page-signals .category-panel>header{padding-bottom:16px;margin-bottom:3px;border-bottom:1px solid color-mix(in srgb,var(--cat-accent) 16%,transparent)}
+.app-shell.page-signals .category-panel>header h2{font-size:14px;line-height:1.4;letter-spacing:.025em;color:#393044;font-weight:750}
+.app-shell.page-signals .category-panel.drop-highlight{outline:2px solid var(--cat-accent);outline-offset:2px}
+.research-product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:20px}
+.research-product-card{padding:22px;border:1px solid #ded7eb;border-radius:12px;background:linear-gradient(160deg,#f5f1fa,#fdfcfe 65%);min-width:0;overflow-wrap:anywhere}
+.research-product-card>header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.research-product-card h3{font-size:24px;margin:0 0 6px}.research-product-card h3 a{color:inherit;text-decoration:none}.research-product-card h3 a:hover{text-decoration:underline}.research-product-card small{font-size:13px}.research-product-card p{font-size:17px;line-height:1.65;margin:16px 0;white-space:pre-wrap}
+.research-product-logo{width:42px;height:42px;object-fit:contain;border-radius:10px;flex-shrink:0}.research-product-screen{width:100%;aspect-ratio:16/10;object-fit:contain;background:#eeeaf4;border-radius:8px;margin:10px 0 14px}
+.app-shell .product-editor .unlink-button{opacity:1;position:static}.product-editor details{margin:18px 0}.product-editor summary{cursor:pointer;color:#63518b;font-size:14px;padding:10px 0}.product-editor{max-width:700px}
+@media(min-width:761px){
+  .sonata-reader.page-threads .research-browser:not(.sources-open)>.sonata-research{width:min(100%,1120px);max-width:1120px;padding:16px 24px 36px}
+  .research-browser:not(.sources-open) .sonata-research-heading{padding:12px 0 22px;margin-bottom:20px}
+  .research-browser:not(.sources-open) .sonata-research-heading h1{font-size:40px;margin:10px 0 12px}
+  .research-browser:not(.sources-open) .sonata-research-heading p{font-size:17px;margin:0 0 14px}
+}

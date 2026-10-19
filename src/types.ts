@@ -88,7 +88,18 @@ export interface RadarTopic {
   evidence: RadarItem[]
 }
 
+export interface ResearchProduct {
+  id: string
+  name: string
+  description: string
+  company: string
+  url: string
+  logoUrl: string
+  screenshotUrl: string
+}
+
 export interface TopicAnalysis {
+  products?: ResearchProduct[]
   keyQuestion: string
   observed: string
   currentView: string

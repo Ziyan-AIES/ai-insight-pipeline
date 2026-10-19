@@ -3,22 +3,26 @@ import { categoryLabels } from '../labels'
 import { safeUrl } from '../analysis'
 import { AnalysisBody, AnalysisEditor } from './AnalysisContent'
 import { SharedSources } from './SharedSources'
-import type { NewsItem, Topic, TopicOutput } from '../types'
+import { ProductEditor } from './ProductEditor'
+import type { NewsItem, Topic, TopicOutput, ResearchProduct } from '../types'
 
 export function researchTopics(topics: Topic[]) {
   return topics.filter(topic => !topic.deletedAt && (topic.status !== 'idea' || topic.outputs.length > 0 || Boolean(topic.outcomeUrl)))
 }
 type Props = { topics: Topic[]; news: NewsItem[]; canEdit: boolean; canLink?: boolean; viewerId?: string; onEdit: (topic: Topic) => void;
   onLink?: (topic: Topic, sourceId: string) => void; onUnlink?: (topic: Topic, sourceId: string) => void; onCapture?: (topic: Topic) => void;
-  onPublish?: (topic: Topic, item: TopicOutput) => Promise<void>; onReorder?: (id: string, beforeId: string) => Promise<void> }
+  onSaveProduct?: (topic: Topic, product: ResearchProduct) => Promise<void>; onPublish?: (topic: Topic, item: TopicOutput) => Promise<void>; onReorder?: (id: string, beforeId: string) => Promise<void> }
 
-export function ResearchLibrary({ topics, news, canEdit, canLink = false, viewerId = 'demo', onEdit: _onEdit, onLink, onUnlink, onCapture, onPublish, onReorder }: Props) {
+export function ResearchLibrary({ topics, news, canEdit, canLink = false, viewerId = 'demo', onEdit: _onEdit, onLink, onUnlink, onCapture, onSaveProduct, onPublish, onReorder }: Props) {
   const params = new URLSearchParams(window.location.search)
   const [selectedId, select] = useState<string | null>(params.get('research'))
   const [outputId, setOutputId] = useState(params.get('analysis'))
   const [section, setSection] = useState('analysis'), [sourcesOpen, openSources] = useState(false)
   const [category, setCategory] = useState('all'), [sort, setSort] = useState('recent'), [view, setView] = useState('cards')
   const [editing, edit] = useState<TopicOutput | 'new' | null>(null), [message, setMessage] = useState(''), [dragged, setDragged] = useState('')
+  const [productBaseVersion,setProductBaseVersion] = useState<number | undefined>()
+  function openProduct(product: ResearchProduct | 'new') {setProductBaseVersion(topic?.version);editProduct(product)}
+  const [productDraft, editProduct] = useState<ResearchProduct | 'new' | null>(null)
   const [busy, setBusy] = useState(false)
   const all = researchTopics(topics), topic = all.find(item => item.id === selectedId)
   const available = all.filter(item => category === 'all' || item.category === category).sort((a,b) => sort === 'editorial' ? a.displayOrder-b.displayOrder : sort === 'oldest' ? a.monthKey.localeCompare(b.monthKey) : b.monthKey.localeCompare(a.monthKey))
@@ -33,7 +37,7 @@ export function ResearchLibrary({ topics, news, canEdit, canLink = false, viewer
     {topic ? <><button className="text-action" onClick={() => navigate(null)}>← All research</button><header className="sonata-research-heading"><span className="eyebrow">Research topic</span><h1>{topic.title}</h1><p>{topic.analysis.keyQuestion || 'Research framing is being developed.'}</p><span className="sonata-status">{topic.monthKey || 'Period not set'} · {topic.ownerName || 'Author not set'} · {categoryLabels[topic.category]}</span>
       <div className="analysis-controls">{sourcesToggle}{canLink && onCapture && <button onClick={() => onCapture(topic)}>+ New source</button>}{canEdit && <a className="workspace-topic-link" href="https://personal-agent-research-studio.ziyan-li-pku.chatgpt.site/" target="_blank" rel="noreferrer">Open private workspace</a>}</div>
     </header><nav className="research-sections" aria-label="Research sections">{['products','sources','analysis'].map(tab => <button key={tab} aria-pressed={section===tab} onClick={() => setSection(tab)}>{tab[0].toUpperCase()+tab.slice(1)}</button>)}</nav>
-    {section==='products' && <div className="sonata-reading"><h2>Products</h2><p>No products have been added to this research topic yet.</p></div>}
+    {section==='products' && <div className="sonata-reading"><div className="analysis-controls"><h2>Products</h2>{canEdit && onSaveProduct && <button onClick={()=>openProduct('new')}>+ New product</button>}</div>{!(topic.analysis.products || []).length && <p>No products have been added to this research topic yet.</p>}<div className="research-product-grid">{(topic.analysis.products || []).map(product=><article className="research-product-card" key={product.id}><header><div><h3>{safeUrl(product.url)?<a href={safeUrl(product.url)!} target="_blank" rel="noreferrer">{product.name}</a>:product.name}</h3>{product.company&&<small>{product.company}</small>}</div>{safeUrl(product.logoUrl)&&<img className="research-product-logo" src={safeUrl(product.logoUrl)!} alt={product.name+' logo'} loading="lazy"/>}</header>{product.description&&<p>{product.description}</p>}{safeUrl(product.screenshotUrl)&&<img className="research-product-screen" src={safeUrl(product.screenshotUrl)!} alt={product.name+' product screenshot'} loading="lazy"/>}{canEdit && onSaveProduct && <button className="text-action" onClick={()=>openProduct(product)}>Edit product</button>}</article>)}</div></div>}
     {section==='sources' && <div className="sonata-reading"><h2>Sources</h2><p>{linked.length} sources linked to this research. Use the Sources panel to add existing material.</p>{linked.map(source => <article className="research-source-card" key={source.id}><header><h3>{safeUrl(source.url) ? <a href={safeUrl(source.url)!} target="_blank" rel="noreferrer">{source.title}</a> : source.title}</h3>{canLink && onUnlink && <button className="unlink-button" title="Remove source from Research" aria-label="Remove source from Research" onClick={() => onUnlink(topic,source.id)}>×</button>}</header><p>{source.summary || source.takeaway}</p><small>Selected by {source.capturedBy || 'a team member'}</small></article>)}</div>}
     {section==='analysis' && <div className="sonata-reading"><div className="analysis-controls"><h2>Analysis</h2>{canEdit && onPublish && <button onClick={() => edit('new')}>+ New analysis</button>}</div>
       {topic.outputs.length===0 && !topic.outcomeUrl && <p>No analysis has been published yet.</p>}
@@ -45,6 +49,7 @@ export function ResearchLibrary({ topics, news, canEdit, canLink = false, viewer
     <div className={'sonata-topic-grid '+(view==='list'?'is-list':'')}>{available.map((item,index) => <article className="sonata-topic" key={item.id} draggable={canEdit && sort==='editorial'} onDragStart={event => { if (event.target instanceof HTMLElement && event.target.closest('button,a')) { event.preventDefault(); return } setDragged(item.id); event.dataTransfer.setData('application/x-research-id',item.id) }} onDragEnter={event => {if(canLink && Array.from(event.dataTransfer.types).includes('application/x-news-id')){event.preventDefault();event.dataTransfer.dropEffect='copy'}}} onDragOver={event => { if (canLink || (canEdit && sort==='editorial')) event.preventDefault() }} onDrop={event => { event.preventDefault(); const source=event.dataTransfer.getData('application/x-news-id'); if (source && canLink) onLink?.(item,source); else { const id=event.dataTransfer.getData('application/x-research-id') || dragged; if (id && id!==item.id && canEdit && sort==='editorial') void reorder(id,item.id) } setDragged('') }}>
       <span>{categoryLabels[item.category]} · {item.status}</span><h2>{item.title}</h2><p>{item.analysis.keyQuestion || item.analysis.currentView || 'Research framing is being developed.'}</p><small>{item.monthKey || 'Period not set'} · {item.ownerName || 'Author not set'} · {item.supportingNews.length} linked sources · {item.outputs.length} outputs</small><button onClick={() => navigate(item.id)}>Explore research ↗</button>{canEdit && sort==='editorial' && onReorder && <div className="analysis-controls"><button disabled={index===0} onClick={() => void reorder(item.id,available[index-1].id)}>Move earlier</button><button disabled={index===available.length-1} onClick={() => void reorder(available[index+1].id,item.id)}>Move later</button></div>}
     </article>)}</div>{!available.length && <div className="sonata-reading"><h2>No research in this view</h2><p>Uncommitted ideas remain in Trends and the workspace. Historical records have not been removed.</p></div>}</>}
+    {topic && productDraft && onSaveProduct && <ProductEditor initial={productDraft==='new'?undefined:productDraft} onClose={()=>editProduct(null)} onSave={product=>onSaveProduct({...topic,version:productBaseVersion},product)}/>}
     {message && <p role="status">{message}</p>}{topic && editing && onPublish && <AnalysisEditor initial={editing==='new'?undefined:editing} draftKey={'sonata:analysis:'+viewerId+':'+topic.id+':'+(editing==='new'?'new':editing.id)} onClose={() => edit(null)} onPublish={item => onPublish(topic,item)}/>}
   </section></div>
 }
