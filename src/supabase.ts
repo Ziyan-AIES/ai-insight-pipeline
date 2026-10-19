@@ -171,6 +171,7 @@ export function parseTopicAnalysis(value: unknown): TopicAnalysis {
     currentView: String(record.currentView || record.current_view || ''),
     implications: String(record.implications || ''),
     watch: String(record.watch || ''),
+    ...(record.workflowStage === 'trend' || record.workflowStage === 'research' ? {workflowStage: record.workflowStage} : {}),
     ...(Array.isArray(record.products) ? {products: parseResearchProducts(record.products)} : {}),
   }
 }

@@ -99,6 +99,7 @@ export interface ResearchProduct {
 }
 
 export interface TopicAnalysis {
+  workflowStage?: 'trend' | 'research'
   products?: ResearchProduct[]
   keyQuestion: string
   observed: string

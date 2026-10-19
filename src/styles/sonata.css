@@ -147,3 +147,16 @@
   .research-browser:not(.sources-open) .sonata-research-heading h1{font-size:40px;margin:10px 0 12px}
   .research-browser:not(.sources-open) .sonata-research-heading p{font-size:17px;margin:0 0 14px}
 }
+.app-shell .research-topic-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:auto}
+.app-shell .research-topic-actions>button{border:1px solid #d7d3e4;border-radius:8px;padding:8px 12px;background:#fdfcfe;color:#4d3c66;font:600 12px/1.5 'Manrope',sans-serif;min-height:34px}
+.app-shell .research-topic-actions>.text-action{border:0;background:transparent;padding:5px 0;min-height:28px}
+.app-shell .sonata-topic-grid.is-list .research-topic-actions{grid-column:2;grid-row:1 / 5;align-self:center;margin:0;flex-direction:column;align-items:flex-start}
+.app-shell .research-details-editor{max-width:760px}.research-details-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.app-shell .research-details-editor .unlink-button{opacity:1;position:static}
+.research-details-actions,.research-details-actions>div{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.research-details-actions{justify-content:space-between}
+.app-shell .research-details-editor .danger-button{color:#a43b4a;border-color:#dbaeb7;background:#fff7f8}
+.research-delete-confirm{padding:14px;background:#fff7f8;border:1px solid #e6c2c9;border-radius:9px}
+.app-shell .trend-editor-modal .modal-actions button{font-family:'Manrope','Segoe UI',sans-serif;font-size:13px;font-weight:600;line-height:20px;border-radius:9px;min-height:40px;padding:9px 14px}
+@media(max-width:760px){.research-details-fields{grid-template-columns:1fr}.research-details-actions{align-items:stretch}.research-details-actions>div{width:100%}.app-shell .sonata-topic-grid.is-list .research-topic-actions{flex-direction:row}}
+.app-shell .research-details-editor button{font-family:'Manrope','Segoe UI',sans-serif;font-size:13px;font-weight:600;line-height:20px;border-radius:9px}
+.app-shell .research-details-editor .unlink-button{font-size:19px}

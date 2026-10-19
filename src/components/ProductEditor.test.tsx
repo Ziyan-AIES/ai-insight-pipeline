@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,within} from '@testing-library/react'
+import {fireEvent,render,screen,within,waitFor} from '@testing-library/react'
 import {expect,it,vi} from 'vitest'
 import App from '../App'
 import {ProductEditor} from './ProductEditor'
@@ -44,4 +44,5 @@ it('keeps the version captured when a product edit began',async()=>{
   view.rerender(<ResearchLibrary topics={[{...topic,version:5}]} news={[]} canEdit onEdit={edit} onSaveProduct={save}/>)
   fireEvent.click(screen.getByRole('button',{name:'Save product'}))
   expect(save).toHaveBeenCalledWith(expect.objectContaining({version:4}),expect.objectContaining({name:'Siri'}))
+  await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull())
 })

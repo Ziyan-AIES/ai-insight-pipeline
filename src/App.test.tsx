@@ -235,7 +235,7 @@ describe('dashboard pilot shell', () => {
       dataTransfer,
     })
     const editor = screen.getByRole('dialog', { name: 'Edit Trend' })
-    expect(within(editor).getByDisplayValue('Harness engineering')).toBeInTheDocument()
+    expect(within(editor).getByDisplayValue('Agent reliability is becoming a product layer')).toBeInTheDocument()
     expect(within(editor).queryByLabelText('Owner')).toBeNull()
     expect(
       within(editor).getByRole('link', {
@@ -247,7 +247,7 @@ describe('dashboard pilot shell', () => {
       expect(screen.getByRole('heading', { name: 'Harness engineering' })).toBeInTheDocument(),
     )
     expect(
-      screen.getByRole('button', { name: 'Harness engineering' }),
+      screen.getByRole('button', { name: 'Agent reliability is becoming a product layer' }),
     ).toBeInTheDocument()
   })
 

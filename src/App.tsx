@@ -1433,7 +1433,7 @@ function App() {
     return trends
       .filter(
         (trend) =>
-          !trend.deletedAt && trend.actionThreadIds.length === 0,
+          !trend.deletedAt && !trend.actionThreadIds.some(id=>topics.some(topic=>topic.id===id && !topic.deletedAt && topic.analysis.workflowStage!=='trend')),
       )
       .filter(
         (trend) =>
@@ -1508,7 +1508,7 @@ function App() {
         (trend) =>
           !trend.deletedAt &&
           trend.status !== 'archived' &&
-          trend.actionThreadIds.length === 0,
+          !trend.actionThreadIds.some(id=>topics.some(topic=>topic.id===id && !topic.deletedAt && topic.analysis.workflowStage!=='trend')),
       )
       .filter(
         (trend) => trendCategory === 'all' || trend.category === trendCategory,
@@ -1520,7 +1520,7 @@ function App() {
         }
         return b.createdAt.localeCompare(a.createdAt)
       })
-  }, [trendCategory, trends])
+  }, [trendCategory, trends, topics])
 
   const archivedTrends = useMemo(
     () =>
@@ -1530,12 +1530,12 @@ function App() {
               (trend) =>
                 !trend.deletedAt &&
                 trend.status === 'archived' &&
-                trend.actionThreadIds.length === 0,
+                !trend.actionThreadIds.some(id=>topics.some(topic=>topic.id===id && !topic.deletedAt && topic.analysis.workflowStage!=='trend')),
             )
             .slice()
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         : [],
-    [trendCategory, trends],
+    [trendCategory, trends, topics],
   )
 
   const synthesisEvidence = useMemo(
@@ -1579,7 +1579,7 @@ function App() {
           (trend) =>
             !trend.deletedAt &&
             trend.status !== 'archived' &&
-            trend.actionThreadIds.length === 0,
+            !trend.actionThreadIds.some(id=>topics.some(topic=>topic.id===id && !topic.deletedAt && topic.analysis.workflowStage!=='trend')),
         )
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -2511,10 +2511,13 @@ function App() {
     })
   }
 
-  async function completeTopicDowngrade(sourceTopic: Topic) {
+  async function completeTopicDowngrade(sourceTopic: Topic, targetTrend: Trend) {
+    const analysis = {...sourceTopic.analysis,workflowStage:'trend' as const}
+    if (cloudConfigured) await persistTrendTopic(targetTrend.id,sourceTopic.id)
     let version = sourceTopic.version
-    if (cloudConfigured) version = await updateTopicItem(sourceTopic.id, { status: 'idea', thread_status: 'parked' }, sourceTopic.version)
-    setTopics(current => current.map(topic => topic.id === sourceTopic.id ? { ...topic, status: 'idea', threadStatus: 'parked', version: version ?? topic.version } : topic))
+    if (cloudConfigured) version = await updateTopicItem(sourceTopic.id, { status: 'idea', thread_status: 'parked',analysis }, sourceTopic.version)
+    setTopics(current => current.map(topic => topic.id === sourceTopic.id ? { ...topic, status: 'idea', threadStatus: 'parked', analysis,version: version ?? topic.version,sourceTrends:topic.sourceTrends.some(link=>link.trendId===targetTrend.id)?topic.sourceTrends:[...topic.sourceTrends,{trendId:targetTrend.id,trendTitle:targetTrend.title}] } : topic))
+    setTrends(current=>current.map(trend=>trend.id===targetTrend.id?{...trend,actionThreadIds:trend.actionThreadIds.includes(sourceTopic.id)?trend.actionThreadIds:[...trend.actionThreadIds,sourceTopic.id]}:trend))
   }
 
   async function saveTrendDraft() {
@@ -2551,11 +2554,6 @@ function App() {
           displayOrder: index + 1,
           linkedAt: new Date().toISOString(),
         }))
-        if (cloudConfigured) {
-          for (const [index, newsId] of evidenceNewsIds.entries()) {
-            await persistTrendNews(saved.id, newsId, 'supporting', index + 1)
-          }
-        }
         const created: Trend = {
           ...trendDraft,
           id: saved.id,
@@ -2565,6 +2563,14 @@ function App() {
           updatedAt: saved.updated_at,
           version: saved.version,
           evidence,
+        }
+        setCreatingTrend(false)
+        setTrendDraft(created)
+        setTrends(current=>upsertWorkspaceItem(current,{...created,evidence:[]}))
+        if (cloudConfigured) {
+          for (const [index, newsId] of evidenceNewsIds.entries()) {
+            await persistTrendNews(saved.id, newsId, 'supporting', index + 1)
+          }
         }
         setTrends((current) => upsertWorkspaceItem(current, created))
         if (evidenceNewsIds.length > 0) {
@@ -2587,7 +2593,7 @@ function App() {
           )
         }
         if (sourceTopic) {
-          await completeTopicDowngrade(sourceTopic)
+          await completeTopicDowngrade(sourceTopic, created)
         }
         setNotice('Trend created')
       } catch (error) {
@@ -2625,9 +2631,7 @@ function App() {
           version,
           updatedAt,
         }
-        setTrends((current) =>
-          current.map((trend) => (trend.id === saved.id ? saved : trend)),
-        )
+        setTrendDraft(saved)
         const addedEvidence = trendDraft.evidence.filter(
           (evidence) =>
             !previousTrend?.evidence.some(
@@ -2644,6 +2648,9 @@ function App() {
             )
           }
         }
+        setTrends((current) =>
+          current.map((trend) => (trend.id === saved.id ? saved : trend)),
+        )
         setNews((current) =>
           current.map((item) => {
             const linked = trendDraft.evidence.some(
@@ -2672,7 +2679,7 @@ function App() {
           }),
         )
         const sourceTopic = topics.find((topic) => topic.id === pendingTrendTopicId)
-        if (sourceTopic) await completeTopicDowngrade(sourceTopic)
+        if (sourceTopic) await completeTopicDowngrade(sourceTopic, saved)
         setNotice('Trend updated')
       } catch (error) {
         setNotice(error instanceof Error ? error.message : 'Could not update Trend')
@@ -3077,6 +3084,13 @@ function App() {
   }
 
   function openCreateThreadFromTrend(trend: Trend, resumeMeeting = false) {
+    const returned = topics.find(topic => !topic.deletedAt && topic.analysis.workflowStage === 'trend' && (trend.actionThreadIds.includes(topic.id) || topic.sourceTrends.some(source=>source.trendId===trend.id)))
+    if (returned) {
+      setPendingThreadTrendId(trend.id)
+      setCreatingTopic(false)
+      setTopicDraft({...returned,status:'researching',threadStatus:'in_progress',analysis:{...returned.analysis,workflowStage:'research'}})
+      return
+    }
     setPendingThreadTrendId(trend.id)
     setMeetingThreadTrendId(resumeMeeting ? trend.id : '')
     openNewTopic(trend.category, {
@@ -3123,27 +3137,25 @@ function App() {
     setTrendDraft({
       ...(sourceTrend || {}),
       id: sourceTrend?.id || '',
-      title: topic.title,
+      title: sourceTrend?.title || topic.title,
       displayOrder: sourceTrend?.displayOrder || 0,
-      category: topic.category,
-      observation: topic.analysis.observed || topic.notes,
-      initialRead: topic.analysis.currentView || topic.decisionSummary,
-      discussionQuestion: topic.analysis.keyQuestion,
+      category: sourceTrend?.category || topic.category,
+      observation: sourceTrend ? sourceTrend.observation : topic.analysis.observed || topic.notes,
+      initialRead: sourceTrend ? sourceTrend.initialRead : topic.analysis.currentView || topic.decisionSummary,
+      discussionQuestion: sourceTrend ? sourceTrend.discussionQuestion : topic.analysis.keyQuestion,
       status: 'active',
       discussionStatus: 'not_discussed',
       createdBy: sourceTrend?.createdBy || identity?.displayName,
       createdAt: sourceTrend?.createdAt || now,
       updatedAt: now,
       version: sourceTrend?.version || 1,
-      evidence: topic.supportingNews.map((newsId, index) => ({
+      evidence: [...(sourceTrend?.evidence || []),...topic.supportingNews.filter(id=>!sourceTrend?.evidence.some(link=>link.newsId===id)).map((newsId, index) => ({
         newsId,
-        role: 'supporting',
-        displayOrder: index + 1,
+        role: 'supporting' as const,
+        displayOrder: (sourceTrend?.evidence.length || 0) + index + 1,
         linkedAt: now,
-      })),
-      actionThreadIds: (sourceTrend?.actionThreadIds || []).filter(
-        (topicId) => topicId !== topic.id,
-      ),
+      }))],
+      actionThreadIds: sourceTrend?.actionThreadIds || [],
     })
   }
 
@@ -4008,7 +4020,7 @@ function App() {
         (trend) =>
           !trend.deletedAt &&
           trend.status !== 'archived' &&
-          trend.actionThreadIds.length === 0,
+          !trend.actionThreadIds.some(id=>topics.some(topic=>topic.id===id && !topic.deletedAt && topic.analysis.workflowStage!=='trend')),
       )
       .slice()
       .sort((a, b) => {
@@ -4045,6 +4057,26 @@ function App() {
     }
   }
 
+  async function saveResearchDetails(draft: Topic) {
+    if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
+    const current = topics.find(topic=>topic.id===draft.id)
+    if (!current || current.version !== draft.version) throw new Error('This research changed elsewhere. Reload and try again.')
+    const analysis={...current.analysis,keyQuestion:draft.analysis.keyQuestion}
+    const threadStatus=threadStatusFromLegacy(draft.status)
+    const version=cloudConfigured?await updateTopicItem(draft.id,{title:draft.title.trim(),category:draft.category,scheduled_month:draft.monthKey?draft.monthKey+'-01':null,status:draft.status,thread_status:threadStatus,analysis},draft.version):draft.version
+    setTopics(items=>items.map(item=>item.id===draft.id?{...item,title:draft.title.trim(),category:draft.category,monthKey:draft.monthKey,monthLabel:topicMonthLabel(draft.monthKey),status:draft.status,threadStatus,analysis,version:version??item.version}:item))
+    setNews(items=>items.map(item=>({...item,topicLinks:item.topicLinks.map(link=>link.topicId===draft.id?{...link,topicTitle:draft.title.trim(),monthLabel:topicMonthLabel(draft.monthKey)}:link)})))
+    setNotice('Research details saved.')
+  }
+  async function recycleResearch(topic: Topic) {
+    if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
+    if (cloudConfigured) await deleteTopicItem(topic.id)
+    const deletedAt=new Date().toISOString()
+    setTopics(items=>items.map(item=>item.id===topic.id?{...item,deletedAt}:item))
+    setNews(items=>items.map(item=>({...item,topicLinks:item.topicLinks.filter(link=>link.topicId!==topic.id)})))
+    setTrends(items=>items.map(item=>({...item,actionThreadIds:item.actionThreadIds.filter(id=>id!==topic.id)})))
+    setNotice('Research moved to the recycle bin. Sources are unchanged.')
+  }
   async function saveResearchProduct(topic: Topic, item: ResearchProduct) {
     if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
     const currentTopic = topics.find(candidate => candidate.id === topic.id)
@@ -4997,7 +5029,7 @@ function App() {
           </section>
         )}
 
-        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} canLink={canEdit} viewerId={identity?.userId || 'demo'} onLink={(topic,id) => void linkNewsToTopic(id,topic.id)} onUnlink={(topic,id) => void unlinkSignal(topic.id,id)} onCapture={topic => { setTargetTopicId(topic.id); setShowAddLink(true) }} onSaveProduct={saveResearchProduct} onPublish={publishAnalysis} onReorder={reorderResearch} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
+        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} canLink={canEdit} viewerId={identity?.userId || 'demo'} onLink={(topic,id) => void linkNewsToTopic(id,topic.id)} onUnlink={(topic,id) => void unlinkSignal(topic.id,id)} onCapture={topic => { setTargetTopicId(topic.id); setShowAddLink(true) }} onSaveDetails={saveResearchDetails} onRecycle={recycleResearch} onReturnToTrend={openCreateTrendFromTopic} onSaveProduct={saveResearchProduct} onPublish={publishAnalysis} onReorder={reorderResearch} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
         {(workspacePage === 'synthesis' || (workspacePage === 'threads' && researchWorkspace)) && (
           <div
             className={`synthesis-workbench ${
@@ -6045,7 +6077,7 @@ function App() {
               </section>
             </div>
             <div className="modal-actions split-actions sticky-footer">
-              {!creatingTrend ? (
+              {!creatingTrend && !pendingTrendTopicId ? (
                 <div className="destructive-actions">
                   <button
                     className={trendDraft.status === 'archived' ? 'secondary-button' : 'danger-button'}
@@ -6093,7 +6125,7 @@ function App() {
                 >
                   {creatingTrend ? 'Create Trend' : 'Save changes'}
                 </button>
-                {!creatingTrend && canResearchWorkspace && <button type="button" onClick={() => {
+                {!creatingTrend && !pendingTrendTopicId && canResearchWorkspace && <button className="secondary-button" type="button" onClick={() => {
                   const saved = trends.find(trend => trend.id === trendDraft.id)
                   if (!saved || ['title','category','observation','initialRead','discussionQuestion'].some(key => saved[key as keyof Trend] !== trendDraft[key as keyof Trend])) { setNotice('Save your trend changes before promoting it.'); return }
                   setTrendDraft(null); openCreateThreadFromTrend(saved)
