@@ -63,3 +63,55 @@
 .analysis-editor{width:min(940px,96vw);max-height:92vh;overflow:auto;background:#fdfcfe;border-radius:16px;padding:26px;color:#252338;box-shadow:0 20px 70px #30253f22}.analysis-editor>header{display:flex;justify-content:space-between;align-items:center}.analysis-editor label{display:flex;flex-direction:column;gap:7px;font:600 13px/1.5 'Manrope',sans-serif;margin:16px 0}.analysis-editor input,.analysis-editor textarea,.analysis-editor select{padding:11px;border:1px solid #d7d3e4;background:#fff;border-radius:8px;color:#252338;font:400 16px/1.6 'Source Sans 3',sans-serif}.analysis-editor textarea{min-height:110px;resize:vertical}.analysis-block-editor{padding:18px;border:1px solid #ded7eb;border-radius:12px;margin:18px 0}.analysis-editor button{min-height:40px;padding:9px 12px;border:1px solid #d7d3e4;border-radius:8px;background:#eee8f6;color:#4d3c66}.analysis-editor footer{position:sticky;bottom:-26px;background:#fdfcfe;padding:18px 0;border-top:1px solid #ded7eb}.analysis-editor .primary-button{background:#3d3255;color:#fff}.draft-notice{font-size:14px;color:#63518b!important}
 @media(max-width:1000px){.app-shell.sonata-reader.page-synthesis .synthesis-workbench,.research-browser.sources-open{grid-template-columns:minmax(240px,1fr) minmax(0,1.7fr)!important;gap:15px}.app-shell .top-navigation{min-height:70px;height:auto}}
 @media(max-width:760px){.app-shell.sonata-reader.page-synthesis .synthesis-workbench,.research-browser.sources-open{grid-template-columns:1fr!important}.app-shell .top-navigation{padding:10px 16px}.trend-sources-column,.shared-sources{padding:16px}.app-shell.sonata-reader .trend-briefing-pane{padding:0}.analysis-slide{aspect-ratio:auto;min-height:240px}.analysis-editor{padding:19px}.analysis-controls button{min-height:44px}}
+/* Reader workspaces: each column owns its scroll; never vertically center a long pane. */
+@media(min-width:761px){
+  .app-shell.sonata-reader.page-synthesis,.app-shell.sonata-reader.page-threads{height:100dvh;min-height:0;overflow:hidden}
+  .sonata-reader.page-synthesis .workspace-main,.sonata-reader.page-threads .workspace-main{height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+  .sonata-reader.page-synthesis .dashboard,.sonata-reader.page-threads .dashboard{height:100%;min-height:0;overflow:hidden;flex:1;padding:16px}
+  .app-shell.sonata-reader.page-synthesis .synthesis-workbench{height:100%!important;min-height:0!important;overflow:hidden;align-items:stretch}
+  .sonata-reader .trend-sources-column,.app-shell.sonata-reader .trend-briefing-pane{height:100%;min-height:0;overflow-y:auto!important;overscroll-behavior:contain;scrollbar-gutter:stable;align-self:stretch}
+  .sonata-reader.page-threads .research-browser{height:100%;min-height:0;align-items:stretch;overflow:hidden}
+  .sonata-reader.page-threads .research-browser>.shared-sources,.sonata-reader.page-threads .research-browser>.sonata-research{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;margin:0;align-self:stretch}
+}
+.app-shell .sonata-topic-grid,.app-shell .research-browser.sources-open .sonata-topic-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.app-shell .sonata-topic-grid.is-list,.app-shell .research-browser.sources-open .sonata-topic-grid.is-list{grid-template-columns:minmax(0,1fr)!important}
+.sonata-topic-grid.is-list .sonata-topic{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;padding:22px 25px}
+.sonata-topic-grid.is-list .sonata-topic>span,.sonata-topic-grid.is-list .sonata-topic>h2,.sonata-topic-grid.is-list .sonata-topic>p,.sonata-topic-grid.is-list .sonata-topic>small{grid-column:1}
+.sonata-topic-grid.is-list .sonata-topic>button{grid-column:2;grid-row:1 / 5;align-self:center}
+.app-shell .trend-grid{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+.app-shell .trend-card{margin:0;padding:22px;min-width:0}
+.app-shell .trend-title-button{font-size:21px!important;line-height:1.35;font-weight:700}
+.app-shell .trend-observation,.app-shell .trend-initial-read p,.app-shell .trend-question{font-size:16px;line-height:1.6}
+.app-shell .trend-card-actions{gap:18px;justify-content:flex-start;margin-top:auto;padding-top:12px}
+.app-shell .trend-card-actions button{background:transparent;border:0;min-height:28px;padding:3px 0;font-size:12px;font-weight:600;box-shadow:none}
+.app-shell .trend-card-actions button:hover{background:transparent;color:#30253f;text-decoration:underline;text-underline-offset:4px}
+.app-shell .column-filter{gap:8px;flex-wrap:wrap}.app-shell .column-filter button{font-size:13px;line-height:1.4;padding:8px 11px;min-height:34px}
+.app-shell .trend-card .category-token,.app-shell .trend-signal-count{font-size:12px}
+.app-shell .shared-sources small{font-size:12px}.app-shell .shared-sources h3{font-size:18px}.app-shell .shared-sources p{font-size:16px}
+.app-shell .research-filters{align-items:flex-end;gap:16px}.app-shell .research-filters label{display:flex;flex-direction:column;gap:7px;font-size:13px;line-height:20px;margin:0}
+.app-shell .research-filters select,.app-shell .research-filters button{box-sizing:border-box;height:40px;min-height:40px;margin:0;padding:8px 12px}
+.app-shell .research-filters>.analysis-controls{height:40px;margin:0;align-items:center}
+.app-shell .sources-toggle{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:4px 7px;border:0;border-radius:6px;background:transparent;color:#63518b;font-size:12px;box-shadow:none}
+.app-shell .sources-toggle:hover{background:#e9e3f3}.app-shell .sources-toggle[aria-expanded=true]{background:#e9e3f3;color:#3d3255}
+.app-shell .sonata-research-heading>.sources-toggle{position:absolute;right:0;bottom:30px}
+.app-shell .workspace-topic-link{font-size:12px;color:#63518b;text-underline-offset:4px;margin-left:8px}
+.app-shell a.sonata-workspace-button{font-size:12px;text-decoration:none}
+.app-shell .research-source-card{padding:20px 0;border-bottom:1px solid #ded7eb}
+.app-shell .research-source-card header{display:flex;align-items:flex-start;gap:14px;justify-content:space-between}
+.app-shell .research-source-card h3{font-size:20px;margin:0;line-height:1.4}.app-shell .research-source-card h3 a{font:inherit;color:#403450;text-decoration:none}.app-shell .research-source-card h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+.app-shell .research-source-card p{font-size:17px;margin:10px 0}.app-shell .research-source-card small{font-size:13px}
+.app-shell .unlink-button{width:26px;height:26px;min-width:26px;min-height:26px;display:inline-flex;justify-content:center;align-items:center;padding:0;border:0;background:transparent;color:#71647f;font-size:19px;border-radius:6px;flex-shrink:0}
+.app-shell .unlink-button:hover{background:#eee6f3;color:#462a53}
+.app-shell .notice{position:fixed;left:50%;bottom:28px;top:auto;transform:translateX(-50%);z-index:110;max-width:min(600px,90vw);padding:12px 20px;background:#3d3255;color:#fff;border:0;border-radius:10px;box-shadow:0 8px 30px #30253f25;font-size:14px}
+.page-signals .pane-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;overflow:visible}.page-signals .pane-heading .page-toolbar{margin:0;padding:0;min-height:0;position:relative;background:transparent;border:0}.page-signals .pane-heading .time-filter{margin:0}
+@media(max-width:1400px){.app-shell .trend-grid,.app-shell .research-browser.sources-open .sonata-topic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1050px){.app-shell .trend-grid,.app-shell .research-browser.sources-open .sonata-topic-grid{grid-template-columns:minmax(0,1fr)}.app-shell .sonata-topic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.page-signals .pane-heading{flex-wrap:wrap}}
+@media(max-width:760px){.app-shell .sonata-topic-grid{grid-template-columns:minmax(0,1fr)}.sonata-topic-grid.is-list .sonata-topic{display:flex}.sonata-reader.page-threads .research-browser>.sonata-research,.sonata-reader.page-threads .research-browser>.shared-sources{height:auto;overflow:visible}.app-shell .sonata-research-heading>.sources-toggle{position:static}.app-shell .research-filters{gap:12px}.app-shell .trend-card{margin-bottom:16px}}
+.app-shell.sonata-reader .trend-briefing-pane{display:block}
+.app-shell.sonata-reader .trend-briefing-pane>.column-filter{height:auto;max-height:none;overflow:visible;flex-shrink:0;margin-block:14px}
+.app-shell.sonata-reader .trend-grid{height:auto;max-height:none;min-height:0;overflow:visible;flex:none}
+.app-shell.sonata-reader .trend-column-heading{margin-bottom:16px}
+.app-shell .shared-source h3 a{font:inherit;color:inherit;text-decoration:none}.app-shell .shared-source h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+.app-shell .news-card.live-card{background:#fdfcfe;border-color:#ded7eb}.app-shell .column-filter button.active{background:#e9e3f3;color:#3d3255}.app-shell .column-drop-zone{font-size:12px;color:#63518b}
+.app-shell .column-drop-zone{min-height:56px}
+.app-shell .shared-sources .unlink-button,.app-shell .research-source-card .unlink-button{opacity:1;position:static}

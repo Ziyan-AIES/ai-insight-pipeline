@@ -1157,7 +1157,7 @@ function App() {
 
   useEffect(() => {
     if (!notice) return
-    const timeout = window.setTimeout(() => setNotice(''), 4000)
+    const timeout = window.setTimeout(() => setNotice(''), /could not|failed|error|changed elsewhere/i.test(notice) ? 5000 : 2000)
     return () => window.clearTimeout(timeout)
   }, [notice])
 
@@ -1914,7 +1914,7 @@ function App() {
     const persistedTopicAlreadyHasNews =
       topics.some((item) => item.id === topicId) &&
       topic.supportingNews.includes(newsId)
-    if (persistedTopicAlreadyHasNews) return true
+    if (persistedTopicAlreadyHasNews) { setNotice('Source already linked.'); return true }
     try {
       if (cloudConfigured) await persistTopicNews(topicId, newsId)
     } catch (error) {
@@ -1950,6 +1950,8 @@ function App() {
           : candidate,
       ),
     )
+    setNotice('One source added.')
+    return true
   }
 
   async function moveNewsToTopic(
@@ -4150,7 +4152,7 @@ function App() {
         <header className="trend-card-head">
           <CategoryLabel category={trend.category} className="category-token" />
           <div className="trend-card-state">
-            <span className={`trend-review-state ${needsReview || stale ? 'needs-review' : ''} ${stale ? 'is-stale' : ''}`}>
+            {legacyMeetingsEnabled && <span className={`trend-review-state ${needsReview || stale ? 'needs-review' : ''} ${stale ? 'is-stale' : ''}`}>
               {trend.status === 'archived'
                 ? 'Archived'
                 : stale
@@ -4161,7 +4163,7 @@ function App() {
                   ? 'Needs review'
                   : `Reviewed ${formatShortDate(trend.lastDiscussedAt || trend.updatedAt)}`}
             </span>
-            <span className="trend-signal-count">
+            }<span className="trend-signal-count">
               {evidence.length} signal{evidence.length === 1 ? '' : 's'}
             </span>
           </div>
@@ -4190,7 +4192,7 @@ function App() {
             <strong>Question</strong> {trend.discussionQuestion}
           </p>
         ) : null}
-        {newEvidence > 0 && trend.lastDiscussedAt ? (
+        {legacyMeetingsEnabled && newEvidence > 0 && trend.lastDiscussedAt ? (
           <p className="trend-new-evidence">
             {newEvidence} new since last discussion
           </p>
@@ -4248,14 +4250,13 @@ function App() {
           ))}
           {evidence.length === 0 ? (
             <p className="trend-empty-evidence">
-              Add reviewed signals before taking this Trend into discussion.
+              Drag selected sources here to support this Trend.
             </p>
           ) : null}
         </div>
         <footer className="trend-card-actions">
           <button type="button" onClick={() => { setCreatingTrend(false); setTrendDraft({ ...trend }) }} hidden={!canEdit}>Edit</button>
           <button type="button" onClick={() => { expandEvidenceInbox(); setEvidenceScope('all'); setEvidenceCategory('all'); setEvidenceTrendFilterId(trend.id) }}>View linked sources</button>
-          {canResearchWorkspace && <button type="button" onClick={() => { setTrendDraft(null); openCreateThreadFromTrend(trend) }}>Promote to Research</button>}
           {trend.status === 'archived' && <button type="button" onClick={() => void setTrendArchived(trend.id,false)}>Unarchive</button>}
         </footer>
       </article>
@@ -4831,7 +4832,7 @@ function App() {
           </button>
           <button type="button" className={workspacePage === 'threads' && !researchWorkspace ? 'active' : ''} onClick={() => { setResearchWorkspace(false); setWorkspacePage('threads') }}>Research</button>
         </nav>
-        {canResearchWorkspace && <button className="sonata-workspace-button" type="button" onClick={() => { setResearchWorkspace(true); setWorkspacePage('threads') }}>Workspace ↗</button>}
+        {canResearchWorkspace && <a className="sonata-workspace-button" href="https://personal-agent-research-studio.ziyan-li-pku.chatgpt.site/" target="_blank" rel="noreferrer">Workspace</a>}
         {renderGlobalSearch()}
         <button
           className="top-add-news"
@@ -4891,13 +4892,11 @@ function App() {
       </header>
 
       <div className="workspace-main">
-        {workspacePage === 'signals' ? (
-          <header className="page-context-bar">{renderTimeFilter()}</header>
-        ) : null}
 
       {notice && (
         <button
           className="notice"
+          role="status"
           type="button"
           onClick={() => setNotice('')}
         >
@@ -4924,6 +4923,7 @@ function App() {
                 <span className="eyebrow">Deliberately selected by people</span>
                 <h1>Selected Sources</h1>
               </div>
+              {renderTimeFilter()}
             </div>
             <div className="sonata-source-note">Sources deliberately selected by team members. Automated reference items are separate. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Install from Chrome Web Store ↗</a> · Request access: <a href="mailto:lizy76@lenovo.com">lizy76@lenovo.com</a></div>
             <div className="signals-grid">
@@ -5007,7 +5007,7 @@ function App() {
           >
             {workspacePage === 'synthesis' &&
               ((!researchWorkspace || evidenceInboxOpen) ? (
-                researchWorkspace ? renderEvidenceColumn() : <div className="trend-sources-column"><label>Link sources to trend<select value={evidenceTrendFilterId} onChange={event => setEvidenceTrendFilterId(event.target.value)}><option value="">Choose a trend or drag a source</option>{trends.filter(trend => !trend.deletedAt && trend.status !== 'archived').map(trend => <option key={trend.id} value={trend.id}>{trend.title}</option>)}</select></label><SharedSources key={evidenceTrendFilterId || 'all'} initialLinked={Boolean(evidenceTrendFilterId)} news={news} canLink={canEdit} targetTitle={trends.find(trend => trend.id === evidenceTrendFilterId)?.title} linkedIds={trends.find(trend => trend.id === evidenceTrendFilterId)?.evidence.map(link => link.newsId)} onLink={id => { if(evidenceTrendFilterId) void linkNewsToTrend(evidenceTrendFilterId,id); else setNotice('Choose a trend first, or drag the source onto a trend.') }}/></div>
+                researchWorkspace ? renderEvidenceColumn() : <div className="trend-sources-column"><label>Link sources to trend<select value={evidenceTrendFilterId} onChange={event => setEvidenceTrendFilterId(event.target.value)}><option value="">Choose a trend or drag a source</option>{trends.filter(trend => !trend.deletedAt && trend.status !== 'archived').map(trend => <option key={trend.id} value={trend.id}>{trend.title}</option>)}</select></label><SharedSources onDragChange={setDraggedNewsId} key={evidenceTrendFilterId || 'all'} initialLinked={Boolean(evidenceTrendFilterId)} news={news} canLink={canEdit} targetTitle={trends.find(trend => trend.id === evidenceTrendFilterId)?.title} linkedIds={trends.find(trend => trend.id === evidenceTrendFilterId)?.evidence.map(link => link.newsId)} onLink={id => { if(evidenceTrendFilterId) void linkNewsToTrend(evidenceTrendFilterId,id); else setNotice('Choose a trend first, or drag the source onto a trend.') }}/></div>
               ) : (
                 <button
                   className="evidence-collapsed-rail"
@@ -5100,12 +5100,15 @@ function App() {
                 </div>
                 <div
                   className={`column-drop-zone ${draggedNewsId || draggedTopicId ? 'active' : ''}`}
+                  onDragEnter={event => { if(canEdit){ event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect=draggedTopicId?'move':'copy' } }}
                   onDragOver={(event) => {
-                    if (!draggedNewsId && !draggedTopicId) return
+                    if (!canEdit || (!draggedNewsId && !draggedTopicId && !Array.from(event.dataTransfer.types || []).some(type => ['application/x-news-id','application/x-topic-id'].includes(type)))) return
                     event.preventDefault()
                     event.dataTransfer.dropEffect = draggedTopicId ? 'move' : 'copy'
                   }}
                   onDrop={(event) => {
+                    if (!canEdit) return
+                    event.stopPropagation()
                     const topicId =
                       event.dataTransfer.getData('application/x-topic-id') || draggedTopicId
                     if (topicId) {
