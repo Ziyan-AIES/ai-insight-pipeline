@@ -22,11 +22,11 @@ describe('dashboard pilot shell', () => {
     vi.restoreAllMocks()
     window.sessionStorage.clear()
     window.localStorage.clear()
-    window.history.replaceState(null, '', '/')
+    window.history.replaceState(null, '', '/?edit=1')
     document.documentElement.removeAttribute('data-ai-signals-batch-open')
   })
 
-  it('defaults a first-time user to the three-column Synthesis workspace', () => {
+  it('retains the legacy full editor workbench behind the explicit edit route', () => {
     render(<App />)
     expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
@@ -163,7 +163,7 @@ describe('dashboard pilot shell', () => {
     const trend = screen
       .getByRole('button', { name: 'Wearables are becoming ambient control layers' })
       .closest('article')
-    fireEvent.click(within(trend as HTMLElement).getByRole('button', { name: 'Show evidence' }))
+    fireEvent.click(within(trend as HTMLElement).getByRole('button', { name: 'View linked sources' }))
     const scoped = screen.getByRole('region', { name: 'Evidence' })
     expect(
       within(scoped).getByRole('link', {
@@ -219,7 +219,7 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('drags an Action Thread back into an editable Trend and removes thread-only fields', async () => {
+  it('returns research to a trend without deleting the preserved research record', async () => {
     render(<App />)
     const thread = screen
       .getByRole('heading', { name: 'Harness engineering' })
@@ -244,27 +244,19 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
     fireEvent.click(within(editor).getByRole('button', { name: 'Save changes' }))
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Harness engineering' })).toBeNull(),
+      expect(screen.getByRole('heading', { name: 'Harness engineering' })).toBeInTheDocument(),
     )
     expect(
       screen.getByRole('button', { name: 'Harness engineering' }),
     ).toBeInTheDocument()
   })
 
-  it('adds a no-evidence Trend to the Trend meeting explicitly', async () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: '+ New Trend' }))
-    const createEditor = screen.getByRole('dialog', { name: 'Create Trend' })
-    fireEvent.change(within(createEditor).getByPlaceholderText(/Name the emerging change/), {
-      target: { value: 'New interaction pattern' },
-    })
-    fireEvent.click(within(createEditor).getByRole('button', { name: 'Create Trend' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'New interaction pattern' }))
-    const editEditor = screen.getByRole('dialog', { name: 'Edit Trend' })
-    fireEvent.click(within(editEditor).getByRole('button', { name: 'Add to meeting' }))
-    expect(await within(editEditor).findByText('Included in Trend meeting')).toBeInTheDocument()
-    expect(within(editEditor).getByRole('button', { name: 'Remove from meeting' })).toBeInTheDocument()
-  })
+  it('offers explicit research promotion and no meeting controls in the trend editor', () => {
+ render(<App />);fireEvent.click(screen.getByRole('button',{name:'Wearables are becoming ambient control layers'}));
+ const editor=screen.getByRole('dialog',{name:'Edit Trend'});
+ expect(within(editor).queryByRole('button',{name:/meeting/i})).toBeNull();
+ expect(within(editor).getByRole('button',{name:'Promote to Research'})).toBeInTheDocument();
+})
 
   it('drags a linked Thread signal into an existing Trend', async () => {
     render(<App />)
@@ -360,17 +352,11 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByRole('button', { name: 'Restore Trend layout' })).toBeNull()
   })
 
-  it('restores and clears a temporary Trend layout when leaving Synthesis', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Maximize Trends' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Signal Reference' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Trends' }))
-
-    expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Maximize Trends' })).toBeInTheDocument()
-  })
+  it('opens the standard source-to-trend layout when returning from another page', () => {
+ render(<App />);openLiveSignals();openBriefing();
+ expect(screen.getByLabelText('Selected Sources panel')).toBeInTheDocument();
+ expect(screen.getByRole('region',{name:'Trends'})).toBeInTheDocument();
+})
 
   it('does not create a restore snapshot when both side columns are already closed', () => {
     render(<App />)
@@ -474,7 +460,7 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByRole('button', { name: '+ New Action Thread' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Harness engineering' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
-    expect(screen.getAllByRole('button', { name: 'Show evidence' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'View linked sources' }).length).toBeGreaterThan(0)
     expect(screen.getByText('Drop here to create a Trend')).toBeInTheDocument()
     expect(screen.getByText('Drop here to create an Action Thread')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
@@ -720,36 +706,17 @@ describe('dashboard pilot shell', () => {
     })
   })
 
-  it('keeps Trend meeting tied to the Trend review state', async () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /Start trend meeting/ }))
-    const meeting = screen.getByRole('dialog', { name: 'Trend review' })
-    expect(within(meeting).queryByText(/Already in/)).toBeNull()
-    expect(within(meeting).getByRole('button', { name: 'Create Action Thread' })).toBeInTheDocument()
-    expect(within(meeting).getByRole('link', {
-      name: /Granola brings ambient meeting memory/,
-    })).toHaveAttribute('href', 'https://example.com/granola-watch')
-    fireEvent.click(within(meeting).getByRole('button', { name: 'Keep watching' }))
-    await waitFor(() =>
-      expect(screen.getByText('Trend discussion complete')).toBeInTheDocument(),
-    )
-  })
+  it('retires meeting entry points while preserving trend editing', () => {
+ render(<App />);expect(screen.queryByRole('button',{name:/Start trend meeting/})).toBeNull();
+ expect(screen.getByRole('button',{name:'+ New Trend'})).toBeInTheDocument();
+})
 
-  it('keeps every signal visible in the expandable Evidence column', () => {
-    render(<App />)
-    openLiveSignals()
-    const live = screen.getByRole('region', { name: 'Selected Sources' })
-    expect(within(live).queryByRole('group', { name: 'Discussion state' })).toBeNull()
-    expect(within(live).queryByText('Awaiting review')).toBeNull()
-    expect(within(live).queryByText('Reviewed')).toBeNull()
-
-    openBriefing()
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
-    const evidence = screen.getByRole('region', { name: 'Evidence' })
-    expect(within(evidence).getByText('Earnings calls treat AI attach rate as a core KPI')).toBeInTheDocument()
-    expect(within(evidence).getAllByText(/Trend ·/).length).toBeGreaterThan(0)
-    expect(within(evidence).getAllByText(/Thread ·/).length).toBeGreaterThan(0)
-  })
+  it('keeps all selected sources available in the default trend sidebar', () => {
+ render(<App />);openLiveSignals();openBriefing();
+ const sources=screen.getByLabelText('Selected Sources panel');
+ expect(within(sources).getByRole('heading',{name:'Earnings calls treat AI attach rate as a core KPI'})).toBeInTheDocument();
+ expect(within(sources).getByRole('heading',{name:'DataFlow-Harness turns agent reliability into an engineering discipline'})).toBeInTheDocument();
+})
 
   it('drags Evidence directly into an existing Action Thread without removing it', async () => {
     render(<App />)

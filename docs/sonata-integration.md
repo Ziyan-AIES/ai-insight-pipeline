@@ -2,6 +2,8 @@
 
 19 October 2026
 
+This document records the foundation. See `sonata-analysis-release.md` for the current implementation and limitations.
+
 ## Product model
 
 Sonata extends the existing AI Insight Pipeline rather than replacing its data store. Its member-facing flow is Signal Reference → Selected Sources → Trends → Research. Workspace remains a separate entry for the editing process.

@@ -96,6 +96,21 @@ export interface TopicAnalysis {
   watch: string
 }
 
+export interface AnalysisBlock {
+  id: string
+  type: 'paragraph' | 'heading' | 'bullets' | 'image' | 'slide'
+  text: string
+  imageUrl?: string
+  caption?: string
+}
+
+export interface NativeAnalysis {
+  format: 'article' | 'slides'
+  blocks: AnalysisBlock[]
+  author: string
+  revision: number
+}
+
 export interface TopicOutput {
   id: string
   kind: string
@@ -103,6 +118,7 @@ export interface TopicOutput {
   dateLabel: string
   link: string
   description: string
+  content?: NativeAnalysis
 }
 
 export interface NewsItem {

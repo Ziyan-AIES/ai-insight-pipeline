@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import './styles/sonata.css'
 import { ResearchLibrary } from './components/ResearchLibrary'
+import { SharedSources } from './components/SharedSources'
 import { CategoryLabel } from './components/CategoryLabel'
 import { IndustryRadar } from './components/IndustryRadar'
 import { demoNews, demoTheses, demoTopics, demoTrends } from './demoData'
@@ -25,6 +26,7 @@ import {
   persistNewsLink,
   persistTeamIdea,
   persistTopicNews,
+  parseTopicOutputs,
   persistTrendOrder,
   persistTrendNews,
   persistTrendTopic,
@@ -39,7 +41,6 @@ import {
   topicMonthLabel,
   unlinkTopicNews,
   unlinkTrendNews,
-  unlinkTrendTopic,
   updateNewsItem,
   updateNewsCategory,
   updateTeamMemberRole,
@@ -85,6 +86,7 @@ import type {
   Trend,
   WorkspaceSearchResult,
   WorkspacePage,
+  TopicOutput,
 } from './types'
 
 type TopicKindFilter = 'all' | TopicKind
@@ -101,6 +103,7 @@ type AddLinkDraft = {
 const addLinkDraftKey = 'signal-intelligence:add-link-draft'
 const liveSignalsViewStoragePrefix =
   'signal-intelligence:last-viewed:live-signals'
+const legacyMeetingsEnabled = false
 const workspacePageStoragePrefix = 'signal-intelligence:workspace-page'
 
 function explicitWorkspaceFromLocation(): WorkspacePage | null {
@@ -448,9 +451,11 @@ function App() {
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     workspaceFromLocation,
   )
-  const [researchWorkspace, setResearchWorkspace] = useState(() => workspaceFromLocation() === 'threads' && new URLSearchParams(window.location.search).get('reader') !== '1')
+  const [researchWorkspace, setResearchWorkspace] = useState(() => new URLSearchParams(window.location.search).get('edit') === '1' || (workspaceFromLocation() === 'threads' && new URLSearchParams(window.location.search).get('reader') !== '1'))
   useEffect(() => {
     const url = new URL(window.location.href)
+    if (researchWorkspace) url.searchParams.set('edit','1')
+    else url.searchParams.delete('edit')
     if (workspacePage === 'threads' && !researchWorkspace) url.searchParams.set('reader', '1')
     else url.searchParams.delete('reader')
     window.history.replaceState(null, '', url)
@@ -837,7 +842,7 @@ function App() {
             record,
             existing?.analysis || { ...emptyTopicAnalysis },
           ),
-          outputs: existing?.outputs || [],
+          outputs: Array.isArray(record.outputs) ? parseTopicOutputs(record.outputs) : existing?.outputs || [],
           ownerId: realtimeOptionalText(record, 'owner_id', existing?.ownerId),
           ownerName:
             teamMembersRef.current.find(
@@ -2510,27 +2515,9 @@ function App() {
   }
 
   async function completeTopicDowngrade(sourceTopic: Topic) {
-    if (cloudConfigured) {
-      for (const source of sourceTopic.sourceTrends) {
-        await unlinkTrendTopic(source.trendId, sourceTopic.id)
-      }
-      await deleteTopicItem(sourceTopic.id)
-    }
-    setTopics((current) => current.filter((topic) => topic.id !== sourceTopic.id))
-    setTrends((current) =>
-      current.map((trend) => ({
-        ...trend,
-        actionThreadIds: trend.actionThreadIds.filter(
-          (topicId) => topicId !== sourceTopic.id,
-        ),
-      })),
-    )
-    setNews((current) =>
-      current.map((item) => ({
-        ...item,
-        topicLinks: item.topicLinks.filter((link) => link.topicId !== sourceTopic.id),
-      })),
-    )
+    let version = sourceTopic.version
+    if (cloudConfigured) version = await updateTopicItem(sourceTopic.id, { status: 'idea', thread_status: 'parked' }, sourceTopic.version)
+    setTopics(current => current.map(topic => topic.id === sourceTopic.id ? { ...topic, status: 'idea', threadStatus: 'parked', version: version ?? topic.version } : topic))
   }
 
   async function saveTrendDraft() {
@@ -3109,6 +3096,8 @@ function App() {
       current
         ? {
             ...current,
+            status: 'researching',
+            threadStatus: 'in_progress',
             supportingNews: trend.evidence.map((evidence) => evidence.newsId),
             decisionSummary: [
               trend.observation ? `• What's changed: ${trend.observation}` : '',
@@ -3978,7 +3967,7 @@ function App() {
               ) : (
                 <>
                   {!toDiscuss || item.meetingNominatedAt ? (
-                    <button
+                    legacyMeetingsEnabled && (<button
                       className="text-action"
                       type="button"
                       onClick={() => void toggleMeetingNomination(item)}
@@ -3986,7 +3975,7 @@ function App() {
                       {item.meetingNominatedAt
                         ? 'Remove manual nomination'
                         : 'Add to meeting'}
-                    </button>
+                    </button>)
                   ) : null}
                   {toDiscuss ? (
                     <>
@@ -4057,6 +4046,27 @@ function App() {
           : 'Could not update the team Trend order.',
       )
     }
+  }
+
+  async function publishAnalysis(topic: Topic, item: TopicOutput) {
+    if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
+    const outputs = topic.outputs.some(output => output.id === item.id) ? topic.outputs.map(output => output.id === item.id ? item : output) : [...topic.outputs,item]
+    const version = cloudConfigured ? await updateTopicItem(topic.id,{outputs},topic.version) : topic.version
+    setTopics(current => current.map(candidate => candidate.id === topic.id ? {...candidate,outputs,version:version ?? candidate.version} : candidate))
+  }
+  async function reorderResearch(fromId: string,toId: string) {
+    if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
+    const ordered=topics.filter(topic => !topic.deletedAt).slice().sort((a,b)=>a.displayOrder-b.displayOrder)
+    const from=ordered.findIndex(topic=>topic.id===fromId)
+    if(from<0 || !ordered.some(topic=>topic.id===toId)) return
+    const [moved]=ordered.splice(from,1);ordered.splice(ordered.findIndex(topic=>topic.id===toId),0,moved)
+    const changed=ordered.map((topic,index)=>({...topic,displayOrder:index+1})).filter(topic=>topic.displayOrder!==topics.find(old=>old.id===topic.id)?.displayOrder)
+    try {
+      for(const topic of changed) {
+        const version=cloudConfigured ? await updateTopicItem(topic.id,{display_order:topic.displayOrder},topic.version) : topic.version
+        setTopics(current=>current.map(old=>old.id===topic.id?{...old,displayOrder:topic.displayOrder,version:version??old.version}:old))
+      }
+    } catch(error) { setNotice('Order could not be fully saved. Reload to reconcile.');throw error }
   }
 
   function renderTrendCard(trend: Trend) {
@@ -4243,57 +4253,10 @@ function App() {
           ) : null}
         </div>
         <footer className="trend-card-actions">
-          <button
-            className="text-action"
-            type="button"
-            onClick={() => {
-              setCreatingTrend(false)
-              setTrendDraft({ ...trend })
-            }}
-          >
-            Edit
-          </button>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => {
-              expandEvidenceInbox()
-              setEvidenceScope('all')
-              if (trend.evidence.length > 0) {
-                setEvidenceCategory('all')
-                setEvidenceTrendFilterId(trend.id)
-              } else {
-                setEvidenceTrendFilterId('')
-                setEvidenceCategory(trend.category)
-              }
-            }}
-            hidden={!canEdit}
-          >
-            Show evidence
-          </button>
-          {trend.status === 'archived' ? (
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => void setTrendArchived(trend.id, false)}
-            >
-              Unarchive
-            </button>
-          ) : needsReview || stale ? (
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => {
-                const index = trendMeetingQueue.findIndex(
-                  (candidate) => candidate.id === trend.id,
-                )
-                setTrendMeetingIndex(Math.max(0, index))
-                setTrendMeetingMode(true)
-              }}
-            >
-              {stale ? 'Health check' : 'Review'}
-            </button>
-          ) : null}
+          <button type="button" onClick={() => { setCreatingTrend(false); setTrendDraft({ ...trend }) }} hidden={!canEdit}>Edit</button>
+          <button type="button" onClick={() => { expandEvidenceInbox(); setEvidenceScope('all'); setEvidenceCategory('all'); setEvidenceTrendFilterId(trend.id) }}>View linked sources</button>
+          {canResearchWorkspace && <button type="button" onClick={() => { setTrendDraft(null); openCreateThreadFromTrend(trend) }}>Promote to Research</button>}
+          {trend.status === 'archived' && <button type="button" onClick={() => void setTrendArchived(trend.id,false)}>Unarchive</button>}
         </footer>
       </article>
     )
@@ -4962,7 +4925,7 @@ function App() {
                 <h1>Selected Sources</h1>
               </div>
             </div>
-            <div className="sonata-source-note">Sources deliberately selected by team members. Automated reference items are separate. <a href="/extension">Browser extension &amp; installation ↗</a> · Request access: <a href="mailto:lizy76@lenovo.com">lizy76@lenovo.com</a></div>
+            <div className="sonata-source-note">Sources deliberately selected by team members. Automated reference items are separate. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Install from Chrome Web Store ↗</a> · Request access: <a href="mailto:lizy76@lenovo.com">lizy76@lenovo.com</a></div>
             <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -5027,7 +4990,7 @@ function App() {
           </section>
         )}
 
-        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
+        {workspacePage === 'threads' && !researchWorkspace && <ResearchLibrary topics={topics} news={news} canEdit={canResearchWorkspace} canLink={canEdit} viewerId={identity?.userId || 'demo'} onLink={(topic,id) => void linkNewsToTopic(id,topic.id)} onUnlink={(topic,id) => void unlinkSignal(topic.id,id)} onCapture={topic => { setTargetTopicId(topic.id); setShowAddLink(true) }} onPublish={publishAnalysis} onReorder={reorderResearch} onEdit={topic => { setResearchWorkspace(true); setCreatingTopic(false); setTopicDraft({ ...topic }) }} />}
         {(workspacePage === 'synthesis' || (workspacePage === 'threads' && researchWorkspace)) && (
           <div
             className={`synthesis-workbench ${
@@ -5043,8 +5006,8 @@ function App() {
             }`}
           >
             {workspacePage === 'synthesis' &&
-              (evidenceInboxOpen ? (
-                renderEvidenceColumn()
+              ((!researchWorkspace || evidenceInboxOpen) ? (
+                researchWorkspace ? renderEvidenceColumn() : <div className="trend-sources-column"><label>Link sources to trend<select value={evidenceTrendFilterId} onChange={event => setEvidenceTrendFilterId(event.target.value)}><option value="">Choose a trend or drag a source</option>{trends.filter(trend => !trend.deletedAt && trend.status !== 'archived').map(trend => <option key={trend.id} value={trend.id}>{trend.title}</option>)}</select></label><SharedSources key={evidenceTrendFilterId || 'all'} initialLinked={Boolean(evidenceTrendFilterId)} news={news} canLink={canEdit} targetTitle={trends.find(trend => trend.id === evidenceTrendFilterId)?.title} linkedIds={trends.find(trend => trend.id === evidenceTrendFilterId)?.evidence.map(link => link.newsId)} onLink={id => { if(evidenceTrendFilterId) void linkNewsToTrend(evidenceTrendFilterId,id); else setNotice('Choose a trend first, or drag the source onto a trend.') }}/></div>
               ) : (
                 <button
                   className="evidence-collapsed-rail"
@@ -5080,6 +5043,7 @@ function App() {
                   <h1>Trends</h1>
                   <div className="heading-actions">
                     <button
+                      hidden={!researchWorkspace}
                       className="secondary-button trend-maximize-button"
                       type="button"
                       aria-label={
@@ -5100,7 +5064,7 @@ function App() {
                     >
                       + New Trend
                     </button>
-                    <button
+                    {legacyMeetingsEnabled && (<button
                       className="primary-button meeting-start"
                       type="button"
                       onClick={() => {
@@ -5110,7 +5074,7 @@ function App() {
                       }}
                     >
                       Start trend meeting · {trendMeetingQueue.length}
-                    </button>
+                    </button>)}
                   </div>
                 </div>
                 <div className="column-filter" role="group" aria-label="Trend category">
@@ -5965,16 +5929,16 @@ function App() {
                   </label>
                 </div>
                 <p className="workflow-note">
-                  A Trend stays in Watching until it is upgraded to an Action Thread or dismissed.
+                  A Trend is an evolving perspective. Promote it explicitly when you commit to research.
                 </p>
-                {!creatingTrend && trendDraft.status !== 'archived' ? (
+                {legacyMeetingsEnabled && !creatingTrend && trendDraft.status !== 'archived' ? (
                   <div className="trend-editor-lifecycle">
                     <span>
                       {isTrendToDiscuss(trendDraft)
                         ? 'Included in Trend meeting'
                         : 'Not in Trend meeting'}
                     </span>
-                    <button
+                    {legacyMeetingsEnabled && (<button
                       className="secondary-button"
                       type="button"
                       onClick={() =>
@@ -5987,7 +5951,7 @@ function App() {
                       {isTrendToDiscuss(trendDraft)
                         ? 'Remove from meeting'
                         : 'Add to meeting'}
-                    </button>
+                    </button>)}
                   </div>
                 ) : null}
                 <label>
@@ -6119,13 +6083,18 @@ function App() {
                 >
                   {creatingTrend ? 'Create Trend' : 'Save changes'}
                 </button>
+                {!creatingTrend && canResearchWorkspace && <button type="button" onClick={() => {
+                  const saved = trends.find(trend => trend.id === trendDraft.id)
+                  if (!saved || ['title','category','observation','initialRead','discussionQuestion'].some(key => saved[key as keyof Trend] !== trendDraft[key as keyof Trend])) { setNotice('Save your trend changes before promoting it.'); return }
+                  setTrendDraft(null); openCreateThreadFromTrend(saved)
+                }}>Promote to Research</button>}
               </div>
             </div>
           </section>
         </div>
       )}
 
-      {trendMeetingMode && (
+      {legacyMeetingsEnabled && trendMeetingMode && (
         <div className="modal-backdrop meeting-backdrop" role="presentation">
           <section
             className="meeting-modal trend-meeting-modal"
@@ -6295,7 +6264,7 @@ function App() {
         </div>
       )}
 
-      {meetingMode && (
+      {legacyMeetingsEnabled && meetingMode && (
         <div className="modal-backdrop meeting-backdrop" role="presentation">
           <section
             className="meeting-modal"

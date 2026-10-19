@@ -1,49 +1,49 @@
 import { useState } from 'react'
-import type { NewsItem, Topic } from '../types'
+import { categoryLabels } from '../labels'
+import { safeUrl } from '../analysis'
+import { AnalysisBody, AnalysisEditor } from './AnalysisContent'
+import { SharedSources } from './SharedSources'
+import type { NewsItem, Topic, TopicOutput } from '../types'
 
 export function researchTopics(topics: Topic[]) {
-  return topics.filter(topic => !topic.deletedAt && (
-    topic.status !== 'idea' || topic.outputs.length > 0 || Boolean(topic.outcomeUrl)
-  ))
+  return topics.filter(topic => !topic.deletedAt && (topic.status !== 'idea' || topic.outputs.length > 0 || Boolean(topic.outcomeUrl)))
 }
+type Props = { topics: Topic[]; news: NewsItem[]; canEdit: boolean; canLink?: boolean; viewerId?: string; onEdit: (topic: Topic) => void;
+  onLink?: (topic: Topic, sourceId: string) => void; onUnlink?: (topic: Topic, sourceId: string) => void; onCapture?: (topic: Topic) => void;
+  onPublish?: (topic: Topic, item: TopicOutput) => Promise<void>; onReorder?: (id: string, beforeId: string) => Promise<void> }
 
-function safeLink(value: string) {
-  try { const url = new URL(value); return /^https?:$/.test(url.protocol) ? url.href : null }
-  catch { return null }
-}
-
-export function ResearchLibrary({ topics, news, canEdit, onEdit }: {
-  topics: Topic[]; news: NewsItem[]; canEdit: boolean; onEdit: (topic: Topic) => void
-}) {
-  const [selectedId, select] = useState<string | null>(null)
-  const available = researchTopics(topics)
-  const topic = available.find(item => item.id === selectedId)
-  if (topic) {
-    const sources = news.filter(item => !item.deletedAt && topic.supportingNews.includes(item.id))
-    return <section className="sonata-research">
-      <button className="text-action" onClick={() => select(null)}>← All research</button>
-      <header className="sonata-research-heading"><span className="eyebrow">Research / {topic.kind}</span>
-        <h1>{topic.title}</h1><p>{topic.analysis.keyQuestion || 'Research question not yet added.'}</p>
-        <span className="sonata-status">{topic.status} · {topic.ownerName || 'Team research'}</span>
-        {canEdit && <button className="secondary-button" onClick={() => onEdit(topic)}>Open research workspace ↗</button>}
-      </header>
-      <div className="sonata-research-spread"><article className="sonata-reading">
-        {Object.entries({ 'Observed evidence': topic.analysis.observed, 'Current perspective': topic.analysis.currentView, 'Implications': topic.analysis.implications, 'Questions to watch': topic.analysis.watch }).filter(([, text]) => text).map(([label, text]) => <section key={label}><h2>{label}</h2><p>{text}</p></section>)}
-        {!Object.values(topic.analysis).some(Boolean) && <p>The research narrative has not been added yet. Existing source links and outputs remain available.</p>}
-        <h2>Research outputs</h2>
-        {topic.outputs.length === 0 && !topic.outcomeUrl && <p>No output has been linked yet.</p>}
-        {topic.outputs.map(output => <article className="sonata-output" key={output.id}><h3>{output.title}</h3><p>{output.description}</p><span>{output.kind} · {output.dateLabel}</span>{safeLink(output.link) && <a href={safeLink(output.link)!} target="_blank" rel="noreferrer">Open output ↗</a>}</article>)}
-        {safeLink(topic.outcomeUrl) && <a href={safeLink(topic.outcomeUrl)!} target="_blank" rel="noreferrer">Open linked deliverable ↗</a>}
-      </article><aside className="sonata-evidence"><h2>Research trail</h2><h3>Related trends</h3>
-        {topic.sourceTrends.map(trend => <p key={trend.trendId}>{trend.trendTitle}</p>)}
-        {!topic.sourceTrends.length && <p>No trend linked yet.</p>}
-        <h3>Selected sources</h3>{sources.map(source => <article key={source.id}><h3>{source.title}</h3><p>{source.summary || source.takeaway}</p><small>Selected by {source.capturedBy || 'a team member'}</small>{safeLink(source.url) && <a href={safeLink(source.url)!} target="_blank" rel="noreferrer">Original source ↗</a>}</article>)}
-        {!sources.length && <p>No sources linked yet.</p>}
-      </aside></div>
-    </section>
-  }
-  return <section className="sonata-research"><header className="sonata-research-heading"><span className="eyebrow">Questions into understanding</span><h1>Research.</h1><p>Committed research, connected evidence, and the outputs that bring it together.</p></header>
-    <div className="sonata-topic-grid">{available.map(item => <button className="sonata-topic" key={item.id} onClick={() => select(item.id)}><span>{item.kind} · {item.status}</span><h2>{item.title}</h2><p>{item.analysis.keyQuestion || item.analysis.currentView || 'Research framing is being developed.'}</p><small>{item.supportingNews.length} linked sources · {item.outputs.length} outputs</small><strong>Explore research ↗</strong></button>)}</div>
-    {!available.length && <div className="sonata-reading"><h2>Research takes shape here</h2><p>Committed topics and existing deliverables will appear here. Uncommitted ideas remain in the workspace; no historical records have been removed.</p></div>}
-  </section>
+export function ResearchLibrary({ topics, news, canEdit, canLink = false, viewerId = 'demo', onEdit, onLink, onUnlink, onCapture, onPublish, onReorder }: Props) {
+  const params = new URLSearchParams(window.location.search)
+  const [selectedId, select] = useState<string | null>(params.get('research'))
+  const [outputId, setOutputId] = useState(params.get('analysis'))
+  const [section, setSection] = useState('analysis'), [sourcesOpen, openSources] = useState(false)
+  const [category, setCategory] = useState('all'), [sort, setSort] = useState('recent'), [view, setView] = useState('cards')
+  const [editing, edit] = useState<TopicOutput | 'new' | null>(null), [message, setMessage] = useState(''), [dragged, setDragged] = useState('')
+  const [busy, setBusy] = useState(false)
+  const all = researchTopics(topics), topic = all.find(item => item.id === selectedId)
+  const available = all.filter(item => category === 'all' || item.category === category).sort((a,b) => sort === 'editorial' ? a.displayOrder-b.displayOrder : sort === 'oldest' ? a.monthKey.localeCompare(b.monthKey) : b.monthKey.localeCompare(a.monthKey))
+  function navigate(id: string | null) { select(id); setOutputId(null); const url = new URL(window.location.href); if (id) url.searchParams.set('research', id); else url.searchParams.delete('research'); url.searchParams.delete('analysis'); window.history.replaceState(null,'',url) }
+  async function share(item: TopicOutput) { try { const url = new URL(window.location.href); url.searchParams.set('workspace','threads'); url.searchParams.set('reader','1'); url.searchParams.delete('edit'); url.searchParams.set('research',topic!.id); url.searchParams.set('analysis',item.id); await navigator.clipboard.writeText(url.href); setMessage('Member-only analysis link copied.') } catch { setMessage('Could not copy the link. Copy this page URL instead.') } }
+  async function pdf(item: TopicOutput) { setBusy(true); setMessage(''); try { const { downloadAnalysisPdf } = await import('../analysis-pdf'); await downloadAnalysisPdf(item,topic!.title) } catch (error) { setMessage(error instanceof Error ? error.message : 'PDF export failed.') } finally { setBusy(false) } }
+  async function reorder(from: string, to: string) { try { await onReorder?.(from,to); setMessage('Editorial order saved.') } catch { setMessage('Order was not saved. Reload before trying again.') } }
+  const linked = topic ? news.filter(item => !item.deletedAt && topic.supportingNews.includes(item.id)) : []
+  const sidebar = sourcesOpen && <SharedSources news={news} canLink={canLink} targetTitle={topic?.title} linkedIds={topic?.supportingNews} onLink={topic && onLink ? id => onLink(topic,id) : undefined} onClose={() => openSources(false)}/>
+  return <div className={'research-browser '+(sourcesOpen?'sources-open':'')}>{sidebar}<section className="sonata-research">
+    {topic ? <><button className="text-action" onClick={() => navigate(null)}>← All research</button><header className="sonata-research-heading"><span className="eyebrow">Research topic</span><h1>{topic.title}</h1><p>{topic.analysis.keyQuestion || 'Research framing is being developed.'}</p><span className="sonata-status">{topic.monthKey || 'Period not set'} · {topic.ownerName || 'Author not set'} · {categoryLabels[topic.category]}</span>
+      <div className="analysis-controls"><button onClick={() => openSources(!sourcesOpen)} aria-expanded={sourcesOpen}>Sources panel</button>{canLink && onCapture && <button onClick={() => onCapture(topic)}>+ New source</button>}{canEdit && <button className="secondary-button" onClick={() => onEdit(topic)}>Open research workspace ↗</button>}</div>
+    </header><nav className="research-sections" aria-label="Research sections">{['products','sources','analysis'].map(tab => <button key={tab} aria-pressed={section===tab} onClick={() => setSection(tab)}>{tab[0].toUpperCase()+tab.slice(1)}</button>)}</nav>
+    {section==='products' && <div className="sonata-reading"><h2>Products</h2><p>No products have been added to this research topic yet.</p></div>}
+    {section==='sources' && <div className="sonata-reading"><h2>Sources</h2><p>{linked.length} sources linked to this research. Use the Sources panel to add existing material.</p>{linked.map(source => <article className="sonata-output" key={source.id}><h3>{source.title}</h3><p>{source.summary || source.takeaway}</p><small>Selected by {source.capturedBy || 'a team member'}</small>{safeUrl(source.url) && <a href={safeUrl(source.url)!} target="_blank" rel="noreferrer">Original source ↗</a>}{canLink && onUnlink && <button onClick={() => onUnlink(topic,source.id)}>Unlink from this research</button>}</article>)}</div>}
+    {section==='analysis' && <div className="sonata-reading"><div className="analysis-controls"><h2>Analysis</h2>{canEdit && onPublish && <button onClick={() => edit('new')}>+ New analysis</button>}</div>
+      {topic.outputs.length===0 && !topic.outcomeUrl && <p>No analysis has been published yet.</p>}
+      {topic.outputs.filter(item => !outputId || item.id===outputId).map(item => <article className="sonata-output" key={item.id}><span>{item.content?.format || item.kind} · {item.dateLabel || 'Date not set'}{item.content?.author ? ' · '+item.content.author : ''}</span><h3>{item.title}</h3><p>{item.description}</p><AnalysisBody item={item}/><footer className="analysis-controls"><button onClick={() => void share(item)}>Share</button>{item.content && <button disabled={busy} onClick={() => void pdf(item)}>Download PDF</button>}{canEdit && onPublish && <button onClick={() => edit(item)}>Edit analysis</button>}</footer></article>)}
+      {outputId && <button onClick={() => setOutputId(null)}>Show all analyses</button>}{safeUrl(topic.outcomeUrl) && <a href={safeUrl(topic.outcomeUrl)!} target="_blank" rel="noreferrer">Open linked deliverable ↗</a>}
+    </div>}
+    </> : <><header className="sonata-research-heading"><span className="eyebrow">Questions into understanding</span><h1>Research.</h1><p>Research topics, selected evidence, and published analysis.</p><button onClick={() => openSources(!sourcesOpen)} aria-expanded={sourcesOpen}>Sources panel</button></header>
+    <div className="research-filters"><label>Category<select value={category} onChange={event => setCategory(event.target.value)}><option value="all">All categories</option>{Object.entries(categoryLabels).map(([id,label]) => <option key={id} value={id}>{label}</option>)}</select></label><label>Order<select value={sort} onChange={event => setSort(event.target.value)}><option value="recent">Research period · newest</option><option value="oldest">Research period · oldest</option><option value="editorial">Editorial order</option></select></label><div className="analysis-controls"><button aria-pressed={view==='cards'} onClick={() => setView('cards')}>Cards</button><button aria-pressed={view==='list'} onClick={() => setView('list')}>List</button></div></div>
+    <div className={'sonata-topic-grid '+(view==='list'?'is-list':'')}>{available.map((item,index) => <article className="sonata-topic" key={item.id} draggable={canEdit && sort==='editorial'} onDragStart={event => { if (event.target instanceof HTMLElement && event.target.closest('button,a')) { event.preventDefault(); return } setDragged(item.id); event.dataTransfer.setData('application/x-research-id',item.id) }} onDragOver={event => { if (canLink || (canEdit && sort==='editorial')) event.preventDefault() }} onDrop={event => { event.preventDefault(); const source=event.dataTransfer.getData('application/x-news-id'); if (source && canLink) onLink?.(item,source); else { const id=event.dataTransfer.getData('application/x-research-id') || dragged; if (id && id!==item.id && canEdit && sort==='editorial') void reorder(id,item.id) } setDragged('') }}>
+      <span>{categoryLabels[item.category]} · {item.status}</span><h2>{item.title}</h2><p>{item.analysis.keyQuestion || item.analysis.currentView || 'Research framing is being developed.'}</p><small>{item.monthKey || 'Period not set'} · {item.ownerName || 'Author not set'} · {item.supportingNews.length} linked sources · {item.outputs.length} outputs</small><button onClick={() => navigate(item.id)}>Explore research ↗</button>{canEdit && sort==='editorial' && onReorder && <div className="analysis-controls"><button disabled={index===0} onClick={() => void reorder(item.id,available[index-1].id)}>Move earlier</button><button disabled={index===available.length-1} onClick={() => void reorder(available[index+1].id,item.id)}>Move later</button></div>}
+    </article>)}</div>{!available.length && <div className="sonata-reading"><h2>No research in this view</h2><p>Uncommitted ideas remain in Trends and the workspace. Historical records have not been removed.</p></div>}</>}
+    {message && <p role="status">{message}</p>}{topic && editing && onPublish && <AnalysisEditor initial={editing==='new'?undefined:editing} draftKey={'sonata:analysis:'+viewerId+':'+topic.id+':'+(editing==='new'?'new':editing.id)} onClose={() => edit(null)} onPublish={item => onPublish(topic,item)}/>}
+  </section></div>
 }

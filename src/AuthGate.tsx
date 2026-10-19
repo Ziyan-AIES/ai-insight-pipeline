@@ -358,8 +358,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let cancelled = false
     setResearchAccess(false)
     if (identity && supabase && typeof supabase.rpc === 'function') {
-      void Promise.resolve(supabase.rpc('can_access_research_workspace')).then(({ data, error }) => {
-        if (!cancelled) setResearchAccess(!error && data === true)
+      void Promise.resolve(supabase.rpc('can_access_research_workspace')).then(async ({ data, error }) => {
+        let allowed = !error && data === true
+        // A missing migration may use the server-verified owner capability.
+        // An explicit database denial or any other failure stays denied.
+        if (error?.code === 'PGRST202') {
+          const { data: sessionData } = await supabase!.auth.getSession()
+          const token = sessionData.session?.access_token
+          if (token) {
+            const result = await fetch('/api/research-workspace-access', {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: 'no-store',
+            })
+            allowed = result.ok && (await result.json()).allowed === true
+          }
+        }
+        if (!cancelled) setResearchAccess(allowed)
       }).catch(() => { if (!cancelled) setResearchAccess(false) })
     }
     return () => { cancelled = true }

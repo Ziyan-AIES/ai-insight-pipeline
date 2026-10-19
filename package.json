@@ -25,6 +25,7 @@
     "@cursor/sdk": "^1.0.26",
     "@supabase/supabase-js": "^2.112.0",
     "ipaddr.js": "^2.5.0",
+    "jspdf": "^4.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "undici-pinned": "npm:undici@^6.28.0"

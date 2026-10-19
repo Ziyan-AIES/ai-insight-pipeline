@@ -6324,7 +6324,7 @@ label input:disabled {
 /* Trend-first intelligence briefing */
 .trend-briefing-pane {
   overflow-y: auto !important;
-  background: #f6f3ee !important;
+  background: var(--color-canvas);
   scrollbar-width: thin;
   scrollbar-color: #c5bfb4 transparent;
 }

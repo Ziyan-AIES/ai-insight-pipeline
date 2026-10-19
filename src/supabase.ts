@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { parseNativeAnalysis } from './analysis'
 import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
 import type {
   ActivityEvent,
@@ -172,7 +173,7 @@ function parseTopicAnalysis(value: unknown): TopicAnalysis {
   }
 }
 
-function parseTopicOutputs(value: unknown): TopicOutput[] {
+export function parseTopicOutputs(value: unknown): TopicOutput[] {
   if (!Array.isArray(value)) return []
   return value
     .filter(
@@ -186,6 +187,7 @@ function parseTopicOutputs(value: unknown): TopicOutput[] {
       dateLabel: String(item.dateLabel || item.date_label || ''),
       link: String(item.link || ''),
       description: String(item.description || ''),
+      content: parseNativeAnalysis(item.content),
     }))
 }
 
@@ -1204,6 +1206,7 @@ export async function updateTopicItem(
     decision_summary?: string
     next_step?: string
     outcome_url?: string
+    display_order?: number
   },
   expectedVersion?: number,
 ) {
