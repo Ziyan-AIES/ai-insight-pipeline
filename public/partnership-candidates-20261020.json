@@ -3,115 +3,6 @@
   "researchedAt": "2026-10-20",
   "items": [
     {
-      "id": "p01",
-      "publishedAt": "2024-06-10",
-      "title": "OpenAI and Apple announce ChatGPT integration",
-      "summaryZh": "宣布将 ChatGPT 接入 Siri 与系统写作工具。",
-      "url": "https://openai.com/index/openai-and-apple-announce-partnership/",
-      "companies": [
-        "OpenAI",
-        "Apple"
-      ],
-      "kind": "partnership",
-      "stage": "宣布",
-      "category": "ecosystem",
-      "summary": "OpenAI and Apple announced a partnership bringing ChatGPT capabilities to Siri and systemwide Writing Tools across Apple devices.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "OpenAI",
-          "Apple"
-        ]
-      ],
-      "source": "openai.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p02",
-      "publishedAt": "2024-12-11",
-      "title": "Apple ships ChatGPT support in Apple Intelligence",
-      "summaryZh": "合作进入正式上线阶段：Siri 和 Writing Tools 可调用 ChatGPT。",
-      "url": "https://www.apple.com/newsroom/2024/12/apple-intelligence-now-features-image-playground-genmoji-and-more/",
-      "companies": [
-        "OpenAI",
-        "Apple"
-      ],
-      "kind": "integration",
-      "stage": "上线",
-      "category": "ai_software",
-      "summary": "Apple launched ChatGPT integration in Siri and Writing Tools alongside its December Apple Intelligence update for supported devices.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "OpenAI",
-          "Apple"
-        ]
-      ],
-      "source": "www.apple.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p03",
-      "publishedAt": "2025-03-31",
-      "title": "Apple brings ChatGPT-powered writing to Vision Pro",
-      "summaryZh": "同一合作扩展到 Vision Pro；可与前两条择优保留。",
-      "url": "https://www.apple.com/newsroom/2025/03/apple-intelligence-features-expand-to-new-languages-and-regions-today/",
-      "companies": [
-        "OpenAI",
-        "Apple"
-      ],
-      "kind": "integration",
-      "stage": "扩展",
-      "category": "ai_software",
-      "summary": "Apple expanded Apple Intelligence to Vision Pro, including ChatGPT-powered composition in Writing Tools and additional creative features.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "OpenAI",
-          "Apple"
-        ]
-      ],
-      "source": "www.apple.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p04",
-      "publishedAt": "2026-02-04",
-      "title": "Granola MCP connects meeting notes to ChatGPT and Claude",
-      "summaryZh": "Granola 自有 MCP 连接器将会议上下文带入 ChatGPT、Claude 和 Cursor。",
-      "url": "https://www.granola.ai/blog/granola-mcp",
-      "companies": [
-        "Granola",
-        "OpenAI",
-        "Anthropic"
-      ],
-      "kind": "integration",
-      "stage": "上线",
-      "category": "ai_software",
-      "summary": "Granola launched an MCP connector letting ChatGPT and Claude retrieve meeting notes and use conversation context across workflows.",
-      "dateNote": "原始日期由 article:published_time 和 datePublished 一致确认；网页仅显示 February 4。",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Granola",
-          "OpenAI"
-        ],
-        [
-          "Granola",
-          "Anthropic"
-        ]
-      ],
-      "source": "www.granola.ai",
-      "datePrecision": "day",
-      "dateBasis": "original_metadata"
-    },
-    {
       "id": "p05",
       "publishedAt": "2026-07-29",
       "title": "Plaud connects recordings and notes to ChatGPT and Claude",
@@ -195,89 +86,6 @@
       "dateBasis": "publisher_displayed_date"
     },
     {
-      "id": "p08",
-      "publishedAt": "2025-10-21",
-      "title": "Samsung launches Perplexity on its TVs",
-      "summaryZh": "Perplexity TV App 正式上线，提供大屏问答入口。",
-      "url": "https://news.samsung.com/us/samsung-launches-first-ever-perplexity-ai-powered-tv-app-further-elevating-samsung-vision-ai-companion-experience/",
-      "companies": [
-        "Samsung",
-        "Perplexity"
-      ],
-      "kind": "integration",
-      "stage": "上线",
-      "category": "ai_software",
-      "summary": "Samsung launched the Perplexity TV App, adding conversational search to compatible televisions and its Vision AI Companion experience.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Samsung",
-          "Perplexity"
-        ]
-      ],
-      "source": "news.samsung.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p09",
-      "publishedAt": "2026-03-02",
-      "title": "Samsung showcases Gemini and Perplexity agents on Galaxy S26",
-      "summaryZh": "MWC 官方发布确认 Galaxy 的多智能体入口包含 Gemini 与 Perplexity。",
-      "url": "https://news.samsung.com/us/samsung-advances-galaxy-ai-connected-ecosystem-mwc-2026/",
-      "companies": [
-        "Samsung",
-        "Google",
-        "Perplexity"
-      ],
-      "kind": "integration",
-      "stage": "扩展",
-      "category": "interaction",
-      "summary": "Samsung demonstrated Galaxy S26 agent experiences with Gemini and Perplexity, supporting search and coordinated actions across apps.",
-      "dateNote": "这是 MWC 展示文章日期，不写成首次签约日。只连接 Samsung–Google 与 Samsung–Perplexity，不推断 Google–Perplexity 合作。",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Samsung",
-          "Google"
-        ],
-        [
-          "Samsung",
-          "Perplexity"
-        ]
-      ],
-      "source": "news.samsung.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p10",
-      "publishedAt": "2024-01-18",
-      "title": "Samsung and Google Cloud announce a multiyear AI partnership",
-      "summaryZh": "将 Google Cloud 的 Gemini 与 Imagen 能力带入 Galaxy S24。",
-      "url": "https://news.samsung.com/sg/samsung-and-google-cloud-join-forces-to-bring-generative-ai-to-samsung-galaxy-s24-series",
-      "companies": [
-        "Samsung",
-        "Google"
-      ],
-      "kind": "partnership",
-      "stage": "宣布",
-      "category": "ecosystem",
-      "summary": "Samsung and Google Cloud announced a multiyear partnership bringing Gemini and Imagen capabilities to the Galaxy S24 series.",
-      "dateNote": "采用此新加坡官方新闻页的 2024-01-18 日期；其他地区时区可能显示前一天。",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Samsung",
-          "Google"
-        ]
-      ],
-      "source": "news.samsung.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
       "id": "p11",
       "publishedAt": "2026-06-01",
       "title": "HP previews AI PCs powered by NVIDIA RTX Spark",
@@ -300,193 +108,6 @@
         ]
       ],
       "source": "www.hp.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p12",
-      "publishedAt": "2025-03-18",
-      "title": "Dell expands the Dell AI Factory with NVIDIA",
-      "summaryZh": "双方扩展从 AI 工作站到数据中心的联合解决方案。",
-      "url": "https://www.dell.com/en-us/dt/corporate/newsroom/announcements/detailpage.press-releases~usa~2025~03~corp.htm",
-      "companies": [
-        "Dell",
-        "NVIDIA"
-      ],
-      "kind": "hardware",
-      "stage": "扩展",
-      "category": "ai_hardware",
-      "summary": "Dell expanded its AI Factory collaboration with NVIDIA, adding workstations, infrastructure and services for enterprise AI deployment.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Dell",
-          "NVIDIA"
-        ]
-      ],
-      "source": "www.dell.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p13",
-      "publishedAt": "2024-07-09",
-      "title": "Perplexity and AWS collaborate on Enterprise Pro",
-      "summaryZh": "明确的联合销售、活动及市场合作；关系对象是 AWS 云业务。",
-      "url": "https://www.perplexity.ai/ca/hub/blog/perplexity-collaborates-with-amazon-web-services-to-launch-enterprise-pro",
-      "companies": [
-        "Perplexity",
-        "Amazon"
-      ],
-      "kind": "partnership",
-      "stage": "宣布",
-      "category": "ecosystem",
-      "summary": "Perplexity announced an AWS collaboration covering Enterprise Pro distribution, joint events, co-selling and co-marketing for business customers.",
-      "dateNote": "原始新闻为 2024-07-09。Amazon 节点在此代表 AWS，不能推断 Amazon 所有业务都与 Perplexity 合作。",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Perplexity",
-          "Amazon"
-        ]
-      ],
-      "source": "www.perplexity.ai",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p14",
-      "publishedAt": "2024-11-22",
-      "title": "Anthropic expands its AWS training partnership",
-      "summaryZh": "Amazon 增资，AWS 成为主要云与训练伙伴；是协议扩大，不是单纯模型提及。",
-      "url": "https://www.anthropic.com/news/anthropic-amazon-trainium",
-      "companies": [
-        "Anthropic",
-        "Amazon"
-      ],
-      "kind": "partnership",
-      "stage": "扩展",
-      "category": "ecosystem",
-      "summary": "Anthropic expanded its AWS partnership with additional Amazon investment and collaboration on Trainium hardware, model training and deployment.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Anthropic",
-          "Amazon"
-        ]
-      ],
-      "source": "www.anthropic.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p15",
-      "publishedAt": "2026-04-06",
-      "title": "Anthropic expands its Google and Broadcom compute agreement",
-      "summaryZh": "新增多吉瓦 TPU 计算资源协议，计划从 2027 年开始上线。",
-      "url": "https://www.anthropic.com/news/google-broadcom-partnership-compute",
-      "companies": [
-        "Anthropic",
-        "Google",
-        "Broadcom"
-      ],
-      "kind": "cloud",
-      "stage": "扩展",
-      "category": "ecosystem",
-      "summary": "Anthropic signed an expanded Google and Broadcom agreement for next-generation TPU capacity expected to become available starting in 2027.",
-      "dateNote": "只连接 Anthropic–Google 与 Anthropic–Broadcom；这篇文章没有单独证明 Google–Broadcom 新签了另一份协议。",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Anthropic",
-          "Google"
-        ],
-        [
-          "Anthropic",
-          "Broadcom"
-        ]
-      ],
-      "source": "www.anthropic.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p16",
-      "publishedAt": "2024-11-19",
-      "title": "Oura and Dexcom announce a strategic partnership",
-      "summaryZh": "结合戒指生理数据与血糖数据，并开展联合营销；Dexcom 同时投资 Oura。",
-      "url": "https://investors.dexcom.com/news/news-details/2024/Dexcom-and-URA-Announce-Strategic-Partnership/default.aspx",
-      "companies": [
-        "Oura",
-        "Dexcom"
-      ],
-      "kind": "partnership",
-      "stage": "宣布",
-      "category": "ecosystem",
-      "summary": "Oura and Dexcom announced data integration and co-marketing plans, alongside a strategic Dexcom investment in Oura funding.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Oura",
-          "Dexcom"
-        ]
-      ],
-      "source": "investors.dexcom.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p17",
-      "publishedAt": "2025-05-06",
-      "title": "Oura launches metabolic health with Dexcom Stelo integration",
-      "summaryZh": "此前宣布的合作进入产品落地阶段，可在 Oura 中查看 Stelo 血糖数据。",
-      "url": "https://ouraring.com/blog/introducing-metabolic-health/",
-      "companies": [
-        "Oura",
-        "Dexcom"
-      ],
-      "kind": "integration",
-      "stage": "上线",
-      "category": "ai_software",
-      "summary": "Oura launched metabolic health features with Dexcom Stelo integration, combining glucose measurements with sleep, stress and activity insights.",
-      "dateNote": "",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Oura",
-          "Dexcom"
-        ]
-      ],
-      "source": "ouraring.com",
-      "datePrecision": "day",
-      "dateBasis": "publisher_displayed_date"
-    },
-    {
-      "id": "p18",
-      "publishedAt": "2024-03-07",
-      "title": "Oura expands distribution through Amazon",
-      "summaryZh": "Oura 官方宣布进入 Amazon 渠道销售；是渠道合作，不是模型或数据合作。",
-      "url": "https://ouraring.com/blog/oura-amazon-announcement/",
-      "companies": [
-        "Oura",
-        "Amazon"
-      ],
-      "kind": "distribution",
-      "stage": "上线",
-      "category": "ecosystem",
-      "summary": "Oura announced availability through Amazon, expanding retail access to its rings and sizing kits for customers in the United States.",
-      "dateNote": "原始日期 2024-03-07；文章后来补充英国渠道信息，不将更新内容误标为初始事件。",
-      "checkedAt": "2026-10-20",
-      "pairs": [
-        [
-          "Oura",
-          "Amazon"
-        ]
-      ],
-      "source": "ouraring.com",
       "datePrecision": "day",
       "dateBasis": "publisher_displayed_date"
     },
@@ -517,30 +138,588 @@
       "dateBasis": "publisher_displayed_date"
     },
     {
-      "id": "p20",
-      "publishedAt": "2026-02-27",
-      "title": "OpenAI and Amazon announce a strategic partnership",
-      "summaryZh": "新增多年度战略合作，覆盖企业 AI、基础设施及产品服务。",
-      "url": "https://openai.com/index/amazon-partnership/",
+      "id": "p21",
+      "publishedAt": "2026-06-28",
+      "title": "HP launches Frontier strategic partnership with OpenAI",
+      "summaryZh": "HP 将 OpenAI Frontier 用于客户体验、WXP 遥测与内部工作流程；具体场景仍将逐步部署。",
+      "url": "https://www.hp.com/us-en/newsroom/press-releases/2026/open-ai-partnership.html",
       "companies": [
-        "OpenAI",
-        "Amazon"
+        "HP",
+        "OpenAI"
       ],
       "kind": "partnership",
       "stage": "宣布",
       "category": "ecosystem",
-      "summary": "OpenAI and Amazon announced a multiyear strategic partnership spanning enterprise AI, infrastructure and new products for business customers.",
-      "dateNote": "",
+      "summary": "HP launches Frontier strategic partnership with OpenAI",
+      "dateNote": "6 月 28 日是战略合作正式发布日；2 月开始的探索期不作为本条发布日期。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "HP",
+          "OpenAI"
+        ]
+      ],
+      "source": "www.hp.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p22",
+      "publishedAt": "2026-09-28",
+      "title": "NVIDIA launches agent safety platform with infrastructure and model partners",
+      "summaryZh": "HP、Dell 支持 NVIDIA 的 Agent 安全基础设施；Anthropic 的 Claude Managed Agents 与 OpenShell / BlueField 协作。",
+      "url": "https://nvidianews.nvidia.com/news/open-agent-safety-platform",
+      "companies": [
+        "NVIDIA",
+        "HP",
+        "Dell",
+        "Anthropic"
+      ],
+      "kind": "integration",
+      "stage": "合作进展",
+      "category": "ecosystem",
+      "summary": "NVIDIA launches agent safety platform with infrastructure and model partners",
+      "dateNote": "平台发布与生态协作进展，不代表每一家在当天签订新协议。只连接原文明确描述的协作双方。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "NVIDIA",
+          "HP"
+        ],
+        [
+          "NVIDIA",
+          "Dell"
+        ],
+        [
+          "NVIDIA",
+          "Anthropic"
+        ]
+      ],
+      "source": "nvidianews.nvidia.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p23",
+      "publishedAt": "2026-09-14",
+      "title": "Perplexity uses OpenAI Astra for end-to-end systems",
+      "summaryZh": "OpenAI 官方客户案例：Perplexity 使用 Astra 处理沟通、代码测试与生产系统监测。",
+      "url": "https://openai.com/index/perplexity-improving-accuracy-with-astra/",
+      "companies": [
+        "OpenAI",
+        "Perplexity"
+      ],
+      "kind": "integration",
+      "stage": "客户案例",
+      "category": "ecosystem",
+      "summary": "Perplexity uses OpenAI Astra for end-to-end systems",
+      "dateNote": "这是模型/API 使用案例，不将其表述为双方战略合作；日期为案例发布日。",
       "checkedAt": "2026-10-20",
       "pairs": [
         [
           "OpenAI",
-          "Amazon"
+          "Perplexity"
         ]
       ],
       "source": "openai.com",
       "datePrecision": "day",
       "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p24",
+      "publishedAt": "2026-09-10",
+      "title": "Amazon Ads announces ChatGPT advertising integration",
+      "summaryZh": "Amazon Ads 与 OpenAI 合作，让广告主扩展到 ChatGPT 广告；部分美国广告主已参与试点。",
+      "url": "https://advertising.amazon.com/en-ca/library/news/amazon-ads-chat-gpt-advertising-integration",
+      "companies": [
+        "Amazon",
+        "OpenAI"
+      ],
+      "kind": "integration",
+      "stage": "试点",
+      "category": "ecosystem",
+      "summary": "Amazon Ads announces ChatGPT advertising integration",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Amazon",
+          "OpenAI"
+        ]
+      ],
+      "source": "advertising.amazon.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p25",
+      "publishedAt": "2026-09-02",
+      "title": "CrowdStrike and OpenAI expand agent security partnership",
+      "summaryZh": "Falcon Guardian 为 Codex Agent 提供运行时安全控制，同时将 OpenAI 网络安全推理能力接入 Falcon。",
+      "url": "https://ir.crowdstrike.com/news-releases/news-release-details/crowdstrike-and-openai-expand-partnership-secure-agentic-era",
+      "companies": [
+        "CrowdStrike",
+        "OpenAI"
+      ],
+      "kind": "partnership",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "CrowdStrike and OpenAI expand agent security partnership",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "CrowdStrike",
+          "OpenAI"
+        ]
+      ],
+      "source": "ir.crowdstrike.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p26",
+      "publishedAt": "2026-09-02",
+      "title": "Oura expands Menopause Impact Scale into partner care workflows",
+      "summaryZh": "Oura 宣布将更年期影响量表接入十家健康伙伴的工作流程，包括 Maven、Alloy Health；并非一次新硬件发布。",
+      "url": "https://www.businesswire.com/news/home/20260902637998/en/URA-Brings-Menopause-Impact-Scale-into-Clinical-Care-Through-Expanding-Partner-Network",
+      "companies": [
+        "Oura",
+        "Maven",
+        "Alloy Health"
+      ],
+      "kind": "integration",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "Oura expands Menopause Impact Scale into partner care workflows",
+      "dateNote": "图中仅选取两家代表性伙伴；原文完整列出十家。日期据 Oura 官方新闻目录与原始新闻稿。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Oura",
+          "Maven"
+        ],
+        [
+          "Oura",
+          "Alloy Health"
+        ]
+      ],
+      "source": "www.businesswire.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p27",
+      "publishedAt": "2026-06-23",
+      "title": "Oura and LillyDirect announce GLP-1 support collaboration",
+      "summaryZh": "Oura 与礼来的 LillyDirect 合作，为使用 GLP-1 疗法的人群提供日常支持与量环套装优惠。",
+      "url": "https://www.businesswire.com/news/home/20260623830970/en/URA-and-LillyDirect-to-Expand-Support-for-People-Using-GLP-1-Therapies-with-New-Tools-and-Savings-Options",
+      "companies": [
+        "Oura",
+        "Eli Lilly"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "Oura and LillyDirect announce GLP-1 support collaboration",
+      "dateNote": "日期据 Oura 官方新闻目录与原始新闻稿；LillyDirect 是 Eli Lilly 的数字健康平台。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Oura",
+          "Eli Lilly"
+        ]
+      ],
+      "source": "www.businesswire.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p28",
+      "publishedAt": "2026-05-18",
+      "title": "OpenAI and Dell partner on hybrid and on-premises Codex",
+      "summaryZh": "Codex 计划连接 Dell AI Data Platform；双方还将探索与 Dell AI Factory 的进一步连接。",
+      "url": "https://openai.com/index/dell-codex-enterprise-partnership/",
+      "companies": [
+        "OpenAI",
+        "Dell"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "OpenAI and Dell partner on hybrid and on-premises Codex",
+      "dateNote": "公告包含计划与探索内容，不等于全部功能已正式上线。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "OpenAI",
+          "Dell"
+        ]
+      ],
+      "source": "openai.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p29",
+      "publishedAt": "2026-08-26",
+      "title": "Dell, AT&T and AMD scale Open Telco AI",
+      "summaryZh": "AT&T 提供电信模型与网络经验，AMD 提供计算硬件，Dell 提供服务器与系统集成，共同推进 OTel 2.0。",
+      "url": "https://www.dell.com/en-us/blog/otel-2-0-dell-technologies-at-t-and-amd-bring-open-telco-ai-to-scale/",
+      "companies": [
+        "Dell",
+        "AT&T",
+        "AMD"
+      ],
+      "kind": "hardware",
+      "stage": "合作进展",
+      "category": "ecosystem",
+      "summary": "Dell, AT&T and AMD scale Open Telco AI",
+      "dateNote": "采用 Dell 文章署名栏的 8 月 26 日；这是协作进展报道，并非合同签署日期。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Dell",
+          "AT&T"
+        ],
+        [
+          "Dell",
+          "AMD"
+        ]
+      ],
+      "source": "www.dell.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p30",
+      "publishedAt": "2026-09-11",
+      "title": "Samsung showcases Gemini, Perplexity and Copilot in Vision AI Companion",
+      "summaryZh": "Samsung 在 IFA 后介绍电视 AI Companion：整合 Gemini、Perplexity 与 Copilot，让用户通过对话探索内容。",
+      "url": "https://news.samsung.com/uk/how-samsung-is-making-ai-a-simple-personal-companion-to-everyday-life",
+      "companies": [
+        "Samsung",
+        "Google",
+        "Perplexity",
+        "Microsoft"
+      ],
+      "kind": "integration",
+      "stage": "展示进展",
+      "category": "ecosystem",
+      "summary": "Samsung showcases Gemini, Perplexity and Copilot in Vision AI Companion",
+      "dateNote": "这是 9 月的体验与整合进展，不把此前已有的服务接入重写为当日新签约。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Samsung",
+          "Google"
+        ],
+        [
+          "Samsung",
+          "Perplexity"
+        ],
+        [
+          "Samsung",
+          "Microsoft"
+        ]
+      ],
+      "source": "news.samsung.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p31",
+      "publishedAt": "2026-09-07",
+      "title": "Samsung rolls Gemini-powered AI Vision updates to existing appliances",
+      "summaryZh": "部分既有 Family Hub 冰箱将通过软件更新获得基于 Google Gemini 的 AI Vision，9 月起陆续推送。",
+      "url": "https://news.samsung.com/global/samsung-enhances-long-term-value-of-refrigerators-and-laundry-appliances-with-ai-focused-software-updates",
+      "companies": [
+        "Samsung",
+        "Google"
+      ],
+      "kind": "integration",
+      "stage": "开始推送",
+      "category": "ecosystem",
+      "summary": "Samsung rolls Gemini-powered AI Vision updates to existing appliances",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Samsung",
+          "Google"
+        ]
+      ],
+      "source": "news.samsung.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p32",
+      "publishedAt": "2026-08-26",
+      "title": "Salesforce and Anthropic announce Claudeforce",
+      "summaryZh": "扩大战略合作：Salesforce in Claude 提供 37 项销售技能，同时将 Claude 更深入接入 Salesforce 与 Slack。",
+      "url": "https://www.salesforce.com/news/press-releases/2026/08/26/salesforce-and-anthropic-announce-claudeforce/",
+      "companies": [
+        "Salesforce",
+        "Anthropic"
+      ],
+      "kind": "partnership",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "Salesforce and Anthropic announce Claudeforce",
+      "dateNote": "发布时向部分试点客户开放，原文预计 9 月公测；不以预计日期冒充实际上线日期。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Salesforce",
+          "Anthropic"
+        ]
+      ],
+      "source": "www.salesforce.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p33",
+      "publishedAt": "2026-10-06",
+      "title": "Atlassian and OpenAI expand enterprise knowledge partnership",
+      "summaryZh": "OpenAI 模型进一步接入 Atlassian 与 Rovo，并通过 Teamwork Graph 连接企业知识与 Agent 工作流程。",
+      "url": "https://openai.com/index/atlassian-partnership/",
+      "companies": [
+        "Atlassian",
+        "OpenAI"
+      ],
+      "kind": "partnership",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "Atlassian and OpenAI expand enterprise knowledge partnership",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Atlassian",
+          "OpenAI"
+        ]
+      ],
+      "source": "openai.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p34",
+      "publishedAt": "2026-10-01",
+      "title": "Barclays expands strategic collaboration with Anthropic",
+      "summaryZh": "Barclays 扩大 Claude 的开发、旧系统改造与运营应用；到年底覆盖半数开发者仍是部署目标。",
+      "url": "https://www.anthropic.com/news/barclays-scales-claude",
+      "companies": [
+        "Barclays",
+        "Anthropic"
+      ],
+      "kind": "partnership",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "Barclays expands strategic collaboration with Anthropic",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Barclays",
+          "Anthropic"
+        ]
+      ],
+      "source": "www.anthropic.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p35",
+      "publishedAt": "2026-09-10",
+      "title": "OpenAI develops financial services experience with Morgan Stanley and Evercore",
+      "summaryZh": "ChatGPT for Financial Services 的设计合作伙伴包括 Morgan Stanley 与 Evercore，共同明确投行和研究流程需求。",
+      "url": "https://openai.com/index/introducing-chatgpt-financial-services/",
+      "companies": [
+        "OpenAI",
+        "Morgan Stanley",
+        "Evercore"
+      ],
+      "kind": "partnership",
+      "stage": "产品发布",
+      "category": "ecosystem",
+      "summary": "OpenAI develops financial services experience with Morgan Stanley and Evercore",
+      "dateNote": "日期是产品及合作背景的公开发布日期，不代表设计合作始于当天。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "OpenAI",
+          "Morgan Stanley"
+        ],
+        [
+          "OpenAI",
+          "Evercore"
+        ]
+      ],
+      "source": "openai.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p36",
+      "publishedAt": "2026-10-16",
+      "title": "NVIDIA RTX Spark PCs launch with HP, Dell and Microsoft",
+      "summaryZh": "RTX Spark 笔记本正式上市，合作机型包括 HP OmniBook、Dell XPS 与 Microsoft Surface，覆盖本地 AI 使用场景。",
+      "url": "https://nvidianews.nvidia.com/news/nvidia-rtx-spark-pcs-available-today-a-new-beginning-for-windows-pcs",
+      "companies": [
+        "NVIDIA",
+        "HP",
+        "Dell",
+        "Microsoft"
+      ],
+      "kind": "hardware",
+      "stage": "上市",
+      "category": "ecosystem",
+      "summary": "NVIDIA RTX Spark PCs launch with HP, Dell and Microsoft",
+      "dateNote": "与 6 月的硬件宣布区分：本条记录 10 月正式上市；可择优收录。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "NVIDIA",
+          "HP"
+        ],
+        [
+          "NVIDIA",
+          "Dell"
+        ],
+        [
+          "NVIDIA",
+          "Microsoft"
+        ]
+      ],
+      "source": "nvidianews.nvidia.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p37",
+      "publishedAt": "2026-10-15",
+      "title": "Adobe and NVIDIA expand collaboration for agentic creation",
+      "summaryZh": "Adobe 与 NVIDIA 扩大创意工作流程协作，结合 NVIDIA 加速技术推进创作工具与 Agent 体验。",
+      "url": "https://nvidianews.nvidia.com/news/adobe-and-nvidia-expand-collaboration-to-speed-agentic-creation",
+      "companies": [
+        "Adobe",
+        "NVIDIA"
+      ],
+      "kind": "partnership",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "Adobe and NVIDIA expand collaboration for agentic creation",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Adobe",
+          "NVIDIA"
+        ]
+      ],
+      "source": "nvidianews.nvidia.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    }
+  ],
+  "window": {
+    "asOf": "2026-10-20",
+    "preferredFrom": "2026-07-20",
+    "earliestFrom": "2026-04-20"
+  },
+  "excludedCandidates": [
+    {
+      "id": "p01",
+      "publishedAt": "2024-06-10",
+      "title": "OpenAI and Apple announce ChatGPT integration",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p02",
+      "publishedAt": "2024-12-11",
+      "title": "Apple ships ChatGPT support in Apple Intelligence",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p03",
+      "publishedAt": "2025-03-31",
+      "title": "Apple brings ChatGPT-powered writing to Vision Pro",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p04",
+      "publishedAt": "2026-02-04",
+      "title": "Granola MCP connects meeting notes to ChatGPT and Claude",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p08",
+      "publishedAt": "2025-10-21",
+      "title": "Samsung launches Perplexity on its TVs",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p09",
+      "publishedAt": "2026-03-02",
+      "title": "Samsung showcases Gemini and Perplexity agents on Galaxy S26",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p10",
+      "publishedAt": "2024-01-18",
+      "title": "Samsung and Google Cloud announce a multiyear AI partnership",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p12",
+      "publishedAt": "2025-03-18",
+      "title": "Dell expands the Dell AI Factory with NVIDIA",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p13",
+      "publishedAt": "2024-07-09",
+      "title": "Perplexity and AWS collaborate on Enterprise Pro",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p14",
+      "publishedAt": "2024-11-22",
+      "title": "Anthropic expands its AWS training partnership",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p15",
+      "publishedAt": "2026-04-06",
+      "title": "Anthropic expands its Google and Broadcom compute agreement",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p16",
+      "publishedAt": "2024-11-19",
+      "title": "Oura and Dexcom announce a strategic partnership",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p17",
+      "publishedAt": "2025-05-06",
+      "title": "Oura launches metabolic health with Dexcom Stelo integration",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p18",
+      "publishedAt": "2024-03-07",
+      "title": "Oura expands distribution through Amazon",
+      "reason": "outside-six-month-window"
+    },
+    {
+      "id": "p20",
+      "publishedAt": "2026-02-27",
+      "title": "OpenAI and Amazon announce a strategic partnership",
+      "reason": "outside-six-month-window"
     }
   ]
 }
