@@ -84,11 +84,11 @@ it('preserves explicit human primary and subtopic placement through changed edit
 it('offers a persistent placement action to editors and supports dragging a news card to a collection',async()=>{
  const item={...demoNews[0],id:'health',title:'ChatGPT Health',summary:'Health guidance'}
  const save=vi.fn(async()=>{})
- render(<SelectedNewsMap news={[item]} isNew={()=>false} renderCard={n=><article>{n.title}</article>} onPlace={save}/>)
- fireEvent.click(screen.getByRole('button',{name:'Change placement'}))
+ render(<SelectedNewsMap news={[item]} isNew={()=>false} renderCard={(n,action)=><article>{n.title}{action}</article>} onPlace={save}/>)
+ fireEvent.click(screen.getByRole('button',{name:'Change Category'}))
  fireEvent.change(screen.getByRole('combobox',{name:'Map collection'}),{target:{value:'topic-8'}})
  fireEvent.change(screen.getByRole('combobox',{name:'Map subtopic'}),{target:{value:'topic-8-sub-1'}})
- await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Save placement'}))})
+ await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Save'}))})
  expect(save).toHaveBeenCalledWith(item,{topicId:'topic-8',subtopicId:'topic-8-sub-1'})
  fireEvent.drop(screen.getByRole('button',{name:'Agent memory & context, 0 stories'}),{dataTransfer:{getData:()=>item.id}})
  expect(save).toHaveBeenCalledWith(item,{topicId:'topic-0'})

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import './App.css'
 import './styles/sonata.css'
 import { ResearchLibrary } from './components/ResearchLibrary'
@@ -3749,6 +3749,7 @@ function App() {
       allowReorder?: boolean
       variant?: 'live' | 'candidate'
       dropCategory?: NewsCategory
+      footerAction?: ReactNode
     } = {},
   ) {
     const takeaway = noteTakeaway(item)
@@ -3981,6 +3982,7 @@ function App() {
                 </span>
               ) : null}
           </div>
+          {options.footerAction}
           {variant === 'candidate' ? (
             <div className="candidate-workflow-actions">
               {item.discussionStatus !== 'not_discussed' ? (
@@ -4982,7 +4984,7 @@ function App() {
               </div>
               <div className="selected-news-heading-controls"><div className="selected-news-view-switch" role="group" aria-label="Selected Sources view"><button type="button" aria-pressed={signalsView === 'categories'} onClick={() => setSignalsView('categories')}>Categories</button><button type="button" aria-pressed={signalsView === 'map'} onClick={() => setSignalsView('map')}>Map</button></div>{renderTimeFilter()}</div>
             </div>
-            {signalsView === 'map' ? <SelectedNewsMap onPlace={canEdit ? saveMapPlacement : undefined} news={visibleNews} isNew={isNewSignal} renderCard={item => renderNoteCard(item, { variant: 'live' })} /> : <div className="signals-grid">
+            {signalsView === 'map' ? <SelectedNewsMap onPlace={canEdit ? saveMapPlacement : undefined} news={visibleNews} isNew={isNewSignal} renderCard={(item, action) => renderNoteCard(item, { variant: 'live', footerAction: action })} /> : <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
