@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, expect, it } from 'vitest'
 import App from './App'
+import { SelectedNewsMap } from './components/SelectedNewsMap'
 import { demoNews } from './demoData'
 import { companyNews, newsMapTopics, topicNews } from './news-map-model'
 
@@ -30,4 +31,15 @@ it('does not put memory-glasses stories into agent memory by a generic memory ma
 it('uses bounded company mentions and current item data rather than a stored experiment snapshot',()=>{
   const items=[{...demoNews[0],id:'current',title:'OpenAI update',summary:'Today'},{...demoNews[0],id:'unrelated',title:'NotOpenAIproduct',summary:''}]
   expect(companyNews(items,'OpenAI').map(n=>n.id)).toEqual(['current'])
+})
+
+it('refreshes the selected topic with newly arriving news instead of retaining an old list of ids',()=>{
+ const first={...demoNews[0],id:'first',title:'Agent memory system',summary:'Persistent memory'}
+ const next={...first,id:'next',title:'New memory architecture'}
+ const card=(n:typeof first)=><article>{n.title}</article>
+ const {rerender}=render(<SelectedNewsMap news={[first]} isNew={()=>false} renderCard={card}/>)
+ fireEvent.click(screen.getByRole('button',{name:'Agent memory & context, 1 stories'}))
+ rerender(<SelectedNewsMap news={[first,next]} isNew={n=>n.id==='next'} renderCard={card}/>)
+ expect(screen.getByText('New memory architecture')).toBeInTheDocument()
+ expect(screen.getByRole('status')).toHaveTextContent('2 stories')
 })

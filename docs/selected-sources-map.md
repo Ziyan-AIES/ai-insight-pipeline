@@ -7,3 +7,5 @@
 - Removed the darker three-pixel category top border while retaining each category's existing color gradient and ordinary one-pixel border.
 
 Validation: production build succeeds; 158 tests pass; lint has no errors and four pre-existing warnings. Browser checks confirm six original category panels, identical top/side border widths and colors, preserved gradients, the original news cards in Map, automatic New badges, and no runtime errors. No database or permission changes.
+
+Follow-up: the selected topic/company/overlap derives its membership from current live props, so newly arriving sources appear without reselecting the node. A regression test covers a source arriving while a topic is selected; four map tests and the production build pass.
