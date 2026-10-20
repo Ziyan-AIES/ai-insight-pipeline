@@ -132,7 +132,7 @@
 .app-shell .dashboard.signals-page{height:auto;min-height:100%;overflow:visible;background:transparent}
 .app-shell.page-signals .news-pane{height:auto;min-height:100%;overflow:visible;background:transparent;border:0}
 .app-shell.page-signals .signals-grid{overflow:visible;grid-template-rows:auto auto;align-items:stretch;gap:26px}
-.app-shell.page-signals .category-panel,.app-shell.page-signals .category-panel.accepting-signal{padding:19px;border:1px solid color-mix(in srgb,var(--cat-accent) 22%,#ded7eb);border-top:3px solid color-mix(in srgb,var(--cat-accent) 65%,#9c8aaa);background:linear-gradient(180deg,color-mix(in srgb,var(--cat-accent) 17%,#f1eff6) 0%,#f8f6fc 200px,#fdfcfe 100%);border-radius:14px;box-shadow:0 5px 20px #4b3d6c05}
+.app-shell.page-signals .category-panel,.app-shell.page-signals .category-panel.accepting-signal{padding:19px;border:1px solid color-mix(in srgb,var(--cat-accent) 22%,#ded7eb);background:linear-gradient(180deg,color-mix(in srgb,var(--cat-accent) 17%,#f1eff6) 0%,#f8f6fc 200px,#fdfcfe 100%);border-radius:14px;box-shadow:0 5px 20px #4b3d6c05}
 .app-shell.page-signals .category-panel>header{padding-bottom:16px;margin-bottom:3px;border-bottom:1px solid color-mix(in srgb,var(--cat-accent) 16%,transparent)}
 .app-shell.page-signals .category-panel>header h2{font-size:14px;line-height:1.4;letter-spacing:.025em;color:#393044;font-weight:750}
 .app-shell.page-signals .category-panel.drop-highlight{outline:2px solid var(--cat-accent);outline-offset:2px}

@@ -3,6 +3,7 @@ import './App.css'
 import './styles/sonata.css'
 import { ResearchLibrary } from './components/ResearchLibrary'
 import { SharedSources } from './components/SharedSources'
+import { SelectedNewsMap } from './components/SelectedNewsMap'
 import { CategoryLabel } from './components/CategoryLabel'
 import { IndustryRadar } from './components/IndustryRadar'
 import { demoNews, demoTheses, demoTopics, demoTrends } from './demoData'
@@ -490,6 +491,7 @@ function App() {
   const [threadGroupMode, setThreadGroupMode] =
     useState<ThreadGroupMode>('timeline')
   const [signalViewBaseline, setSignalViewBaseline] = useState('')
+  const [signalsView, setSignalsView] = useState<'categories' | 'map'>('categories')
   const [pendingThreadNewsId, setPendingThreadNewsId] = useState('')
   const [categoryDrawer, setCategoryDrawer] = useState<NewsCategory | null>(
     null,
@@ -4965,7 +4967,8 @@ function App() {
               {renderTimeFilter()}
             </div>
             <div className="sonata-source-note">Sources are selected by team members. Use <strong>+ Add News</strong> at the top right, or save an article in one click with our Chrome extension. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Get the Chrome extension</a></div>
-            <div className="signals-grid">
+            <div className="selected-news-view-switch" role="group" aria-label="Selected Sources view"><button type="button" aria-pressed={signalsView === 'categories'} onClick={() => setSignalsView('categories')}>Categories</button><button type="button" aria-pressed={signalsView === 'map'} onClick={() => setSignalsView('map')}>Map</button></div>
+            {signalsView === 'map' ? <SelectedNewsMap news={visibleNews} isNew={isNewSignal} renderCard={item => renderNoteCard(item, { variant: 'live' })} /> : <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,
@@ -5025,7 +5028,7 @@ function App() {
                   </section>
                 )
               })}
-            </div>
+            </div>}
           </section>
         )}
 
