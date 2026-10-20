@@ -416,7 +416,9 @@ export const newsMapCompanies = [
     "id": "entity:Broadcom",
     "title": "Broadcom",
     "aliases": "Broadcom|博通"
-  }
+  },
+  {"id":"entity:CrowdStrike","title":"CrowdStrike","aliases":"CrowdStrike|Falcon Guardian"},
+  {"id":"entity:Atlassian","title":"Atlassian","aliases":"Atlassian|Rovo"}
 ] as const
 export function topicNews(items: NewsItem[], pattern: string) {
  const regex = new RegExp('(?<![a-z0-9])(?:'+pattern+')(?![a-z0-9])','i')

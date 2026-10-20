@@ -58,6 +58,11 @@
   status = 200
 
 [[redirects]]
+  from = "/partnership-review.html"
+  to = "/?workspace=radar"
+  status = 302
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

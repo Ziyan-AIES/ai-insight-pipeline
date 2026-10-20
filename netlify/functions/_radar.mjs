@@ -434,7 +434,7 @@ export async function runRadarIngest() {
   let inserted = 0
   let failed = 0
   const results = await Promise.allSettled(
-    (sources || []).map(async (source) => {
+    (sources || []).filter(source => !(source.source_type === 'official' && !source.feed_url)).map(async (source) => {
       try {
         const raw = await fetchSource(source)
         fetched += raw.length

@@ -55,11 +55,11 @@ describe('dashboard pilot shell', () => {
     expect(within(radar).getAllByText('Collaborative AI workspaces')).toHaveLength(2)
     expect(within(radar).getByText(/A development is one underlying story/)).toBeInTheDocument()
     fireEvent.click(within(radar).getByRole('button', { name: 'How it works' }))
-    expect(within(radar).getByText(/no Codex or Cursor job is required/i)).toBeInTheDocument()
+    expect(within(radar).getByText(/An Agent verifies weekly website discoveries/i)).toBeInTheDocument()
 
     fireEvent.click(within(radar).getByRole('button', { name: /Sources ·/ }))
     const sources = screen.getByRole('dialog', { name: 'Sources' })
-    expect(within(sources).getByText('Product Hunt')).toBeInTheDocument()
+    expect(within(sources).getByRole('link', { name: 'Product Hunt' })).toHaveAttribute('href', 'https://www.producthunt.com/')
     expect(within(sources).getByRole('button', { name: '+ Add source' })).toBeInTheDocument()
   })
 

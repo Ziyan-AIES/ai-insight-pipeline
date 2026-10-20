@@ -311,8 +311,8 @@ function SourceManager({
                 </div>
                 <span className={`radar-health-dot ${health}`} title={health} />
                 <div className="radar-source-main">
-                  <strong>{source.name}</strong>
-                  <span>{source.domain} · {radarSourceTypeLabels[source.sourceType]}</span>
+                  <strong><a href={source.homepageUrl} target="_blank" rel="noreferrer">{source.name}</a></strong>
+                  <span>{source.domain} · {radarSourceTypeLabels[source.sourceType]}{source.connectorType === 'website_agent' ? ' · Agent · Mon 12:00 Beijing' : source.connectorType === 'rss' ? <> · <a href={source.feedUrl} target="_blank" rel="noreferrer">RSS ↗</a></> : ''}</span>
                   {source.lastError ? <small>{source.lastError}</small> : <small>Checked {ageLabel(source.lastFetchedAt)}</small>}
                 </div>
                 <div className="radar-source-volume"><strong>{source.itemCount7d}</strong><span>7d items</span></div>
@@ -465,7 +465,7 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         <div>
           <span className="eyebrow">External market sensing</span>
           <h1>Signal Reference</h1>
-          <p>RSS and supported feeds, grouped by keywords and deterministic rules. Reference only: these are not team-endorsed trends.</p>
+          <p>Official updates and supported feeds, grouped by topic. Reference only: these are not team-endorsed trends.</p>
         </div>
         <div className="radar-hero-actions">
           <button className="text-action radar-method-toggle" type="button" aria-expanded={methodOpen} onClick={() => setMethodOpen((open) => !open)}>How it works</button>
@@ -488,10 +488,10 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
 
       {methodOpen ? (
         <section className="radar-methodology" aria-label="How Industry Radar works">
-          <div><strong>Collect</strong><span>Every 4 hours from RSS and supported APIs; Refresh now runs the same pipeline.</span></div>
+          <div><strong>Collect</strong><span>RSS and supported APIs refresh every 4 hours. Official sites without feeds are checked Mondays at noon Beijing time.</span></div>
           <div><strong>Cluster</strong><span>Near-identical coverage is consolidated into one distinct development.</span></div>
           <div><strong>Rank</strong><span>Development count, independent-source breadth, momentum and available engagement.</span></div>
-          <div><strong>AI use</strong><span>None. Topic matching and ranking are deterministic and auditable; no Codex or Cursor job is required.</span></div>
+          <div><strong>AI use</strong><span>An Agent verifies weekly website discoveries. Topic matching and ranking remain deterministic; signals do not automatically become endorsed trends.</span></div>
         </section>
       ) : null}
 

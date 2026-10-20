@@ -1,0 +1,122 @@
+[
+  {
+    "key": "openai",
+    "name": "OpenAI News",
+    "domain": "openai.com",
+    "homepageUrl": "https://openai.com/news/",
+    "feedUrl": "https://openai.com/news/rss.xml",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "anthropic",
+    "name": "Anthropic News",
+    "domain": "anthropic.com",
+    "homepageUrl": "https://www.anthropic.com/news",
+    "feedUrl": "",
+    "method": "website_agent",
+    "verifiedAt": "2026-10-20",
+    "schedule": "Monday 12:00 Asia/Shanghai"
+  },
+  {
+    "key": "microsoft",
+    "name": "Microsoft Official Blog",
+    "domain": "blogs.microsoft.com",
+    "homepageUrl": "https://blogs.microsoft.com/",
+    "feedUrl": "https://blogs.microsoft.com/feed/",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "nvidia-news",
+    "name": "NVIDIA Newsroom",
+    "domain": "nvidianews.nvidia.com",
+    "homepageUrl": "https://nvidianews.nvidia.com/",
+    "feedUrl": "https://nvidianews.nvidia.com/releases.xml",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "nvidia-blog",
+    "name": "NVIDIA Blog",
+    "domain": "blogs.nvidia.com",
+    "homepageUrl": "https://blogs.nvidia.com/",
+    "feedUrl": "https://blogs.nvidia.com/feed/",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "samsung",
+    "name": "Samsung Global Newsroom",
+    "domain": "news.samsung.com",
+    "homepageUrl": "https://news.samsung.com/global/",
+    "feedUrl": "https://news.samsung.com/global/feed",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "amazon",
+    "name": "About Amazon",
+    "domain": "aboutamazon.com",
+    "homepageUrl": "https://www.aboutamazon.com/news",
+    "feedUrl": "https://www.aboutamazon.com/rss/feed.rss",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "aws",
+    "name": "AWS News Blog",
+    "domain": "aws.amazon.com",
+    "homepageUrl": "https://aws.amazon.com/blogs/aws/",
+    "feedUrl": "https://aws.amazon.com/blogs/aws/feed/",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "hp",
+    "name": "HP Newsroom",
+    "domain": "hp.com",
+    "homepageUrl": "https://www.hp.com/us-en/newsroom.html",
+    "feedUrl": "",
+    "method": "website_agent",
+    "verifiedAt": "2026-10-20",
+    "schedule": "Monday 12:00 Asia/Shanghai"
+  },
+  {
+    "key": "dell-blog",
+    "name": "Dell Blog",
+    "domain": "dell.com",
+    "homepageUrl": "https://www.dell.com/en-us/blog/",
+    "feedUrl": "https://www.dell.com/en-us/blog/feed/",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "dell-news",
+    "name": "Dell Press Releases",
+    "domain": "investors.delltechnologies.com",
+    "homepageUrl": "https://investors.delltechnologies.com/news-events/press-releases",
+    "feedUrl": "https://investors.delltechnologies.com/news-events/press-releases/rss",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  },
+  {
+    "key": "google",
+    "name": "Google AI",
+    "domain": "blog.google",
+    "homepageUrl": "https://blog.google/innovation-and-ai/technology/ai/",
+    "feedUrl": "https://blog.google/innovation-and-ai/technology/ai/rss/",
+    "method": "rss",
+    "verifiedAt": "2026-10-20",
+    "schedule": "existing four-hour RSS refresh"
+  }
+]
