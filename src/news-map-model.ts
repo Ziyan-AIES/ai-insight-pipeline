@@ -389,3 +389,48 @@ export function companyGroup(item: NewsItem) {
  const mentions = newsMapCompanies.filter(c=>companyNews([item],c.aliases).length)
  return mentions.find(c=>companyNews([{...item,summary:''}],c.aliases).length)?.title || mentions[0]?.title || 'Other / not identified'
 }
+
+export type NewsMapOverride = { topicId: string; subtopicId?: string; editedAt?: string }
+export function manualMapPlacement(item: NewsItem): NewsMapOverride | undefined {
+ const value=item.metadata?.news_map_override
+ if(!value || typeof value!=='object' || Array.isArray(value))return
+ const row=value as Record<string,unknown>
+ const topic=newsMapTopics.find(t=>t.id===row.topicId)
+ if(!topic)return
+ return {topicId:topic.id,subtopicId:topic.subtopics.find(t=>t.id===row.subtopicId)?.id}
+}
+export function mapTopicNews(items: NewsItem[], topicId: string) {
+ const topic=newsMapTopics.find(t=>t.id===topicId)
+ if(!topic)return []
+ return items.filter(item=>manualMapPlacement(item)?.topicId===topicId || topicNews([item],topic.pattern).length>0)
+}
+export function mapSubtopicNews(items: NewsItem[], topicId: string, subtopicId: string) {
+ const topic=newsMapTopics.find(t=>t.id===topicId),sub=topic?.subtopics.find(t=>t.id===subtopicId)
+ if(!sub)return []
+ return items.filter(item=>{
+  const manual=manualMapPlacement(item)
+  if(manual?.topicId===topicId && manual.subtopicId)return manual.subtopicId===subtopicId
+  return topicNews([item],sub.pattern).length>0
+ })
+}
+const categoryTopics: Record<NewsItem['category'], string[]> = {
+ interaction:['topic-6','topic-7','topic-9'],
+ ai_hardware:['topic-4','topic-5'],
+ ai_software:['topic-8','topic-9','topic-7','topic-3','topic-6'],
+ ai_capability:['topic-0','topic-1','topic-2','topic-5','topic-10','topic-6'],
+ ecosystem:['topic-7','topic-3','topic-11','topic-10'],
+ industry_events:['topic-10','topic-11'],
+}
+export function mapPlacement(item: NewsItem) {
+ const manual=manualMapPlacement(item)
+ const matches=newsMapTopics.filter(t=>mapTopicNews([item],t.id).length>0)
+ const preferences=categoryTopics[item.category]||[]
+ const ranked=matches.map(t=>{
+  const titleMatch=topicNews([{...item,summary:''}],t.pattern).length>0
+  const categoryRank=preferences.indexOf(t.id)
+  return {topic:t,score:(titleMatch?100:0)+(categoryRank>=0?30-categoryRank*3:0)}
+ }).sort((a,b)=>b.score-a.score)
+ const primary=newsMapTopics.find(t=>t.id===manual?.topicId)||ranked[0]?.topic
+ const subtopic=primary?.subtopics.find(t=>t.id===manual?.subtopicId)||primary?.subtopics.find(t=>mapSubtopicNews([item],primary.id,t.id).length>0)
+ return {primary,subtopic,manual:!!manual,related:matches.filter(t=>t.id!==primary?.id)}
+}

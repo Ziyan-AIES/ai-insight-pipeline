@@ -4,6 +4,7 @@ import './styles/sonata.css'
 import { ResearchLibrary } from './components/ResearchLibrary'
 import { SharedSources } from './components/SharedSources'
 import { SelectedNewsMap } from './components/SelectedNewsMap'
+import type { NewsMapOverride } from './news-map-model'
 import { CategoryLabel } from './components/CategoryLabel'
 import { IndustryRadar } from './components/IndustryRadar'
 import { demoNews, demoTheses, demoTopics, demoTrends } from './demoData'
@@ -2343,6 +2344,21 @@ function App() {
     )
     setNewsDraft(null)
     setNotice('News card updated')
+  }
+
+  async function saveMapPlacement(item: NewsItem, value: NewsMapOverride | null) {
+    if (!canEdit) throw new Error('Editing permission is required.')
+    const current = news.find(n => n.id === item.id)
+    if (!current || current.deletedAt) throw new Error('This news item is no longer available.')
+    const metadata = {...current.metadata, news_map_override:value ? {...value,editedAt:new Date().toISOString()} : null}
+    try {
+      const result = cloudConfigured ? await updateNewsItem(current.id, {metadata}, current.version) : undefined
+      setNews(items => items.map(n => n.id === current.id ? {...n,metadata:result?.metadata || metadata,version:result?.version ?? n.version} : n))
+      setNotice(value ? 'Primary map placement saved for the team' : 'Automatic map placement restored')
+    } catch(error) {
+      setNotice(error instanceof Error ? error.message : 'Could not save map placement')
+      throw error
+    }
   }
 
   async function reassignNewsCategory(newsId: string, category: NewsCategory) {
@@ -4966,7 +4982,7 @@ function App() {
               </div>
               <div className="selected-news-heading-controls"><div className="selected-news-view-switch" role="group" aria-label="Selected Sources view"><button type="button" aria-pressed={signalsView === 'categories'} onClick={() => setSignalsView('categories')}>Categories</button><button type="button" aria-pressed={signalsView === 'map'} onClick={() => setSignalsView('map')}>Map</button></div>{renderTimeFilter()}</div>
             </div>
-            {signalsView === 'map' ? <SelectedNewsMap news={visibleNews} isNew={isNewSignal} renderCard={item => renderNoteCard(item, { variant: 'live' })} /> : <div className="signals-grid">
+            {signalsView === 'map' ? <SelectedNewsMap onPlace={canEdit ? saveMapPlacement : undefined} news={visibleNews} isNew={isNewSignal} renderCard={item => renderNoteCard(item, { variant: 'live' })} /> : <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
                   (item) => !item.deletedAt && item.category === category,

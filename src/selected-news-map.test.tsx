@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, expect, it } from 'vitest'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { beforeEach, expect, it, vi } from 'vitest'
 import App from './App'
 import { SelectedNewsMap } from './components/SelectedNewsMap'
 import { demoNews } from './demoData'
-import { companyNews, newsMapTopics, topicNews } from './news-map-model'
+import { companyNews, newsMapTopics, topicNews, mapPlacement, mapTopicNews, mapSubtopicNews } from './news-map-model'
 
 beforeEach(()=>{window.localStorage.clear();window.sessionStorage.clear();window.history.replaceState(null,'','/?workspace=signals')})
 it('keeps Categories as the default and reuses the same session New cursor across map switches',()=>{
@@ -58,4 +58,38 @@ it('drills into consumer subtopics, hides empty children, and preserves overlapp
  expect(screen.getByRole('status')).toHaveTextContent('2 stories')
  fireEvent.click(screen.getByRole('button',{name:'Global map'}))
  expect(screen.queryByRole('navigation',{name:'Subtopics'})).toBeNull()
+})
+
+it('places a health experience by its headline and category instead of an incidental permission mention',()=>{
+ const item={...demoNews[0],title:'ChatGPT Health connects Apple Health and medical records',summary:'Personalized health guidance with permission',category:'ai_software' as const}
+ expect(mapPlacement(item).primary?.id).toBe('topic-8')
+ expect(mapPlacement(item).subtopic?.title).toBe('Health & wellbeing')
+ expect(mapPlacement(item).related.some(t=>t.id==='topic-2')).toBe(true)
+ const device={...item,title:'AI glasses with health features',summary:'A wearable device',category:'ai_hardware' as const}
+ expect(mapPlacement(device).primary?.id).toBe('topic-4')
+})
+it('uses the six-category framing to resolve competing headline matches',()=>{
+ const item={...demoNews[0],title:'Agent memory and voice update',summary:''}
+ expect(mapPlacement({...item,category:'interaction'}).primary?.id).toBe('topic-6')
+ expect(mapPlacement({...item,category:'ai_capability'}).primary?.id).toBe('topic-0')
+})
+it('preserves explicit human primary and subtopic placement through changed editorial content and allows automatic reset',()=>{
+ const item={...demoNews[0],title:'A permission isolation update',summary:'Security',metadata:{news_map_override:{topicId:'topic-8',subtopicId:'topic-8-sub-1'}}}
+ expect(mapPlacement(item).primary?.id).toBe('topic-8')
+ expect(mapPlacement(item).manual).toBe(true)
+ expect(mapSubtopicNews([item],'topic-8','topic-8-sub-1')).toHaveLength(1)
+ expect(mapTopicNews([item],'topic-2')).toHaveLength(1)
+ expect(mapPlacement({...item,metadata:{news_map_override:null}}).primary?.id).toBe('topic-2')
+})
+it('offers a persistent placement action to editors and supports dragging a news card to a collection',async()=>{
+ const item={...demoNews[0],id:'health',title:'ChatGPT Health',summary:'Health guidance'}
+ const save=vi.fn(async()=>{})
+ render(<SelectedNewsMap news={[item]} isNew={()=>false} renderCard={n=><article>{n.title}</article>} onPlace={save}/>)
+ fireEvent.click(screen.getByRole('button',{name:'Change placement'}))
+ fireEvent.change(screen.getByRole('combobox',{name:'Map collection'}),{target:{value:'topic-8'}})
+ fireEvent.change(screen.getByRole('combobox',{name:'Map subtopic'}),{target:{value:'topic-8-sub-1'}})
+ await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Save placement'}))})
+ expect(save).toHaveBeenCalledWith(item,{topicId:'topic-8',subtopicId:'topic-8-sub-1'})
+ fireEvent.drop(screen.getByRole('button',{name:'Agent memory & context, 0 stories'}),{dataTransfer:{getData:()=>item.id}})
+ expect(save).toHaveBeenCalledWith(item,{topicId:'topic-0'})
 })
