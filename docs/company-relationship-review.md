@@ -1,0 +1,15 @@
+# Company relationships and temporary source review
+
+Company map defaults to Partnerships & integrations. An edge requires an exact-source evidence record or reviewed `metadata.company_relationships` with matching `evidence_url`, `verified: true`, explicit `from`/`to` company IDs and a supported kind. A raw co-mention cannot create this edge. Shared stories remains a separate view. Related companies in a multilateral announcement are explicitly paired; no complete clique is inferred.
+
+The evidence registry activates only for news already in the current Selected Sources props. Researching a candidate never inserts that news into the workspace. Exact-source matching ignores tracking queries and a trailing slash; it does not trust an arbitrary article with similar keywords. This is a curated evidence mechanism, not general semantic relationship extraction. New unrelated URLs need review before becoming cooperation edges.
+
+HP, Dell, Samsung, Plaud and Oura are pinned even with zero stories. Claude is a product alias of Anthropic, not a separate company. Dexcom, Salesforce and Broadcom are configured but remain hidden until news mentions them or has a reviewed relationship involving them. Layout height grows with company rows.
+
+`/partnership-review.html` is a temporary Chinese research-review page, with an independent 20-source public batch. It supports company/pair/type/year/text filters, individual selection, feedback, browser-local persistence, and JSON export/copy. It has no database write endpoint. Feedback is not uploaded or synced across devices. The export is a review handoff, not automatic publication approval.
+
+After the user confirms a selection, recheck live canonical URLs for duplicates, use the requesting member as contributor, set published_at from the original day-precision date, and preserve the actual capture timestamp for per-user New semantics. Retain explicit relationship endpoints, kind and evidence URL in metadata. A publication date or documented case-study date must not be represented as a contract signature date. Later updates do not rewrite the original publication date.
+
+Granola MCP original date: 2026-02-04 from article:published_time and JSON-LD. Plaud MCP original date: 2026-07-29 from JSON-LD datePublished; current displayed/modified date is 2026-10-19. Plaud expressly identifies ChatGPT/Claude compatibility without asserting sponsorship or affiliation. Capture that distinction as integration, not a bilateral strategic partnership.
+
+Validation: 169 unit/component tests, production build and existing lint checks; browser QA covers pair filtering by mouse and keyboard, compound filters, selection persistence, feedback, export contents/dates and mobile width. No candidate news or review feedback was written to the production database.

@@ -1,4 +1,5 @@
 import type { NewsItem } from './types'
+import { companyRelationships } from './company-relationships'
 export const newsMapTopics = [
   {
     "id": "topic-0",
@@ -224,12 +225,12 @@ export const newsMapCompanies = [
   {
     "id": "entity:OpenAI",
     "title": "OpenAI",
-    "aliases": "OpenAI|Open AI|开放人工智能"
+    "aliases": "OpenAI|Open AI|开放人工智能|ChatGPT"
   },
   {
     "id": "entity:Anthropic",
-    "title": "Anthropic",
-    "aliases": "Anthropic"
+    "title": "Anthropic / Claude",
+    "aliases": "Anthropic|Claude"
   },
   {
     "id": "entity:Google",
@@ -269,7 +270,7 @@ export const newsMapCompanies = [
   {
     "id": "entity:Amazon",
     "title": "Amazon",
-    "aliases": "Amazon|亚马逊"
+    "aliases": "Amazon|亚马逊|AWS|Amazon Web Services"
   },
   {
     "id": "entity:NVIDIA",
@@ -282,9 +283,34 @@ export const newsMapCompanies = [
     "aliases": "Hugging Face"
   },
   {
+    "id": "entity:HP",
+    "title": "HP",
+    "aliases": "HP|Hewlett.Packard|惠普"
+  },
+  {
+    "id": "entity:Dell",
+    "title": "Dell",
+    "aliases": "Dell|戴尔"
+  },
+  {
+    "id": "entity:Samsung",
+    "title": "Samsung",
+    "aliases": "Samsung|三星"
+  },
+  {
     "id": "entity:Perplexity",
     "title": "Perplexity",
     "aliases": "Perplexity"
+  },
+  {
+    "id": "entity:Plaud",
+    "title": "Plaud",
+    "aliases": "Plaud|PLAUD AI"
+  },
+  {
+    "id": "entity:Oura",
+    "title": "Oura Ring",
+    "aliases": "Oura|ŌURA|Oura Ring"
   },
   {
     "id": "entity:Cloudflare",
@@ -375,6 +401,21 @@ export const newsMapCompanies = [
     "id": "entity:KiWear",
     "title": "KiWear",
     "aliases": "KiWear"
+  },
+  {
+    "id": "entity:Dexcom",
+    "title": "Dexcom",
+    "aliases": "Dexcom|Stelo"
+  },
+  {
+    "id": "entity:Salesforce",
+    "title": "Salesforce",
+    "aliases": "Salesforce"
+  },
+  {
+    "id": "entity:Broadcom",
+    "title": "Broadcom",
+    "aliases": "Broadcom|博通"
   }
 ] as const
 export function topicNews(items: NewsItem[], pattern: string) {
@@ -383,7 +424,8 @@ export function topicNews(items: NewsItem[], pattern: string) {
 }
 export function companyNews(items: NewsItem[], aliases: string) {
  const regex = new RegExp('(?<![a-z0-9])(?:'+aliases+')(?![a-z0-9])','i')
- return items.filter(item => regex.test(item.title+' '+item.summary))
+ const company=newsMapCompanies.find(c=>c.aliases===aliases)
+ return items.filter(item => regex.test(item.title+' '+item.summary) || (company && companyRelationships(item).some(r=>r.from===company.id||r.to===company.id)))
 }
 export function companyGroup(item: NewsItem) {
  const mentions = newsMapCompanies.filter(c=>companyNews([item],c.aliases).length)
@@ -434,3 +476,5 @@ export function mapPlacement(item: NewsItem) {
  const subtopic=primary?.subtopics.find(t=>t.id===manual?.subtopicId)||primary?.subtopics.find(t=>mapSubtopicNews([item],primary.id,t.id).length>0)
  return {primary,subtopic,manual:!!manual,related:matches.filter(t=>t.id!==primary?.id)}
 }
+
+export const pinnedMapCompanies = ['entity:HP','entity:Dell','entity:Samsung','entity:Plaud','entity:Oura']

@@ -1,0 +1,546 @@
+{
+  "batchId": "partnerships-20261020-v1",
+  "researchedAt": "2026-10-20",
+  "items": [
+    {
+      "id": "p01",
+      "publishedAt": "2024-06-10",
+      "title": "OpenAI and Apple announce ChatGPT integration",
+      "summaryZh": "宣布将 ChatGPT 接入 Siri 与系统写作工具。",
+      "url": "https://openai.com/index/openai-and-apple-announce-partnership/",
+      "companies": [
+        "OpenAI",
+        "Apple"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "OpenAI and Apple announced a partnership bringing ChatGPT capabilities to Siri and systemwide Writing Tools across Apple devices.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "OpenAI",
+          "Apple"
+        ]
+      ],
+      "source": "openai.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p02",
+      "publishedAt": "2024-12-11",
+      "title": "Apple ships ChatGPT support in Apple Intelligence",
+      "summaryZh": "合作进入正式上线阶段：Siri 和 Writing Tools 可调用 ChatGPT。",
+      "url": "https://www.apple.com/newsroom/2024/12/apple-intelligence-now-features-image-playground-genmoji-and-more/",
+      "companies": [
+        "OpenAI",
+        "Apple"
+      ],
+      "kind": "integration",
+      "stage": "上线",
+      "category": "ai_software",
+      "summary": "Apple launched ChatGPT integration in Siri and Writing Tools alongside its December Apple Intelligence update for supported devices.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "OpenAI",
+          "Apple"
+        ]
+      ],
+      "source": "www.apple.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p03",
+      "publishedAt": "2025-03-31",
+      "title": "Apple brings ChatGPT-powered writing to Vision Pro",
+      "summaryZh": "同一合作扩展到 Vision Pro；可与前两条择优保留。",
+      "url": "https://www.apple.com/newsroom/2025/03/apple-intelligence-features-expand-to-new-languages-and-regions-today/",
+      "companies": [
+        "OpenAI",
+        "Apple"
+      ],
+      "kind": "integration",
+      "stage": "扩展",
+      "category": "ai_software",
+      "summary": "Apple expanded Apple Intelligence to Vision Pro, including ChatGPT-powered composition in Writing Tools and additional creative features.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "OpenAI",
+          "Apple"
+        ]
+      ],
+      "source": "www.apple.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p04",
+      "publishedAt": "2026-02-04",
+      "title": "Granola MCP connects meeting notes to ChatGPT and Claude",
+      "summaryZh": "Granola 自有 MCP 连接器将会议上下文带入 ChatGPT、Claude 和 Cursor。",
+      "url": "https://www.granola.ai/blog/granola-mcp",
+      "companies": [
+        "Granola",
+        "OpenAI",
+        "Anthropic"
+      ],
+      "kind": "integration",
+      "stage": "上线",
+      "category": "ai_software",
+      "summary": "Granola launched an MCP connector letting ChatGPT and Claude retrieve meeting notes and use conversation context across workflows.",
+      "dateNote": "原始日期由 article:published_time 和 datePublished 一致确认；网页仅显示 February 4。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Granola",
+          "OpenAI"
+        ],
+        [
+          "Granola",
+          "Anthropic"
+        ]
+      ],
+      "source": "www.granola.ai",
+      "datePrecision": "day",
+      "dateBasis": "original_metadata"
+    },
+    {
+      "id": "p05",
+      "publishedAt": "2026-07-29",
+      "title": "Plaud connects recordings and notes to ChatGPT and Claude",
+      "summaryZh": "通过 MCP 接入录音、转写与摘要；属于产品兼容整合，不等于双方战略合作。",
+      "url": "https://uk.plaud.ai/blogs/news/plaud-mcp-for-chatgpt-and-claude",
+      "companies": [
+        "Plaud",
+        "OpenAI",
+        "Anthropic"
+      ],
+      "kind": "integration",
+      "stage": "上线",
+      "category": "ai_software",
+      "summary": "Plaud introduced MCP integrations that let ChatGPT and Claude access recordings, transcripts and summaries for connected work.",
+      "dateNote": "datePublished 为 2026-07-29；dateModified 与页面当前显示为 2026-10-19。导入用原始发布日期。原文明确不代表 OpenAI/Anthropic 背书或关联。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Plaud",
+          "OpenAI"
+        ],
+        [
+          "Plaud",
+          "Anthropic"
+        ]
+      ],
+      "source": "uk.plaud.ai",
+      "datePrecision": "day",
+      "dateBasis": "original_metadata"
+    },
+    {
+      "id": "p06",
+      "publishedAt": "2026-09-22",
+      "title": "Plaud launches a native Salesforce integration",
+      "summaryZh": "把现场对话摘要及文件链接同步到 Salesforce 的联系人、商机和账户记录。",
+      "url": "https://www.plaud.ai/blogs/news/plaud-brings-conversation-intelligence-to-field-sales-teams-with-new-salesforce-integration",
+      "companies": [
+        "Plaud",
+        "Salesforce"
+      ],
+      "kind": "integration",
+      "stage": "上线",
+      "category": "ai_software",
+      "summary": "Plaud launched a Salesforce integration that turns captured conversations into CRM records, summaries and linked meeting intelligence.",
+      "dateNote": "采用原文显示的发布日期；与 Plaud MCP 是不同产品整合。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Plaud",
+          "Salesforce"
+        ]
+      ],
+      "source": "www.plaud.ai",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p07",
+      "publishedAt": "2026-08-05",
+      "title": "Plaud builds its AI infrastructure on Microsoft Azure",
+      "summaryZh": "Microsoft 客户案例确认 Plaud 使用 Azure 语音、模型推理及安全服务。",
+      "url": "https://www.microsoft.com/en/customers/story/26496-plaud-azure-speech-in-foundry-tools",
+      "companies": [
+        "Plaud",
+        "Microsoft"
+      ],
+      "kind": "cloud",
+      "stage": "客户案例",
+      "category": "ecosystem",
+      "summary": "Microsoft documented how Plaud uses Azure services for speech processing, model inference and content safety across its infrastructure.",
+      "dateNote": "日期为客户案例发表日，不是双方合同签署日。Azure OpenAI 是经 Microsoft 提供的模型服务，不另推断直接战略协议。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Plaud",
+          "Microsoft"
+        ]
+      ],
+      "source": "www.microsoft.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p08",
+      "publishedAt": "2025-10-21",
+      "title": "Samsung launches Perplexity on its TVs",
+      "summaryZh": "Perplexity TV App 正式上线，提供大屏问答入口。",
+      "url": "https://news.samsung.com/us/samsung-launches-first-ever-perplexity-ai-powered-tv-app-further-elevating-samsung-vision-ai-companion-experience/",
+      "companies": [
+        "Samsung",
+        "Perplexity"
+      ],
+      "kind": "integration",
+      "stage": "上线",
+      "category": "ai_software",
+      "summary": "Samsung launched the Perplexity TV App, adding conversational search to compatible televisions and its Vision AI Companion experience.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Samsung",
+          "Perplexity"
+        ]
+      ],
+      "source": "news.samsung.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p09",
+      "publishedAt": "2026-03-02",
+      "title": "Samsung showcases Gemini and Perplexity agents on Galaxy S26",
+      "summaryZh": "MWC 官方发布确认 Galaxy 的多智能体入口包含 Gemini 与 Perplexity。",
+      "url": "https://news.samsung.com/us/samsung-advances-galaxy-ai-connected-ecosystem-mwc-2026/",
+      "companies": [
+        "Samsung",
+        "Google",
+        "Perplexity"
+      ],
+      "kind": "integration",
+      "stage": "扩展",
+      "category": "interaction",
+      "summary": "Samsung demonstrated Galaxy S26 agent experiences with Gemini and Perplexity, supporting search and coordinated actions across apps.",
+      "dateNote": "这是 MWC 展示文章日期，不写成首次签约日。只连接 Samsung–Google 与 Samsung–Perplexity，不推断 Google–Perplexity 合作。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Samsung",
+          "Google"
+        ],
+        [
+          "Samsung",
+          "Perplexity"
+        ]
+      ],
+      "source": "news.samsung.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p10",
+      "publishedAt": "2024-01-18",
+      "title": "Samsung and Google Cloud announce a multiyear AI partnership",
+      "summaryZh": "将 Google Cloud 的 Gemini 与 Imagen 能力带入 Galaxy S24。",
+      "url": "https://news.samsung.com/sg/samsung-and-google-cloud-join-forces-to-bring-generative-ai-to-samsung-galaxy-s24-series",
+      "companies": [
+        "Samsung",
+        "Google"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "Samsung and Google Cloud announced a multiyear partnership bringing Gemini and Imagen capabilities to the Galaxy S24 series.",
+      "dateNote": "采用此新加坡官方新闻页的 2024-01-18 日期；其他地区时区可能显示前一天。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Samsung",
+          "Google"
+        ]
+      ],
+      "source": "news.samsung.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p11",
+      "publishedAt": "2026-06-01",
+      "title": "HP previews AI PCs powered by NVIDIA RTX Spark",
+      "summaryZh": "HP 官方发布 NVIDIA RTX Spark 平台 PC，覆盖本地 AI 与创作。",
+      "url": "https://www.hp.com/us-en/newsroom/press-releases/2026/computex.html",
+      "companies": [
+        "HP",
+        "NVIDIA"
+      ],
+      "kind": "hardware",
+      "stage": "宣布",
+      "category": "ai_hardware",
+      "summary": "HP previewed PCs powered by NVIDIA RTX Spark, targeting local AI workflows, content creation and high-performance Windows experiences.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "HP",
+          "NVIDIA"
+        ]
+      ],
+      "source": "www.hp.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p12",
+      "publishedAt": "2025-03-18",
+      "title": "Dell expands the Dell AI Factory with NVIDIA",
+      "summaryZh": "双方扩展从 AI 工作站到数据中心的联合解决方案。",
+      "url": "https://www.dell.com/en-us/dt/corporate/newsroom/announcements/detailpage.press-releases~usa~2025~03~corp.htm",
+      "companies": [
+        "Dell",
+        "NVIDIA"
+      ],
+      "kind": "hardware",
+      "stage": "扩展",
+      "category": "ai_hardware",
+      "summary": "Dell expanded its AI Factory collaboration with NVIDIA, adding workstations, infrastructure and services for enterprise AI deployment.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Dell",
+          "NVIDIA"
+        ]
+      ],
+      "source": "www.dell.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p13",
+      "publishedAt": "2024-07-09",
+      "title": "Perplexity and AWS collaborate on Enterprise Pro",
+      "summaryZh": "明确的联合销售、活动及市场合作；关系对象是 AWS 云业务。",
+      "url": "https://www.perplexity.ai/ca/hub/blog/perplexity-collaborates-with-amazon-web-services-to-launch-enterprise-pro",
+      "companies": [
+        "Perplexity",
+        "Amazon"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "Perplexity announced an AWS collaboration covering Enterprise Pro distribution, joint events, co-selling and co-marketing for business customers.",
+      "dateNote": "原始新闻为 2024-07-09。Amazon 节点在此代表 AWS，不能推断 Amazon 所有业务都与 Perplexity 合作。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Perplexity",
+          "Amazon"
+        ]
+      ],
+      "source": "www.perplexity.ai",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p14",
+      "publishedAt": "2024-11-22",
+      "title": "Anthropic expands its AWS training partnership",
+      "summaryZh": "Amazon 增资，AWS 成为主要云与训练伙伴；是协议扩大，不是单纯模型提及。",
+      "url": "https://www.anthropic.com/news/anthropic-amazon-trainium",
+      "companies": [
+        "Anthropic",
+        "Amazon"
+      ],
+      "kind": "partnership",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "Anthropic expanded its AWS partnership with additional Amazon investment and collaboration on Trainium hardware, model training and deployment.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Anthropic",
+          "Amazon"
+        ]
+      ],
+      "source": "www.anthropic.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p15",
+      "publishedAt": "2026-04-06",
+      "title": "Anthropic expands its Google and Broadcom compute agreement",
+      "summaryZh": "新增多吉瓦 TPU 计算资源协议，计划从 2027 年开始上线。",
+      "url": "https://www.anthropic.com/news/google-broadcom-partnership-compute",
+      "companies": [
+        "Anthropic",
+        "Google",
+        "Broadcom"
+      ],
+      "kind": "cloud",
+      "stage": "扩展",
+      "category": "ecosystem",
+      "summary": "Anthropic signed an expanded Google and Broadcom agreement for next-generation TPU capacity expected to become available starting in 2027.",
+      "dateNote": "只连接 Anthropic–Google 与 Anthropic–Broadcom；这篇文章没有单独证明 Google–Broadcom 新签了另一份协议。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Anthropic",
+          "Google"
+        ],
+        [
+          "Anthropic",
+          "Broadcom"
+        ]
+      ],
+      "source": "www.anthropic.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p16",
+      "publishedAt": "2024-11-19",
+      "title": "Oura and Dexcom announce a strategic partnership",
+      "summaryZh": "结合戒指生理数据与血糖数据，并开展联合营销；Dexcom 同时投资 Oura。",
+      "url": "https://investors.dexcom.com/news/news-details/2024/Dexcom-and-URA-Announce-Strategic-Partnership/default.aspx",
+      "companies": [
+        "Oura",
+        "Dexcom"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "Oura and Dexcom announced data integration and co-marketing plans, alongside a strategic Dexcom investment in Oura funding.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Oura",
+          "Dexcom"
+        ]
+      ],
+      "source": "investors.dexcom.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p17",
+      "publishedAt": "2025-05-06",
+      "title": "Oura launches metabolic health with Dexcom Stelo integration",
+      "summaryZh": "此前宣布的合作进入产品落地阶段，可在 Oura 中查看 Stelo 血糖数据。",
+      "url": "https://ouraring.com/blog/introducing-metabolic-health/",
+      "companies": [
+        "Oura",
+        "Dexcom"
+      ],
+      "kind": "integration",
+      "stage": "上线",
+      "category": "ai_software",
+      "summary": "Oura launched metabolic health features with Dexcom Stelo integration, combining glucose measurements with sleep, stress and activity insights.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Oura",
+          "Dexcom"
+        ]
+      ],
+      "source": "ouraring.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p18",
+      "publishedAt": "2024-03-07",
+      "title": "Oura expands distribution through Amazon",
+      "summaryZh": "Oura 官方宣布进入 Amazon 渠道销售；是渠道合作，不是模型或数据合作。",
+      "url": "https://ouraring.com/blog/oura-amazon-announcement/",
+      "companies": [
+        "Oura",
+        "Amazon"
+      ],
+      "kind": "distribution",
+      "stage": "上线",
+      "category": "ecosystem",
+      "summary": "Oura announced availability through Amazon, expanding retail access to its rings and sizing kits for customers in the United States.",
+      "dateNote": "原始日期 2024-03-07；文章后来补充英国渠道信息，不将更新内容误标为初始事件。",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Oura",
+          "Amazon"
+        ]
+      ],
+      "source": "ouraring.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p19",
+      "publishedAt": "2026-04-27",
+      "title": "Microsoft and OpenAI amend their partnership agreement",
+      "summaryZh": "双方调整合作条款；可与早期协议放在同一关系的时间线中。",
+      "url": "https://blogs.microsoft.com/blog/2026/04/27/the-next-phase-of-the-microsoft-openai-partnership/",
+      "companies": [
+        "Microsoft",
+        "OpenAI"
+      ],
+      "kind": "partnership",
+      "stage": "更新",
+      "category": "ecosystem",
+      "summary": "Microsoft and OpenAI announced an amended agreement intended to simplify their partnership and provide greater flexibility for both companies.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "Microsoft",
+          "OpenAI"
+        ]
+      ],
+      "source": "blogs.microsoft.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    },
+    {
+      "id": "p20",
+      "publishedAt": "2026-02-27",
+      "title": "OpenAI and Amazon announce a strategic partnership",
+      "summaryZh": "新增多年度战略合作，覆盖企业 AI、基础设施及产品服务。",
+      "url": "https://openai.com/index/amazon-partnership/",
+      "companies": [
+        "OpenAI",
+        "Amazon"
+      ],
+      "kind": "partnership",
+      "stage": "宣布",
+      "category": "ecosystem",
+      "summary": "OpenAI and Amazon announced a multiyear strategic partnership spanning enterprise AI, infrastructure and new products for business customers.",
+      "dateNote": "",
+      "checkedAt": "2026-10-20",
+      "pairs": [
+        [
+          "OpenAI",
+          "Amazon"
+        ]
+      ],
+      "source": "openai.com",
+      "datePrecision": "day",
+      "dateBasis": "publisher_displayed_date"
+    }
+  ]
+}
