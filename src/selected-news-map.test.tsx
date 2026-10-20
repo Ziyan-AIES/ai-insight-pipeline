@@ -43,3 +43,19 @@ it('refreshes the selected topic with newly arriving news instead of retaining a
  expect(screen.getByText('New memory architecture')).toBeInTheDocument()
  expect(screen.getByRole('status')).toHaveTextContent('2 stories')
 })
+
+it('drills into consumer subtopics, hides empty children, and preserves overlapping news',()=>{
+ const items=[{...demoNews[0],id:'finance',title:'Google Finance market briefings',summary:'Personal finance for families'},{...demoNews[0],id:'health',title:'AI health assistant',summary:'Healthcare at home'}]
+ render(<SelectedNewsMap news={items} isNew={n=>n.id==='finance'} renderCard={n=><article>{n.title}</article>}/>)
+ fireEvent.click(screen.getByRole('button',{name:'Consumer domain experiences, 2 stories, 1 new'}))
+ const subtopics=screen.getByRole('navigation',{name:'Subtopics'})
+ expect(within(subtopics).queryByText('Relationships & personal assistance')).toBeNull()
+ fireEvent.click(within(subtopics).getByRole('button',{name:/Personal finance/}))
+ expect(screen.getByRole('status')).toHaveTextContent('1 stories')
+ expect(screen.getByText('Google Finance market briefings')).toBeInTheDocument()
+ expect(within(screen.getByRole('region',{name:'News in selected map area'})).queryByText('AI health assistant')).toBeNull()
+ fireEvent.click(within(subtopics).getByRole('button',{name:'All in this topic'}))
+ expect(screen.getByRole('status')).toHaveTextContent('2 stories')
+ fireEvent.click(screen.getByRole('button',{name:'Global map'}))
+ expect(screen.queryByRole('navigation',{name:'Subtopics'})).toBeNull()
+})

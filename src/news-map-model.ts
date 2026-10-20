@@ -3,62 +3,221 @@ export const newsMapTopics = [
   {
     "id": "topic-0",
     "title": "Agent memory & context",
-    "pattern": "memory|knowledge graphs?|shared context|context layer|long.conversation|ownership of AI usage data"
+    "pattern": "memory|knowledge graphs?|shared context|context layer|long.conversation|ownership of AI usage data",
+    "subtopics": [
+      {
+        "id": "topic-0-sub-0",
+        "title": "Persistent memory & context",
+        "pattern": "memory|shared context|context layer|long.conversation"
+      },
+      {
+        "id": "topic-0-sub-1",
+        "title": "Knowledge & retrieval",
+        "pattern": "knowledge graphs?|retrieval|knowledge base"
+      }
+    ]
   },
   {
     "id": "topic-1",
     "title": "Agent harness & reliability",
-    "pattern": "harness|Loop Engineering|coding loops|OSWorld|code.agent|coding agent|agent.*token|token.*agent"
+    "pattern": "harness|Loop Engineering|coding loops|OSWorld|code.agent|coding agent|agent.*token|token.*agent|harness(?:es)?|coding agents?|agents.cli|reusable skills",
+    "subtopics": [
+      {
+        "id": "topic-1-sub-0",
+        "title": "Coding harnesses & skills",
+        "pattern": "harness(?:es)?|coding agents?|code.agent|skills?|Codex|Claude Code|agents.cli"
+      },
+      {
+        "id": "topic-1-sub-1",
+        "title": "Evaluation & reliability",
+        "pattern": "OSWorld|evaluat(?:e|ion)|benchmark|reliability|Loop Engineering|coding loops"
+      }
+    ]
   },
   {
     "id": "topic-2",
     "title": "Agent security & governance",
-    "pattern": "security|permission|safeguard|credential|isolation|copyright|watermark|C2PA|governance|authorization|parental control|transparency rules"
+    "pattern": "security|permission|safeguard|credential|isolation|copyright|watermark|C2PA|governance|authorization|parental control|transparency rules|private modes",
+    "subtopics": [
+      {
+        "id": "topic-2-sub-0",
+        "title": "Permissions & isolation",
+        "pattern": "permissions?|authorization|credentials?|isolation|private modes"
+      },
+      {
+        "id": "topic-2-sub-1",
+        "title": "Safety & content provenance",
+        "pattern": "safeguards?|copyright|watermarks?|C2PA|parental controls?|transparency rules"
+      }
+    ]
   },
   {
     "id": "topic-3",
     "title": "Commerce & agent payments",
-    "pattern": "commerce|payment|SkillPay|WeChat Pay|Alipay|orders|ordering|check out|bookings|outcome.based|result.based|monetization|Shop the Scene"
+    "pattern": "commerce|shopping|payment|SkillPay|WeChat Pay|Alipay|orders|ordering|check out|bookings|outcome.based|result.based|monetization|Shop the Scene",
+    "subtopics": [
+      {
+        "id": "topic-3-sub-0",
+        "title": "Shopping & booking",
+        "pattern": "commerce|shopping|orders?|ordering|check out|bookings?|Shop the Scene"
+      },
+      {
+        "id": "topic-3-sub-1",
+        "title": "Payments & monetization",
+        "pattern": "payments?|SkillPay|WeChat Pay|Alipay|outcome.based|result.based|monetization"
+      }
+    ]
   },
   {
     "id": "topic-4",
     "title": "Personal devices & embodiment",
-    "pattern": "speaker|keypad|AI companion|Muse Charm|AI device|AI Hardware|Embodied|robot|glasses|AI ring|NFC|Watch|core devices"
+    "pattern": "speaker|keypad|AI companion|Muse Charm|AI device|AI Hardware|Embodied|robot|glasses|AI ring|NFC|Watch|core devices|MHS|factory hardware",
+    "subtopics": [
+      {
+        "id": "topic-4-sub-0",
+        "title": "Wearables & companions",
+        "pattern": "glasses|AI ring|Watch|Muse Charm|AI companion|NFC"
+      },
+      {
+        "id": "topic-4-sub-1",
+        "title": "Robotics & connected hardware",
+        "pattern": "robots?|Embodied|speakers?|keypads?|MHS|factory hardware"
+      }
+    ]
   },
   {
     "id": "topic-5",
     "title": "Local AI & compute",
-    "pattern": "on.prem|local inference|local AI|local.first|local computing|Macs|Mac mini|DGX|RTX|Ollama|Exo|Go Abacus"
+    "pattern": "on.prem|local inference|local AI|local.first|local computing|Macs|Mac mini|DGX|RTX|Ollama|Exo|Go Abacus",
+    "subtopics": [
+      {
+        "id": "topic-5-sub-0",
+        "title": "Local deployment",
+        "pattern": "on.prem|local inference|local AI|local.first|Ollama|Exo|Go Abacus"
+      },
+      {
+        "id": "topic-5-sub-1",
+        "title": "Compute & devices",
+        "pattern": "Macs|Mac mini|DGX|RTX|local computing"
+      }
+    ]
   },
   {
     "id": "topic-6",
-    "title": "Voice & live interaction",
-    "pattern": "full.duplex|voice|audio.visual|realtime|real.time voice|speech|Gemini Live|GPT.Live|Seeduplex"
+    "title": "Interaction & interfaces",
+    "pattern": "full.duplex|voice|audio.visual|realtime|real.time voice|speech|Gemini Live|GPT.Live|Seeduplex|screen|browser|Chrome|computer.use|GenUI|Artifacts|interfaces?|Record & Replay|demonstrat|Cowork|chat merge|Copilot apps",
+    "subtopics": [
+      {
+        "id": "topic-6-sub-0",
+        "title": "Voice & live conversation",
+        "pattern": "full.duplex|voice|speech|Gemini Live|GPT.Live|Seeduplex|audio.visual"
+      },
+      {
+        "id": "topic-6-sub-1",
+        "title": "Screen & browser interaction",
+        "pattern": "screen|browser|Chrome|computer.use|GenUI|Artifacts|interactive|interface"
+      },
+      {
+        "id": "topic-6-sub-2",
+        "title": "Demonstration & workflow interaction",
+        "pattern": "Record & Replay|demonstrat|Cowork|chat merge|Copilot apps"
+      }
+    ]
   },
   {
     "id": "topic-7",
     "title": "Cross-app agent workflows",
-    "pattern": "cross.app|cross.device|Workspace|connected apps|connectors|MCP|Slack|browser|OS.level|OS-level|workplace|WorkBuddy|agent collaboration"
+    "pattern": "cross.app|cross.device|Workspace|connected apps|connectors|MCP|Slack|browser|OS.level|OS-level|workplace|WorkBuddy|agent collaboration|MHS|Cowork|Microsoft 365|meeting note.taker|scheduling|Calendly",
+    "subtopics": [
+      {
+        "id": "topic-7-sub-0",
+        "title": "App connections & orchestration",
+        "pattern": "cross.app|cross.device|connected apps|connectors|MCP|agent collaboration|MHS"
+      },
+      {
+        "id": "topic-7-sub-1",
+        "title": "Work & productivity",
+        "pattern": "Workspace|Slack|workplace|WorkBuddy|Cowork|Microsoft 365|meeting|scheduling|Calendly"
+      }
+    ]
   },
   {
     "id": "topic-8",
-    "title": "Family & personal life",
-    "pattern": "families|family|household|caregiver|Teens|dating|Home|health|healthcare|personal finance"
+    "title": "Consumer domain experiences",
+    "pattern": "families|family|household|caregiver|Teens|dating|Home|health|healthcare|personal finance|Google Finance|Vibe.Trading|personal.*trading|financial market analysis|personal agents?",
+    "subtopics": [
+      {
+        "id": "topic-8-sub-0",
+        "title": "Family & caregiving",
+        "pattern": "families|family|household|caregiver|Teens|parental|Home"
+      },
+      {
+        "id": "topic-8-sub-1",
+        "title": "Health & wellbeing",
+        "pattern": "health|healthcare|wellbeing"
+      },
+      {
+        "id": "topic-8-sub-2",
+        "title": "Personal finance",
+        "pattern": "personal finance|Google Finance|Vibe.Trading|personal.*trading|financial market analysis"
+      },
+      {
+        "id": "topic-8-sub-3",
+        "title": "Relationships & personal assistance",
+        "pattern": "dating|personal agents?|AI companion"
+      }
+    ]
   },
   {
     "id": "topic-9",
     "title": "Creation & generative interfaces",
-    "pattern": "3D|game|visual generation|diffusion|Firefly|Photoshop|creation|Creator|Artifacts|GenUI|generated Agent|flash apps|text.to.game"
+    "pattern": "3D|game|visual generation|diffusion|Firefly|Photoshop|creation|Creator|Artifacts|GenUI|generated Agent|flash apps|text.to.game|games?",
+    "subtopics": [
+      {
+        "id": "topic-9-sub-0",
+        "title": "Games & interactive worlds",
+        "pattern": "3D|games?|text.to.game|Roblox"
+      },
+      {
+        "id": "topic-9-sub-1",
+        "title": "Visual & creative tools",
+        "pattern": "visual generation|diffusion|Firefly|Photoshop|creation|Creator|Artifacts|GenUI|flash apps"
+      }
+    ]
   },
   {
     "id": "topic-10",
     "title": "Model competition & economics",
-    "pattern": "open.weight|open model|model market|model.efficiency|token cost|API cost|2.4T|2.8.trillion|Qwen3|Kimi K3|model selection|Muse Spark|Fable"
+    "pattern": "open.weight|open model|model market|model.efficiency|token cost|API cost|2.4T|2.8.trillion|Qwen3|Kimi K3|model selection|Muse Spark|Fable|open.source releases|open models?|API costs?|token burn|spend caps|App Store|downloads",
+    "subtopics": [
+      {
+        "id": "topic-10-sub-0",
+        "title": "Models & releases",
+        "pattern": "open.weight|open.source releases|open models?|Qwen3|Kimi K3|Muse Spark|Fable|2.4T|2.8.trillion"
+      },
+      {
+        "id": "topic-10-sub-1",
+        "title": "Costs & adoption",
+        "pattern": "model market|model.efficiency|token cost|API costs?|model selection|token burn|spend caps|App Store|downloads"
+      }
+    ]
   },
   {
     "id": "topic-11",
     "title": "Enterprise AI & data ownership",
-    "pattern": "enterprise|regulated|financial services|Glean|usage data|proprietary|on.prem|company context"
+    "pattern": "enterprise|regulated|financial services|Glean|usage data|proprietary|on.prem|company context",
+    "subtopics": [
+      {
+        "id": "topic-11-sub-0",
+        "title": "Enterprise deployment & control",
+        "pattern": "enterprise|regulated|financial services|on.prem"
+      },
+      {
+        "id": "topic-11-sub-1",
+        "title": "Organizational knowledge & ownership",
+        "pattern": "Glean|usage data|proprietary|company context"
+      }
+    ]
   }
 ] as const
 export const newsMapCompanies = [

@@ -4964,10 +4964,8 @@ function App() {
                 <span className="eyebrow">Deliberately selected by people</span>
                 <h1>Selected Sources</h1>
               </div>
-              {renderTimeFilter()}
+              <div className="selected-news-heading-controls"><div className="selected-news-view-switch" role="group" aria-label="Selected Sources view"><button type="button" aria-pressed={signalsView === 'categories'} onClick={() => setSignalsView('categories')}>Categories</button><button type="button" aria-pressed={signalsView === 'map'} onClick={() => setSignalsView('map')}>Map</button></div>{renderTimeFilter()}</div>
             </div>
-            <div className="sonata-source-note">Sources are selected by team members. Use <strong>+ Add News</strong> at the top right, or save an article in one click with our Chrome extension. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Get the Chrome extension</a></div>
-            <div className="selected-news-view-switch" role="group" aria-label="Selected Sources view"><button type="button" aria-pressed={signalsView === 'categories'} onClick={() => setSignalsView('categories')}>Categories</button><button type="button" aria-pressed={signalsView === 'map'} onClick={() => setSignalsView('map')}>Map</button></div>
             {signalsView === 'map' ? <SelectedNewsMap news={visibleNews} isNew={isNewSignal} renderCard={item => renderNoteCard(item, { variant: 'live' })} /> : <div className="signals-grid">
               {liveSignalCategories.map((category) => {
                 const items = visibleNews.filter(
@@ -5029,6 +5027,7 @@ function App() {
                 )
               })}
             </div>}
+            <div className="sonata-source-note">Sources are selected by team members. Use <strong>+ Add News</strong> at the top right, or save an article in one click with our Chrome extension. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Get the Chrome extension</a></div>
           </section>
         )}
 
