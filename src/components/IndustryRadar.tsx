@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { sourceSetup } from '../source-method'
 import {
   archiveRadarSource,
   cloudConfigured,
@@ -303,6 +304,7 @@ function SourceManager({
         <div className="radar-source-list">
           {sources.map((source, index) => {
             const health = radarSourceHealth(source)
+            const setup = sourceSetup(source.domain)
             return (
               <article className={`radar-source-row health-${health}`} key={source.id}>
                 <div className="radar-source-order">
@@ -312,8 +314,12 @@ function SourceManager({
                 <span className={`radar-health-dot ${health}`} title={health} />
                 <div className="radar-source-main">
                   <strong><a href={source.homepageUrl} target="_blank" rel="noreferrer">{source.name}</a></strong>
-                  <span>{source.domain} · {radarSourceTypeLabels[source.sourceType]}{source.connectorType === 'website_agent' ? ' · Agent · Mon 12:00 Beijing' : source.connectorType === 'rss' ? <> · <a href={source.feedUrl} target="_blank" rel="noreferrer">RSS ↗</a></> : ''}</span>
-                  {source.lastError ? <small>{source.lastError}</small> : <small>Checked {ageLabel(source.lastFetchedAt)}</small>}
+                  <span>{source.domain} · {radarSourceTypeLabels[source.sourceType]}{source.connectorType === 'website_agent' ? ' · Website Agent · Mon 12:00 Beijing' : source.connectorType === 'agent_email' ? ' · Agent email subscription' : source.connectorType === 'rss' ? <> · <a href={source.feedUrl} target="_blank" rel="noreferrer">RSS ↗</a> · Every 4 hours</> : ''}</span>
+                  {setup?.subscription ? <small>{setup.subscription}</small> : null}
+                  {setup ? <small title={setup.checkedAt}>Setup checked {new Date(setup.checkedAt).toLocaleString('en-GB', {timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short'})} Beijing</small> : null}
+                  <small>{source.connectorType === 'agent_email' ? 'Inbox checked' : 'Content checked'} {ageLabel(source.lastFetchedAt)}{source.connectorType === 'agent_email' ? ' · Automatic inbox checks not scheduled' : ''}</small>
+                  {setup?.note ? <small>{setup.note}</small> : null}
+                  {source.lastError ? <small>{source.lastError}</small> : null}
                 </div>
                 <div className="radar-source-volume"><strong>{source.itemCount7d}</strong><span>7d items</span></div>
                 <label className="radar-source-toggle">

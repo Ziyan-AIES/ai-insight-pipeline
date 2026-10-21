@@ -1,0 +1,136 @@
+[
+  {
+    "key": "sequoia",
+    "name": "Sequoia Capital — Stories",
+    "domain": "sequoiacap.com",
+    "legacyDomain": "framerusercontent.com",
+    "homepageUrl": "https://sequoiacap.com/stories",
+    "feedUrl": "https://framerusercontent.com/assets/89OrFM7FwUeBjSd3KLqLiOUEe4.xml",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:37:47.022Z",
+    "note": "At setup: hosted RSS verified, latest entry August 19; website contains newer stories."
+  },
+  {
+    "key": "menlo",
+    "name": "Menlo Ventures",
+    "domain": "menlovc.com",
+    "homepageUrl": "https://menlovc.com/perspective/",
+    "feedUrl": "https://menlovc.com/feed/",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:37:47.038Z"
+  },
+  {
+    "key": "a16z",
+    "name": "a16z",
+    "domain": "a16z.news",
+    "homepageUrl": "https://www.a16z.news/",
+    "feedUrl": "https://www.a16z.news/feed",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:37:47.039Z",
+    "subscription": "Subscribed"
+  },
+  {
+    "key": "a16z-policy",
+    "name": "a16z AI Policy Brief",
+    "domain": "a16zpolicy.substack.com",
+    "homepageUrl": "https://a16zpolicy.substack.com/",
+    "feedUrl": "https://a16zpolicy.substack.com/feed",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:37:47.042Z",
+    "subscription": "Subscribed"
+  },
+  {
+    "key": "lightspeed-newsletter",
+    "name": "Lightspeed — Newsletter",
+    "domain": "newsletter.lsvp.com",
+    "homepageUrl": "https://newsletter.lsvp.com/",
+    "feedUrl": "https://rss.beehiiv.com/feeds/oj8diHp4G5.xml",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:37:47.041Z",
+    "subscription": "Submitted; email delivery not yet verified",
+    "note": "Newsletter RSS; latest entry September 1 at setup. Main Stories is a separate RSS source."
+  },
+  {
+    "key": "greylock",
+    "name": "Greylock",
+    "domain": "greylock.com",
+    "homepageUrl": "https://greylock.com/blog/",
+    "feedUrl": "https://greylock.com/feed/",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:44:07.763Z",
+    "subscription": "Subscribed",
+    "note": "RSS verified; email subscription also active."
+  },
+  {
+    "key": "bvp",
+    "name": "Bessemer — Atlas",
+    "domain": "bvp.com",
+    "homepageUrl": "https://www.bvp.com/atlas",
+    "feedUrl": "",
+    "method": "agent_email",
+    "checkedAt": "2026-10-21T03:44:07.763Z",
+    "subscription": "Confirmed; welcome email received"
+  },
+  {
+    "key": "nfx",
+    "name": "NFX",
+    "domain": "nfx.com",
+    "homepageUrl": "https://www.nfx.com/library",
+    "feedUrl": "",
+    "method": "agent_email",
+    "checkedAt": "2026-10-21T03:44:07.763Z",
+    "subscription": "Confirmed; welcome email received"
+  },
+  {
+    "key": "felicis",
+    "name": "Felicis",
+    "domain": "felicis.com",
+    "homepageUrl": "https://www.felicis.com/blog",
+    "feedUrl": "",
+    "method": "agent_email",
+    "checkedAt": "2026-10-21T03:44:07.763Z",
+    "subscription": "Subscribed"
+  },
+  {
+    "key": "foundation",
+    "name": "Foundation Capital — The Foundation",
+    "domain": "foundationcapital.com",
+    "homepageUrl": "https://foundationcapital.com/ideas",
+    "feedUrl": "",
+    "method": "agent_email",
+    "checkedAt": "2026-10-21T03:44:07.763Z",
+    "subscription": "Confirmed; welcome email received"
+  },
+  {
+    "key": "iconiq",
+    "name": "ICONIQ — Growth Insights",
+    "domain": "iconiq.com",
+    "homepageUrl": "https://www.iconiq.com/growth/insights",
+    "feedUrl": "",
+    "method": "agent_email",
+    "checkedAt": "2026-10-21T03:44:07.763Z",
+    "subscription": "Submitted; email delivery not yet verified",
+    "pending": true
+  },
+  {
+    "key": "the-information",
+    "name": "The Information — Tech / AI",
+    "domain": "theinformation.com",
+    "homepageUrl": "https://www.theinformation.com/newsletters",
+    "feedUrl": "",
+    "method": "agent_email",
+    "sourceType": "industry_news",
+    "checkedAt": "2026-10-21T03:46:34.879Z",
+    "subscription": "Subscribed: The Briefing, The Information AM, Applied AI, AI Agenda, AI Infrastructure",
+    "note": "Tech and AI email subscription. AI Agenda advertises a 14-day trial; subscriber-only content may require paid access after the trial."
+  },
+  {
+    "key": "lightspeed",
+    "name": "Lightspeed — Stories",
+    "domain": "lsvp.com",
+    "homepageUrl": "https://lsvp.com/stories/",
+    "feedUrl": "https://lsvp.com/feed/",
+    "method": "rss",
+    "checkedAt": "2026-10-21T03:44:45.304Z"
+  }
+]

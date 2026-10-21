@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPinnedLookup,
+  isAgentManagedSource,
   parseFeed,
   storySignature,
   titleSimilarity,
@@ -8,6 +9,13 @@ import {
 } from '../../netlify/functions/_radar.mjs'
 
 describe('Industry Radar ingestion helpers', () => {
+  it('leaves inbox and weekly website sources untouched by RSS refresh without hiding broken RSS sources', () => {
+    expect(isAgentManagedSource({domain:'bvp.com',source_type:'investor',connector_type:'rss',feed_url:''})).toBe(true)
+    expect(isAgentManagedSource({domain:'anthropic.com',source_type:'official',connector_type:'rss',feed_url:''})).toBe(true)
+    expect(isAgentManagedSource({domain:'bvp.com',source_type:'investor',connector_type:'rss',feed_url:'https://www.bvp.com/feed/'})).toBe(false)
+    expect(isAgentManagedSource({domain:'unknown.example',source_type:'investor',connector_type:'rss',feed_url:''})).toBe(false)
+    expect(isAgentManagedSource({domain:'producthunt.com',source_type:'product_discovery',connector_type:'producthunt',feed_url:''})).toBe(false)
+  })
   it('parses RSS and Atom entries into one normalized contract', () => {
     const rss = `<?xml version="1.0"?><rss><channel><item>
       <title><![CDATA[AI agents move into browsers]]></title>

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { sourceConnector } from './source-method'
 import { parseNativeAnalysis } from './analysis'
 import { parseResearchProducts } from './products'
 import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
@@ -1560,7 +1561,7 @@ function mapRadarSource(row: RadarSourceRow, itemCount7d = 0): RadarSource {
     homepageUrl: row.homepage_url,
     feedUrl: row.feed_url,
     sourceType: row.source_type,
-    connectorType: row.source_type === 'official' && !row.feed_url ? 'website_agent' : row.connector_type,
+    connectorType: sourceConnector({domain: row.domain, sourceType: row.source_type, feedUrl: row.feed_url, connectorType: row.connector_type}),
     enabled: row.enabled,
     priority: Number(row.priority || 0),
     displayOrder: Number(row.display_order || 0),

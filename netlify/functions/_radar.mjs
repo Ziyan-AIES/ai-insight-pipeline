@@ -3,6 +3,7 @@ import { lookup } from 'node:dns/promises'
 import ipaddr from 'ipaddr.js'
 import { Agent as UndiciAgent, fetch as undiciFetch } from 'undici-pinned'
 import { canonicalizeUrl, supabase } from './_supabase.mjs'
+import investorSources from '../../config/investor-sources.json' with { type: 'json' }
 
 const USER_AGENT = 'QiraIndustryRadar/0.1 (+https://aiinsightpipeline.netlify.app)'
 const MAX_FEED_BYTES = 2 * 1024 * 1024
@@ -422,6 +423,11 @@ async function recordSourceResult(source, error = null) {
   })
 }
 
+export function isAgentManagedSource(source) {
+  if (source.feed_url || ['producthunt', 'hacker_news'].includes(source.connector_type)) return false
+  return source.source_type === 'official' || investorSources.some(entry => entry.domain === source.domain && entry.method === 'agent_email')
+}
+
 export async function runRadarIngest() {
   const sources = await supabase(
     'radar_sources?enabled=eq.true&deleted_at=is.null&select=*&order=display_order.asc',
@@ -434,7 +440,7 @@ export async function runRadarIngest() {
   let inserted = 0
   let failed = 0
   const results = await Promise.allSettled(
-    (sources || []).filter(source => !(source.source_type === 'official' && !source.feed_url)).map(async (source) => {
+    (sources || []).filter(source => !isAgentManagedSource(source)).map(async (source) => {
       try {
         const raw = await fetchSource(source)
         fetched += raw.length

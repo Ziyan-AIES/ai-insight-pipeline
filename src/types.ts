@@ -35,7 +35,7 @@ export type RadarSourceType =
   | 'investor'
   | 'community'
 
-export type RadarConnectorType = 'rss' | 'producthunt' | 'hacker_news' | 'website_agent'
+export type RadarConnectorType = 'rss' | 'producthunt' | 'hacker_news' | 'website_agent' | 'agent_email'
 
 export interface RadarSource {
   id: string
