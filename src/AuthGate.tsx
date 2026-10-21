@@ -125,7 +125,7 @@ function AuthCard({
   return (
     <main className="auth-screen">
       <section className="auth-card">
-        <span className="brand-mark">SI</span>
+        <img className="sonata-auth-mark" src="/sonata-mark.svg" alt="Sonata" width="48" height="51" />
         <span className="eyebrow">{eyebrow}</span>
         <h1>{title}</h1>
         {children}

@@ -4861,7 +4861,8 @@ function App() {
           href="/?workspace=synthesis"
           aria-label="Open dashboard home"
         >
-          Sonata<small>Qira Market Intelligence</small>
+          <img className="sonata-brand-mark" src="/sonata-mark.svg" alt="" width="36" height="38" />
+          <span className="sonata-brand-wordmark">Sonata<small>Qira Market Intelligence</small></span>
         </a>
         <nav className="workspace-nav" aria-label="Workspace">
           <button
