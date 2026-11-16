@@ -2,6 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { handler, publicResources } from '../../netlify/functions/public-read.mjs'
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 describe('public reading boundary', () => {
+  it('resolves legacy research authors without exposing member ids or overriding explicit authors',async()=>{
+    vi.stubEnv('PUBLIC_WORKSPACE_ENABLED','true')
+    vi.stubEnv('SUPABASE_URL','https://example.supabase.co')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY','test-secret')
+    vi.spyOn(globalThis,'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify([{id:'legacy',owner_id:'member-id',analysis:{}},{id:'new',owner_id:'member-id',analysis:{authorName:'Custom author'}}])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{user_id:'member-id',display_name:'Research author'}])))
+    const result=await handler({httpMethod:'GET',queryStringParameters:{resource:'topics'}})
+    const rows=JSON.parse(result.body).data
+    expect(rows[0].analysis.authorName).toBe('Research author')
+    expect(rows[1].analysis.authorName).toBe('Custom author')
+    expect(result.body).not.toContain('member-id')
+    expect(result.body).not.toContain('owner_id')
+  })
   it('does not expose privileged tables or wildcard fields', () => {
     for (const [table, fields] of Object.values(publicResources)) {
       expect(fields).not.toContain('*')
