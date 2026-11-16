@@ -167,3 +167,19 @@
 .sonata-auth-mark{display:block;width:48px;height:51px;margin-bottom:20px;object-fit:contain}
 .app-shell .top-navigation .brand-title:focus-visible{outline:2px solid #8F5FC0;outline-offset:5px;border-radius:5px}
 @media(max-width:720px){.app-shell .top-navigation .brand-title{gap:8px}.sonata-brand-mark{width:30px;height:32px}}
+.sonata-research-heading h1{max-width:none}
+
+/* Research descriptions use the available canvas; actions finish each list row. */
+.app-shell .sonata-research-heading h1{max-width:none}
+.app-shell .sonata-research-heading p{max-width:none;font-size:16px;line-height:1.6}
+.app-shell .sonata-research-heading:after{opacity:.2}
+.app-shell .sonata-topic p{max-width:none;font-size:16px;line-height:1.6}
+.app-shell .sonata-topic-grid.is-list .sonata-topic{grid-template-columns:minmax(0,1fr);gap:14px}
+.app-shell .sonata-topic-grid.is-list .sonata-topic>span,
+.app-shell .sonata-topic-grid.is-list .sonata-topic>h2,
+.app-shell .sonata-topic-grid.is-list .sonata-topic>p,
+.app-shell .sonata-topic-grid.is-list .sonata-topic>small{grid-column:1;min-width:0}
+.app-shell .sonata-topic-grid.is-list .research-topic-actions{grid-column:1;grid-row:auto;justify-self:end;align-self:end;display:flex;flex-direction:row;flex-wrap:wrap;justify-content:flex-end;align-items:center;margin-top:2px}
+.app-shell .research-output-links,.app-shell .research-output-links span{font:inherit;color:inherit}
+.app-shell .research-output-links a{color:#63518b;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+@media(max-width:760px){.app-shell .sonata-topic-grid.is-list .research-topic-actions{align-self:flex-end}}

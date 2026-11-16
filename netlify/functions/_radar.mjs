@@ -4,53 +4,16 @@ import ipaddr from 'ipaddr.js'
 import { Agent as UndiciAgent, fetch as undiciFetch } from 'undici-pinned'
 import { canonicalizeUrl, supabase } from './_supabase.mjs'
 import investorSources from '../../config/investor-sources.json' with { type: 'json' }
+import radarDictionary from '../../config/radar-topics.json' with { type: 'json' }
 
 const USER_AGENT = 'QiraIndustryRadar/0.1 (+https://aiinsightpipeline.netlify.app)'
 const MAX_FEED_BYTES = 2 * 1024 * 1024
 
 // Specific, auditable market movements. Broad evergreen buckets such as
 // "consumer AI" or "model capabilities" are deliberately excluded.
-const topicRules = [
-  ['browser-agents', /\b(browser agents?|agentic browsers?|agents? (?:in|for) (?:the )?browser|browser-based agents?)\b/i],
-  ['agent-orchestration', /\b(agent orchestration|multi-agent|agent-to-agent|agentic workflow|orchestrat(?:e|ion).{0,30}agents?)\b/i],
-  ['autonomous-coding', /\b(coding agents?|agentic coding|autonomous (?:coding|software)|software engineering agents?|repository.{0,24}agents?|agents?.{0,24}repositories|vibe coding)\b/i],
-  ['agent-evaluation', /\b(agent evals?|agent evaluation|evaluat(?:e|ing|ion).{0,25}agents?|agent reliability|agent observability)\b/i],
-  ['ai-workspaces', /\b(ai-powered (?:project |team )?(?:workspace|collaboration)|agentic workspace|collaborative ai workspace)\b/i],
-  ['agent-platforms', /\b(managed agents?|agent platforms?|agents? sdk|agent development platforms?|build.{0,18}production-ready agents?)\b/i],
-  ['ai-search-engines', /\b(ai search|answer engines?|perplexity|search copilots?|generative search|ai-powered search|ai mode.{0,48}search|search.{0,48}ai mode)\b/i],
-  ['browser-model-inference', /\b(webllm|in-browser (?:llm|model|ai|inference)|browser-based (?:llm|model) inference)\b/i],
-  ['voice-agents', /\b(voice agents?|voice assistants?|conversational voice|real-time voice ai)\b/i],
-  ['speech-models', /\b(speech models?|text.to.speech|speech.to.text|tts\b|voice cloning|audio models?)\b/i],
-  ['text-to-video', /\b(text.to.video|video generation|generative video|ai video models?)\b/i],
-  ['image-generation', /\b(image generation|image creation|generative image|ai image models?|diffusion models?)\b/i],
-  ['humanoid-robotics', /\b(humanoid robots?|humanoid robotics)\b/i],
-  ['robot-learning', /\b(robot learning|robot foundation models?|vision.language.action|vla models?|physical ai)\b/i],
-  ['ai-wearables', /\b(ai wearables?|ai pins?|smart glasses|ai glasses|ambient devices?)\b/i],
-  ['inference-chips', /\b(inference chips?|ai accelerators?|gpus?.{0,24}inference|npus?|ai semiconductors?)\b/i],
-  ['on-device-ai', /\b(on-device ai|edge ai|local inference|offline (?:ai|llm)|models? run locally)\b/i],
-  ['open-weight-models', /\b(open weights?|open-weight|open source (?:ai )?models?|hugging face|llama|mistral)\b/i],
-  ['reasoning-models', /\b(reasoning models?|test-time compute|chain.of.thought|reasoning benchmarks?)\b/i],
-  ['multimodal-models', /\b(multimodal models?|vision.language models?|vlms?\b|omnimodal)\b/i],
-  ['long-context-models', /\b(long context|context windows?|million.token|extended context)\b/i],
-  ['model-evaluation', /\b(model evals?|model evaluation|ai benchmarks?|llm evaluation|benchmarking (?:ai )?models?)\b/i],
-  ['model-observability', /\b(model observability|llm observability|hallucination monitoring|ai monitoring|guardrails?)\b/i],
-  ['content-authenticity', /\b(ai provenance|content credentials|ai watermark|watermarking ai|detect(?:ing|ion).{0,25}ai.generated|made with (?:claude|chatgpt|gemini))\b/i],
-  ['clinical-ai', /\b(medical ai|clinical ai|ai (?:diagnosis|diagnostics)|clinical.{0,24}ai|ai.{0,24}clinical consultation)\b/i],
-  ['ai-marketing', /\b(ai marketing|marketing copilots?|marketing.{0,24}ai tools?|ai.{0,24}marketing workflow)\b/i],
-  ['enterprise-customer-service', /\b(ai customer service|customer service agents?|contact cent(?:er|re).{0,24}ai|support agents?.{0,24}ai)\b/i],
-  ['enterprise-sales-ai', /\b(ai sales agents?|sales copilots?|ai-powered sales|revenue intelligence.{0,20}ai)\b/i],
-  ['enterprise-workflow-automation', /\b(ai workflow automation|enterprise automation.{0,20}ai|agentic process automation|business workflow agents?)\b/i],
-  ['ai-companions', /\b(ai companions?|companion bots?|virtual companions?)\b/i],
-  ['ai-shopping-assistants', /\b(ai shopping|shopping assistants?|commerce agents?|agentic commerce)\b/i],
-  ['ai-creator-tools', /\b(ai creator tools?|creator copilots?|generative creator tools?)\b/i],
-  ['ai-funding-rounds', /\b(?:ai|artificial intelligence).{0,45}(?:funding|raises? \$|seed round|series [a-f]|valuation)|(?:funding|raises? \$|seed round|series [a-f]).{0,45}(?:ai|artificial intelligence)\b/i],
-  ['ai-acquisitions', /\b(?:ai|artificial intelligence).{0,45}(?:acqui(?:res|red|sition)|merger)|(?:acqui(?:res|red|sition)|merger).{0,45}(?:ai|artificial intelligence)\b/i],
-  ['ai-regulation', /\b(ai regulation|ai act|regulat(?:e|ing|ion).{0,24}(?:ai|models?)|lawmakers?.{0,24}ai)\b/i],
-  ['ai-copyright', /\b(ai copyright|copyright.{0,24}(?:ai|training data)|ai training.{0,24}copyright)\b/i],
-  ['model-safety', /\b(model safety|ai safety testing|alignment research|frontier model safety|responsible ai)\b/i],
-]
+const topicRules = radarDictionary.topics.map(({ slug, pattern }) => [slug, new RegExp(pattern, 'i')])
 
-const aiGate = /\b(ai|artificial intelligence|machine learning|llm|gpt|claude|gemini|copilot|neural|generative|agents?|robots?|inference|foundation model)\b/i
+const aiGate = /\b(ai|artificial intelligence|machine learning|llm|gpt|claude|gemini|copilot|neural|generative|agents?|robots?|inference|foundation model|language models?|model distillation|model quantization|model compression)\b/i
 const stopWords = new Set(
   'a an and are as at be by for from has have how in into is it its new of on or that the their this to with will your ai artificial intelligence says launches launch unveils'.split(' '),
 )
@@ -104,15 +67,16 @@ export function parseFeed(xml, baseUrl) {
       const externalId = plainText(tag(block, ['guid', 'id'])) || link
       const publishedRaw = plainText(tag(block, ['pubDate', 'published', 'updated', 'dc:date']))
       const publishedAt = new Date(publishedRaw || Date.now())
+      const feedText = plainText(tag(block, ['content:encoded', 'content', 'description', 'summary']))
       return {
         externalId,
         url: link,
         title,
-        summary: plainText(tag(block, ['description', 'summary', 'content:encoded', 'content'])).slice(0, 1200),
+        summary: feedText.slice(0, 2000),
         author: plainText(tag(block, ['author', 'dc:creator'])).slice(0, 200),
         publishedAt: Number.isNaN(publishedAt.getTime()) ? new Date().toISOString() : publishedAt.toISOString(),
         engagement: {},
-        rawMetadata: {},
+        rawMetadata: { acquisition_method: 'rss', feed_text: feedText.slice(0, 6000), feed_text_truncated: feedText.length > 6000 },
       }
     })
     .filter((item) => item.title && item.url)
@@ -254,6 +218,8 @@ export function topicSlugsFor(value) {
   return [...new Set(topics)]
 }
 
+export function hasAiContext(value) { return aiGate.test(plainText(value)) }
+
 export function storyTokens(title) {
   return plainText(title)
     .toLowerCase()
@@ -275,12 +241,14 @@ export function storySignature(title) {
   return crypto.createHash('sha256').update(tokens.join('|')).digest('hex').slice(0, 24)
 }
 
-function normalizeCandidate(source, candidate) {
+export function normalizeCandidate(source, candidate) {
   const topics = topicSlugsFor(
     `${candidate.title} ${candidate.summary} ${(candidate.rawMetadata?.topics || []).join(' ')}`,
     source.source_type,
   )
-  if (!topics.length) return null
+  // Collection is not classification. Keep unmatched articles for the briefing
+  // and source archive; only matched topics contribute to the rule-based ranking.
+  if (!candidate.title || !candidate.url || !Number.isFinite(Date.parse(candidate.publishedAt))) return null
   return {
     source_id: source.id,
     external_id: String(candidate.externalId || candidate.url).slice(0, 500),
@@ -402,7 +370,8 @@ async function saveItems(items) {
     if (!chunk.length) continue
     const result = await supabase('radar_items?on_conflict=source_id,external_id', {
       method: 'POST',
-      headers: { prefer: 'resolution=merge-duplicates,return=representation' },
+      // A refresh must not turn an old article into a new daily discovery.
+      headers: { prefer: 'resolution=ignore-duplicates,return=representation' },
       body: JSON.stringify(chunk),
     })
     saved += Array.isArray(result) ? result.length : chunk.length
@@ -410,14 +379,14 @@ async function saveItems(items) {
   return saved
 }
 
-async function recordSourceResult(source, error = null) {
+async function recordSourceResult(source, error = null, warning = '') {
   const now = new Date().toISOString()
   await supabase(`radar_sources?id=eq.${encodeURIComponent(source.id)}`, {
     method: 'PATCH',
     body: JSON.stringify({
       last_fetched_at: now,
       last_success_at: error ? source.last_success_at : now,
-      last_error: error ? String(error.message || error).slice(0, 500) : '',
+      last_error: error ? String(error.message || error).slice(0, 500) : warning,
       updated_at: now,
     }),
   })
@@ -448,9 +417,13 @@ export async function runRadarIngest() {
           .map((item) => normalizeCandidate(source, item))
           .filter(Boolean)
           .filter((item) => new Date(item.published_at).getTime() >= Date.now() - 60 * 24 * 60 * 60 * 1000)
+          .filter((item) => new Date(item.published_at).getTime() <= Date.now())
         const withStories = assignExistingStoryKeys(normalized, existing || [])
         inserted += await saveItems(withStories)
-        await recordSourceResult(source)
+        const newest = raw.map(item => item.publishedAt).filter(Boolean).sort().at(-1)
+        const warning = source.feed_url && newest && +new Date(newest) < Date.now() - 30 * 86400000
+          ? `Feed retrieved but latest article is ${newest.slice(0, 10)}; recent website coverage is unverified` : ''
+        await recordSourceResult(source, null, warning)
         return { source: source.name, fetched: raw.length, saved: withStories.length }
       } catch (error) {
         failed += 1

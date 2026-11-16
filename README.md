@@ -143,7 +143,7 @@ the dashboard no longer launches migration from a browser session.
 
 ## Editorial automation
 
-See `docs/editorial-automation.md`. The intended weekday 18:00 job exports pending news, edits it under the preserved Browser Signal Watcher editorial rules, posts the result to `/api/editorial-sync`, and verifies pending/processed counts.
+See `docs/daily-pipeline.md` for the current pipeline. Windows runs mail review and Agent recommendations daily at 16:15, and article editorial plus Signal Reference synthesis on weekdays at 18:00. Both use Cursor SDK and shared `config/daily-pipeline.json`; Codex only monitors exceptions. Run `npm run pipeline:check` or `npm run pipeline:schedule`. Detailed editorial rules remain in `docs/editorial-automation.md`.
 
 ## Quality and pilot
 

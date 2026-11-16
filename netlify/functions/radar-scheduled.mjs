@@ -1,6 +1,6 @@
 import { runRadarIngest } from './_radar.mjs'
 
-export const config = { schedule: '17 */4 * * *' }
+export const config = { schedule: '0 */8 * * *' }
 
 export default async () => {
   const result = await runRadarIngest()

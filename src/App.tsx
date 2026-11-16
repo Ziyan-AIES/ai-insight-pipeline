@@ -1,6 +1,10 @@
+import { publicWorkspaceEnabled } from './visitor'
+import { SourceEditor } from './components/SourceEditor'
+import type { NewsCaptureInput } from './components/SourceEditor'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import './App.css'
 import './styles/sonata.css'
+import './styles/research.css'
 import { ResearchLibrary } from './components/ResearchLibrary'
 import { SharedSources } from './components/SharedSources'
 import { SelectedNewsMap } from './components/SelectedNewsMap'
@@ -431,10 +435,15 @@ function ActivityHistory({ events }: { events: ActivityEvent[] }) {
 }
 
 function App() {
-  const { identity, canEdit, canAdmin, canResearch, signOut } = useTeamAuth()
+  const { identity, canEdit, canAdmin, canResearch, signOut, visitorName, setVisitorName, openEditorLogin } = useTeamAuth()
+  const [editingVisitorName, setEditingVisitorName] = useState(false)
+  const [visitorNameDraft, setVisitorNameDraft] = useState('')
+  const profileName = identity?.displayName || visitorName || 'Anonymous'
+  const canContribute = canEdit || publicWorkspaceEnabled
   const canResearchWorkspace = !cloudConfigured || canResearch === true
   const initialAddLinkDraft = useMemo(loadAddLinkDraft, [])
   const [news, setNews] = useState(cloudConfigured ? [] : demoNews)
+  const [agentReviewBusy, setAgentReviewBusy] = useState<string[]>([])
   const [topics, setTopics] = useState(cloudConfigured ? [] : demoTopics)
   const [trends, setTrends] = useState(cloudConfigured ? [] : demoTrends)
   const [theses, setTheses] = useState(cloudConfigured ? [] : demoTheses)
@@ -448,7 +457,7 @@ function App() {
   const [workspacePage, setWorkspacePage] = useState<WorkspacePage>(
     workspaceFromLocation,
   )
-  const [researchWorkspace, setResearchWorkspace] = useState(() => new URLSearchParams(window.location.search).get('edit') === '1' || (workspaceFromLocation() === 'threads' && new URLSearchParams(window.location.search).get('reader') !== '1'))
+  const [researchWorkspace, setResearchWorkspace] = useState(() => workspaceFromLocation() !== 'threads' && new URLSearchParams(window.location.search).get('edit') === '1')
   useEffect(() => {
     const url = new URL(window.location.href)
     if (researchWorkspace) url.searchParams.set('edit','1')
@@ -587,10 +596,12 @@ function App() {
     clearStoredAddLinkDraft()
   }, [])
 
+  const captureDraftChanged=useCallback((input:NewsCaptureInput)=>{setLinkUrl(input.url);setLinkTitle(input.title);setLinkContributor(input.contributor);setTargetTopicId(input.topicId)},[])
+
   const reloadWorkspace = useCallback(async (quiet = false) => {
     if (!cloudConfigured) return
     try {
-      const workspace = await loadWorkspace(canAdmin)
+      const workspace = await loadWorkspace(canEdit)
       if (!workspace) return false
       setNews(workspace.news)
       setTopics(workspace.topics)
@@ -609,7 +620,7 @@ function App() {
       }
       return false
     }
-  }, [canAdmin])
+  }, [canEdit])
 
   const applyRealtimeChange = useCallback((change: WorkspaceRealtimeChange) => {
     const record =
@@ -818,7 +829,7 @@ function App() {
         ).slice(0, 7)
         const next: Topic = {
           id,
-          title: realtimeText(record, 'title', existing?.title || 'Untitled Action Thread'),
+          title: realtimeText(record, 'title', existing?.title || 'Untitled Research Topic'),
           thesisId: realtimeOptionalText(record, 'thesis_id', existing?.thesisId),
           parentTopicId: realtimeOptionalText(
             record,
@@ -904,7 +915,7 @@ function App() {
                       topicId,
                       topicTitle:
                         topicsRef.current.find((topic) => topic.id === topicId)?.title ||
-                        'Action Thread',
+                        'Research Topic',
                       monthLabel:
                         topicsRef.current.find((topic) => topic.id === topicId)?.monthLabel ||
                         'Unscheduled',
@@ -1082,6 +1093,7 @@ function App() {
 
   useEffect(() => {
     void reloadWorkspace()
+    if (publicWorkspaceEnabled && !identity) return
     let timeout = 0
     const unsubscribe = subscribeToWorkspace(
       (change) => {
@@ -1099,7 +1111,7 @@ function App() {
       window.clearTimeout(timeout)
       unsubscribe()
     }
-  }, [applyRealtimeChange, reloadWorkspace])
+  }, [applyRealtimeChange, reloadWorkspace, identity])
 
   useEffect(() => {
     if (!selectedActivityType || !selectedActivityId || !cloudConfigured) {
@@ -1213,14 +1225,14 @@ function App() {
       return
     }
     if (!cloudConfigured || !identity?.userId) {
-      setWorkspacePage(localPage || 'synthesis')
+      setWorkspacePage(localPage || (cloudConfigured ? 'radar' : 'synthesis'))
       setWorkspacePreferenceReady(true)
       return
     }
 
     void loadLastWorkspacePage()
       .then((remotePage) => setWorkspacePage(remotePage || localPage || 'synthesis'))
-      .catch(() => setWorkspacePage(localPage || 'synthesis'))
+      .catch(() => setWorkspacePage(localPage || (cloudConfigured ? 'radar' : 'synthesis')))
       .finally(() => setWorkspacePreferenceReady(true))
   }, [identity?.userId])
 
@@ -1865,15 +1877,6 @@ function App() {
         error instanceof Error ? error.message : 'Could not empty recycle bin',
       )
       await reloadWorkspace(true)
-    }
-  }
-
-  async function openTeamManagement() {
-    setShowTeam(true)
-    try {
-      setTeamMembers(await loadTeamMembers())
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not load team')
     }
   }
 
@@ -2539,7 +2542,7 @@ function App() {
   }
 
   async function saveTrendDraft() {
-    if (!trendDraft || !trendDraft.title.trim()) return
+    if (!trendDraft || !trendDraft.title.trim() || (!creatingTrend && !canEdit)) return
     if (creatingTrend) {
       let saved = {
         id: `trend-${Date.now()}`,
@@ -3095,7 +3098,7 @@ function App() {
       setNotice(
         error instanceof Error
           ? error.message
-          : 'Could not upgrade this Trend to an Action Thread.',
+          : 'Could not upgrade this Trend to an Research Topic.',
       )
       return false
     }
@@ -3213,7 +3216,7 @@ function App() {
       setNotice(
         error instanceof Error
           ? error.message
-          : 'Could not move this Action Thread',
+          : 'Could not move this Research Topic',
       )
     }
   }
@@ -3263,9 +3266,25 @@ function App() {
       setNotice(
         error instanceof Error
           ? error.message
-          : 'Could not move this Action Thread',
+          : 'Could not move this Research Topic',
       )
     }
+  }
+
+  async function reviewAgentNews(item: NewsItem, action: 'agree' | 'delete') {
+    if (!canEdit || agentReviewBusy.includes(item.id)) return
+    setAgentReviewBusy(ids => [...ids, item.id])
+    try {
+      if (action === 'delete') { await removeNews(item.id); return }
+      const current = news.find(n => n.id === item.id)
+      if (!current || current.deletedAt) return
+      const metadata = { ...current.metadata, agent_review_status: 'approved', agent_reviewed_at: new Date().toISOString(), agent_reviewed_by: identity?.displayName || 'Team member' }
+      const result = cloudConfigured ? await updateNewsItem(current.id, { metadata }, current.version) : undefined
+      setNews(items => items.map(n => n.id === current.id ? { ...n, metadata: result?.metadata || metadata, version: result?.version ?? n.version } : n))
+      setNotice('Agent recommendation approved')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not save. Please try again.')
+    } finally { setAgentReviewBusy(ids => ids.filter(id => id !== item.id)) }
   }
 
   async function removeNews(id: string) {
@@ -3400,7 +3419,7 @@ function App() {
   async function saveTopicDraft() {
     if (!topicDraft || !topicDraft.title.trim()) return
     if (creatingTopic && !topicDraft.ownerId) {
-      setNotice('Choose an owner before creating this Action Thread.')
+      setNotice('Choose an owner before creating this Research Topic.')
       return
     }
     if (creatingTopic) {
@@ -3453,7 +3472,7 @@ function App() {
           ),
         )
       }
-      setNotice('Action Thread created')
+      setNotice('Research Topic created')
       if (pendingThreadNewsId) {
         const meetingSource = news.find(
           (item) => item.id === meetingThreadNewsId,
@@ -3597,7 +3616,8 @@ function App() {
     setNotice('Topic deleted')
   }
 
-  async function addLink() {
+  async function addLink(input: NewsCaptureInput) {
+    const {url:linkUrl,title:linkTitle,contributor:linkContributor,topicId:targetTopicId}=input
     let url = linkUrl.trim()
     if (!url) return
     let hostname = ''
@@ -3605,8 +3625,7 @@ function App() {
       url = canonicalizeUrl(url)
       hostname = new URL(url).hostname.replace(/^www\./, '')
     } catch {
-      setNotice('Enter a valid http or https URL')
-      return
+      throw new Error('Enter a valid http or https URL')
     }
     let persisted
     try {
@@ -3615,12 +3634,14 @@ function App() {
         title: linkTitle.trim() || hostname,
         source: hostname,
         contributorName: linkContributor.trim() || undefined,
+        topicId:targetTopicId,
       })
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not add link')
-      return
+      throw new Error(error instanceof Error ? error.message : 'Could not add link')
     }
     if (persisted?.alreadyExisted) {
+      if(persisted.removed)throw new Error('This source is in the recycle bin. Restore it first.');
+      if(targetTopicId){await reloadWorkspace(true)}
       setNotice(
         persisted.removed
           ? 'This link exists in the recycle bin. Ask an admin to restore it.'
@@ -3677,7 +3698,7 @@ function App() {
             : candidate,
         ),
       )
-      if (cloudConfigured) await persistTopicNews(topic.id, id)
+
     }
     closeAddLink()
   }
@@ -3788,14 +3809,14 @@ function App() {
           setDraggedNewsSourceTopicId('')
         }}
         onDragOver={
-          options.allowReorder || options.dropCategory
+          canEdit && (options.allowReorder || options.dropCategory)
             ? (event) => {
                 event.preventDefault()
               }
             : undefined
         }
         onDrop={
-          options.allowReorder || options.dropCategory
+          canEdit && (options.allowReorder || options.dropCategory)
             ? (event) => {
                 event.preventDefault()
                 const newsId =
@@ -3844,7 +3865,7 @@ function App() {
               ) : null}
             </>
           ) : null}
-          <div className="card-actions">
+          <div className="card-actions" hidden={!canEdit}>
             {item.deletedAt ? (
               <button
                 type="button"
@@ -3957,7 +3978,7 @@ function App() {
           </div>
         ) : null}
         <div className="card-footer">
-          <div className="signal-actions">
+          <div className="signal-actions" hidden={!canEdit}>
               <button
                 className={`vote-button ${item.votedByMe ? 'voted' : ''}`}
                 type="button"
@@ -3983,7 +4004,15 @@ function App() {
               ) : null}
           </div>
           {options.footerAction}
-          {variant === 'candidate' ? (
+          {canEdit && !item.deletedAt && (item.metadata?.contributor_name === 'Agent' || item.capturedBy === 'Agent') && (
+            <div className="agent-review-actions" aria-label="Review Agent recommendation">
+              <button type="button" className="text-action" disabled={!canEdit || agentReviewBusy.includes(item.id) || item.metadata?.agent_review_status === 'approved'} onClick={() => void reviewAgentNews(item, 'agree')}>
+                {item.metadata?.agent_review_status === 'approved' ? 'Approved' : 'Approve'}
+              </button>
+              <button type="button" className="text-action danger-action" disabled={!canEdit || agentReviewBusy.includes(item.id)} onClick={() => void reviewAgentNews(item, 'delete')}>Delete</button>
+            </div>
+          )}
+          {canEdit && variant === 'candidate' ? (
             <div className="candidate-workflow-actions">
               {item.discussionStatus !== 'not_discussed' ? (
                 <button
@@ -4081,7 +4110,7 @@ function App() {
     if (!canResearchWorkspace) throw new Error('Research workspace access is required.')
     const current = topics.find(topic=>topic.id===draft.id)
     if (!current || current.version !== draft.version) throw new Error('This research changed elsewhere. Reload and try again.')
-    const analysis={...current.analysis,keyQuestion:draft.analysis.keyQuestion}
+    const analysis={...current.analysis,keyQuestion:draft.analysis.keyQuestion,description:draft.analysis.description?.trim(),authorName:draft.analysis.authorName?.trim()}
     const threadStatus=threadStatusFromLegacy(draft.status)
     const version=cloudConfigured?await updateTopicItem(draft.id,{title:draft.title.trim(),category:draft.category,scheduled_month:draft.monthKey?draft.monthKey+'-01':null,status:draft.status,thread_status:threadStatus,analysis},draft.version):draft.version
     setTopics(items=>items.map(item=>item.id===draft.id?{...item,title:draft.title.trim(),category:draft.category,monthKey:draft.monthKey,monthLabel:topicMonthLabel(draft.monthKey),status:draft.status,threadStatus,analysis,version:version??item.version}:item))
@@ -4301,7 +4330,7 @@ function App() {
                   event.stopPropagation()
                   void unlinkSignalFromTrend(trend.id, item.id)
                 }}
-                hidden={!canEdit}
+                hidden={!canContribute}
               >
                 ×
               </button>
@@ -4316,7 +4345,7 @@ function App() {
         <footer className="trend-card-actions">
           <button type="button" onClick={() => { setCreatingTrend(false); setTrendDraft({ ...trend }) }} hidden={!canEdit}>Edit</button>
           <button type="button" onClick={() => { expandEvidenceInbox(); setEvidenceScope('all'); setEvidenceCategory('all'); setEvidenceTrendFilterId(trend.id) }}>View linked sources</button>
-          {trend.status === 'archived' && <button type="button" onClick={() => void setTrendArchived(trend.id,false)}>Unarchive</button>}
+          {canEdit && trend.status === 'archived' && <button type="button" onClick={() => void setTrendArchived(trend.id,false)}>Unarchive</button>}
         </footer>
       </article>
     )
@@ -4687,7 +4716,7 @@ function App() {
               ))}
             </div>
             <div className="search-result-section">
-              <strong>Action Threads</strong>
+              <strong>Research Topics</strong>
               {globalTopicResults.map((topic) => (
                 <button
                   type="button"
@@ -4695,7 +4724,7 @@ function App() {
                   onClick={() => {
                     const source = topics.find((candidate) => candidate.id === topic.id)
                     if (!source) {
-                      setNotice('This Action Thread is outside the current workspace snapshot. Refresh and try again.')
+                      setNotice('This Research Topic is outside the current workspace snapshot. Refresh and try again.')
                       return
                     }
                     setCreatingTopic(false)
@@ -4892,14 +4921,14 @@ function App() {
           </button>
           <button type="button" className={workspacePage === 'threads' && !researchWorkspace ? 'active' : ''} onClick={() => { setResearchWorkspace(false); setWorkspacePage('threads') }}>Research</button>
         </nav>
-        {canResearchWorkspace && <a className="sonata-workspace-button" href="https://personal-agent-research-studio.ziyan-li-pku.chatgpt.site/" target="_blank" rel="noreferrer">Workspace</a>}
+
         {renderGlobalSearch()}
         <button
           className="top-add-news"
           type="button"
           onClick={() => setShowAddLink(true)}
         >
-          + Add News
+          + New source
         </button>
         <div className="sync-status top-sync-status">
           <span className={`status-dot ${syncState}`} />
@@ -4917,10 +4946,10 @@ function App() {
             type="button"
             aria-label="Open profile menu"
             aria-expanded={profileMenuOpen}
-            title={identity?.displayName || 'Demo user'}
+            title={profileName}
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
-            {(identity?.displayName || 'DU')
+            {profileName
               .split(/\s+/)
               .map((part) => part[0])
               .join('')
@@ -4930,27 +4959,29 @@ function App() {
           {profileMenuOpen ? (
             <div className="profile-menu" role="menu">
               <div className="profile-summary">
-                <strong>{identity?.displayName || 'Demo user'}</strong>
-                <span>{identity?.email || 'Local demo workspace'}</span>
+                <strong>{profileName}</strong>
+                <span>{identity ? identity.role.charAt(0).toUpperCase() + identity.role.slice(1) : 'Visitor'}</span>
+                {identity?.email && <span>{identity.email}</span>}
               </div>
-              {canAdmin && cloudConfigured ? (
-                <>
-                  <button type="button" role="menuitem" onClick={() => void openTeamManagement()}>
-                    Team
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => setShowRecycleBin(true)}>
-                    Recycle Bin
-                  </button>
-                </>
-              ) : null}
-              <button type="button" role="menuitem" onClick={() => void signOut()}>
-                Sign out
-              </button>
+              {!identity && <>
+                <button type="button" role="menuitem" onClick={() => { setVisitorNameDraft(profileName === 'Anonymous' ? '' : profileName); setEditingVisitorName(true); setProfileMenuOpen(false) }}>Edit name</button>
+                <button type="button" role="menuitem" onClick={() => { openEditorLogin?.(); setProfileMenuOpen(false) }}>Editor sign in</button>
+              </>}
+              {canEdit && cloudConfigured && <button type="button" role="menuitem" onClick={() => setShowRecycleBin(true)}>Recycle Bin</button>}
+              {identity && <button type="button" role="menuitem" onClick={() => void signOut()}>Sign out</button>}
             </div>
           ) : null}
         </div>
       </header>
 
+      {editingVisitorName && <div className="modal-backdrop"><section className="analysis-editor" role="dialog" aria-modal="true" aria-label="Edit name">
+        <header><h2>Edit name</h2><button type="button" onClick={() => setEditingVisitorName(false)}>Close</button></header>
+        <form onSubmit={event => { event.preventDefault(); setVisitorName?.(visitorNameDraft); setEditingVisitorName(false) }}>
+          <label>Name<input autoFocus maxLength={80} value={visitorNameDraft} onChange={event => setVisitorNameDraft(event.target.value)} placeholder="Anonymous" /></label>
+          <p>Your name is saved in this browser and used as your default contributor name.</p>
+          <footer><button type="button" onClick={() => setEditingVisitorName(false)}>Cancel</button><button className="primary-button" type="submit">Save</button></footer>
+        </form>
+      </section></div>}
       <div className="workspace-main">
 
       {notice && (
@@ -5046,7 +5077,7 @@ function App() {
                 )
               })}
             </div>}
-            <div className="sonata-source-note">Sources are selected by team members. Use <strong>+ Add News</strong> at the top right, or save an article in one click with our Chrome extension. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Get the Chrome extension</a></div>
+            <div className="sonata-source-note">Sources are selected by team members. Use <strong>+ New source</strong> at the top right, or save an article in one click with our Chrome extension. <a href="https://chromewebstore.google.com/detail/ai-signals/bgmhnlbjfdnbfpjgmcmedjebcpjoppjc" target="_blank" rel="noreferrer">Get the Chrome extension</a></div>
           </section>
         )}
 
@@ -5067,7 +5098,7 @@ function App() {
           >
             {workspacePage === 'synthesis' &&
               ((!researchWorkspace || evidenceInboxOpen) ? (
-                researchWorkspace ? renderEvidenceColumn() : <div className="trend-sources-column"><label>Link sources to trend<select value={evidenceTrendFilterId} onChange={event => setEvidenceTrendFilterId(event.target.value)}><option value="">Choose a trend or drag a source</option>{trends.filter(trend => !trend.deletedAt && trend.status !== 'archived').map(trend => <option key={trend.id} value={trend.id}>{trend.title}</option>)}</select></label><SharedSources onDragChange={setDraggedNewsId} key={evidenceTrendFilterId || 'all'} initialLinked={Boolean(evidenceTrendFilterId)} news={news} canLink={canEdit} targetTitle={trends.find(trend => trend.id === evidenceTrendFilterId)?.title} linkedIds={trends.find(trend => trend.id === evidenceTrendFilterId)?.evidence.map(link => link.newsId)} onLink={id => { if(evidenceTrendFilterId) void linkNewsToTrend(evidenceTrendFilterId,id); else setNotice('Choose a trend first, or drag the source onto a trend.') }}/></div>
+                researchWorkspace ? renderEvidenceColumn() : <div className="trend-sources-column"><label>Link sources to trend<select value={evidenceTrendFilterId} onChange={event => setEvidenceTrendFilterId(event.target.value)}><option value="">Choose a trend or drag a source</option>{trends.filter(trend => !trend.deletedAt && trend.status !== 'archived').map(trend => <option key={trend.id} value={trend.id}>{trend.title}</option>)}</select></label><SharedSources onDragChange={setDraggedNewsId} key={evidenceTrendFilterId || 'all'} initialLinked={Boolean(evidenceTrendFilterId)} news={news} canLink={canContribute} targetTitle={trends.find(trend => trend.id === evidenceTrendFilterId)?.title} linkedIds={trends.find(trend => trend.id === evidenceTrendFilterId)?.evidence.map(link => link.newsId)} onLink={id => { if(evidenceTrendFilterId) void linkNewsToTrend(evidenceTrendFilterId,id); else setNotice('Choose a trend first, or drag the source onto a trend.') }}/></div>
               ) : (
                 <button
                   className="evidence-collapsed-rail"
@@ -5120,7 +5151,7 @@ function App() {
                       className="secondary-button"
                       type="button"
                       onClick={() => openNewTrend()}
-                      hidden={!canEdit}
+                      hidden={!canContribute}
                     >
                       + New Trend
                     </button>
@@ -5160,18 +5191,19 @@ function App() {
                 </div>
                 <div
                   className={`column-drop-zone ${draggedNewsId || draggedTopicId ? 'active' : ''}`}
-                  onDragEnter={event => { if(canEdit){ event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect=draggedTopicId?'move':'copy' } }}
+                  onDragEnter={event => { if(canContribute){ event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect=draggedTopicId?'move':'copy' } }}
                   onDragOver={(event) => {
-                    if (!canEdit || (!draggedNewsId && !draggedTopicId && !Array.from(event.dataTransfer.types || []).some(type => ['application/x-news-id','application/x-topic-id'].includes(type)))) return
+                    if (!canContribute || (!draggedNewsId && !draggedTopicId && !Array.from(event.dataTransfer.types || []).some(type => ['application/x-news-id','application/x-topic-id'].includes(type)))) return
                     event.preventDefault()
                     event.dataTransfer.dropEffect = draggedTopicId ? 'move' : 'copy'
                   }}
                   onDrop={(event) => {
-                    if (!canEdit) return
+                    if (!canContribute) return
                     event.stopPropagation()
                     const topicId =
                       event.dataTransfer.getData('application/x-topic-id') || draggedTopicId
                     if (topicId) {
+                      if (!canEdit) return
                       const topic = topics.find((candidate) => candidate.id === topicId)
                       event.preventDefault()
                       if (topic) openCreateTrendFromTopic(topic)
@@ -5239,28 +5271,28 @@ function App() {
               <button
                 className="action-threads-collapsed-rail"
                 type="button"
-                aria-label="Expand Action Threads"
+                aria-label="Expand Research Topics"
                 onClick={expandActionThreads}
               >
                 <i aria-hidden="true">‹</i>
-                <span>Action Threads</span>
+                <span>Research Topics</span>
                 <strong>{activeVisibleTopics.length}</strong>
               </button>
             ) : (
               <section
                 className="topic-pane workflow-column"
-                aria-label="Action Threads"
+                aria-label="Research Topics"
               >
               <div className="workflow-column-heading">
-                <h1>Action Threads</h1>
+                <h1>Research Topics</h1>
                 <div className="heading-actions">
                   {workspacePage === 'synthesis' && (
                     <>
                       <button
                         className="icon-button"
                         type="button"
-                        title="Collapse Action Threads"
-                        aria-label="Collapse Action Threads"
+                        title="Collapse Research Topics"
+                        aria-label="Collapse Research Topics"
                         onClick={() => setActionThreadsOpen(false)}
                       >
                         ›
@@ -5268,8 +5300,8 @@ function App() {
                       <button
                         className="icon-button expand-threads"
                         type="button"
-                        title="Open Action Threads dashboard"
-                        aria-label="Open Action Threads dashboard"
+                        title="Open Research Topics dashboard"
+                        aria-label="Open Research Topics dashboard"
                         onClick={() => { setResearchWorkspace(true); setWorkspacePage('threads') }}
                       >
                         View all
@@ -5288,11 +5320,11 @@ function App() {
                   <button
                     className="secondary-button"
                     type="button"
-                    title="Create Action Thread"
+                    title="Create Research Topic"
                     onClick={() => openCreateThread()}
                     hidden={!canEdit}
                   >
-                    + New Action Thread
+                    + New Research Topic
                   </button>
                 </div>
               </div>
@@ -5428,13 +5460,13 @@ function App() {
                     setDraggedNewsId('')
                   }}
                 >
-                  Drop here to create an Action Thread
+                  Drop here to create an Research Topic
                 </div>
               )}
               {workspacePage === 'threads' && threadGroupMode === 'timeline' ? (
                 <div
                   className="thread-timeline-board"
-                  aria-label="Action Threads grouped by work month"
+                  aria-label="Research Topics grouped by work month"
                 >
                   <section className="timeline-scheduled-column">
                     <header className="timeline-column-heading">
@@ -5534,7 +5566,7 @@ function App() {
               ) : workspacePage === 'threads' && threadGroupMode === 'category' ? (
                 <div
                   className="thread-groups"
-                  aria-label="Action Threads grouped by category"
+                  aria-label="Research Topics grouped by category"
                 >
                   {liveSignalCategories.map((category) => {
                     const categoryTopics = activeVisibleTopics.filter(
@@ -5581,7 +5613,7 @@ function App() {
                   })}
                   {activeVisibleTopics.length === 0 && (
                     <div className="month-empty">
-                      No active Action Threads in this filter yet.
+                      No active Research Topics in this filter yet.
                     </div>
                   )}
                 </div>
@@ -5590,7 +5622,7 @@ function App() {
                   {activeVisibleTopics.map((topic) => renderTopicCard(topic))}
                   {activeVisibleTopics.length === 0 && (
                     <div className="month-empty">
-                      No active Action Threads in this filter yet.
+                      No active Research Topics in this filter yet.
                     </div>
                   )}
                 </div>
@@ -5758,7 +5790,7 @@ function App() {
                   <div className="linked-topic-summary">
                     {newsDraft.topicLinks.map((link) => <span key={link.topicId}>{link.topicTitle}</span>)}
                   </div>
-                ) : <p className="section-hint">Not linked to an action thread yet.</p>}
+                ) : <p className="section-hint">Not linked to an research topic yet.</p>}
                 <ActivityHistory events={activity} />
               </section>
             </div>
@@ -5959,6 +5991,7 @@ function App() {
                     Trend title <span className="required-mark" aria-hidden="true">*</span>
                   </span>
                   <input
+                    readOnly={!creatingTrend && !canEdit}
                     value={trendDraft.title}
                     onChange={(event) =>
                       setTrendDraft({ ...trendDraft, title: event.target.value })
@@ -5975,6 +6008,7 @@ function App() {
                   <label>
                     Primary category
                     <select
+                    disabled={!creatingTrend && !canEdit}
                       value={trendDraft.category}
                       onChange={(event) =>
                         setTrendDraft({
@@ -6020,6 +6054,7 @@ function App() {
                 <label>
                   What changed
                   <textarea
+                    readOnly={!creatingTrend && !canEdit}
                     rows={3}
                     value={trendDraft.observation}
                     onChange={(event) =>
@@ -6031,6 +6066,7 @@ function App() {
                 <label>
                   Initial read
                   <textarea
+                    readOnly={!creatingTrend && !canEdit}
                     rows={3}
                     value={trendDraft.initialRead}
                     onChange={(event) =>
@@ -6042,6 +6078,7 @@ function App() {
                 <label>
                   Discussion question
                   <textarea
+                    readOnly={!creatingTrend && !canEdit}
                     rows={2}
                     value={trendDraft.discussionQuestion}
                     onChange={(event) =>
@@ -6079,7 +6116,7 @@ function App() {
                             className="text-action"
                             type="button"
                             onClick={() => void unlinkSignalFromTrend(trendDraft.id, item.id)}
-                            hidden={!canEdit || creatingTrend}
+                            hidden={!canContribute || creatingTrend}
                           >
                             Remove
                           </button>
@@ -6141,6 +6178,7 @@ function App() {
                 <button
                   className="primary-button"
                   type="button"
+                  hidden={!creatingTrend && !canEdit}
                   onClick={() => void saveTrendDraft()}
                   disabled={!trendDraft.title.trim()}
                 >
@@ -6202,7 +6240,7 @@ function App() {
                   ) : null}
                   {trendMeetingItem.actionThreadIds.length > 0 ? (
                     <span className="state-in-thread">
-                      Already in {trendMeetingItem.actionThreadIds.length} Action Thread{trendMeetingItem.actionThreadIds.length === 1 ? '' : 's'}
+                      Already in {trendMeetingItem.actionThreadIds.length} Research Topic{trendMeetingItem.actionThreadIds.length === 1 ? '' : 's'}
                     </span>
                   ) : null}
                 </div>
@@ -6277,7 +6315,7 @@ function App() {
                           setTopicDraft({ ...topic })
                         }}
                       >
-                        Open Action Thread
+                        Open Research Topic
                       </button>
                     ) : (
                       <button
@@ -6288,7 +6326,7 @@ function App() {
                           openCreateThreadFromTrend(trendMeetingItem, true)
                         }}
                       >
-                        Create Action Thread
+                        Create Research Topic
                       </button>
                     )}
                     <button
@@ -6367,7 +6405,7 @@ function App() {
                   ) : null}
                   {meetingItem.topicLinks.length > 0 ? (
                     <span className="state-in-thread">
-                      In Action Thread · {meetingItem.topicLinks[0].topicTitle}
+                      In Research Topic · {meetingItem.topicLinks[0].topicTitle}
                     </span>
                   ) : null}
                   {meetingItem.meetingNominatedAt ? (
@@ -6452,7 +6490,7 @@ function App() {
                           setTopicDraft({ ...topic })
                         }}
                       >
-                        Open Action Thread
+                        Open Research Topic
                       </button>
                     ) : (
                       <button
@@ -6464,7 +6502,7 @@ function App() {
                           openCreateThread(meetingItem.id)
                         }}
                       >
-                        Create Action Thread
+                        Create Research Topic
                       </button>
                     )}
                     <button
@@ -6481,7 +6519,7 @@ function App() {
                     >
                       {meetingItem.topicLinks.length > 0
                         ? 'Discussed · keep linked'
-                        : 'Discussed · no Action Thread'}
+                        : 'Discussed · no Research Topic'}
                     </button>
                   </>
                 ) : (
@@ -6569,9 +6607,9 @@ function App() {
           >
             <div className="modal-heading">
               <div>
-                <span className="eyebrow">Action Thread</span>
+                <span className="eyebrow">Research Topic</span>
                 <h2 id="edit-topic-title">
-                  {creatingTopic ? 'New Action Thread' : 'Edit Action Thread'}
+                  {creatingTopic ? 'New Research Topic' : 'Edit Research Topic'}
                 </h2>
               </div>
               <button
@@ -6886,7 +6924,7 @@ function App() {
                     (creatingTopic && !topicDraft.ownerId)
                   }
                 >
-                  {creatingTopic ? 'Create Action Thread' : 'Save changes'}
+                  {creatingTopic ? 'Create Research Topic' : 'Save changes'}
                 </button>
               </div>
             </div>
@@ -6959,7 +6997,7 @@ function App() {
           >
             <div className="modal-heading">
               <div>
-                <span className="eyebrow">Admin recovery</span>
+                <span className="eyebrow">Recovery</span>
                 <h2 id="recycle-bin-title">Recycle bin</h2>
               </div>
               <button
@@ -7007,6 +7045,7 @@ function App() {
                     </button>
                     <button
                       className="danger-button"
+                      hidden={!canAdmin}
                       type="button"
                       onClick={() =>
                         void purgeItem(item.table, item.id, item.title)
@@ -7033,6 +7072,7 @@ function App() {
                 <button
                   className="danger-button"
                   type="button"
+                  hidden={!canAdmin}
                   onClick={() => void emptyRecycleBin()}
                 >
                   Empty recycle bin
@@ -7134,97 +7174,7 @@ function App() {
         </div>
       )}
 
-      {showAddLink && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={closeAddLink}
-        >
-          <section
-            className="link-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-link-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="modal-heading">
-              <div>
-                <span className="eyebrow">Capture a signal</span>
-                <h2 id="add-link-title">Add News</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={closeAddLink}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <label>
-              URL
-              <input
-                type="url"
-                required
-                value={linkUrl}
-                onChange={(event) => setLinkUrl(event.target.value)}
-                placeholder="https://"
-                autoFocus
-              />
-            </label>
-            <label>
-              Title <span>optional</span>
-              <input
-                value={linkTitle}
-                onChange={(event) => setLinkTitle(event.target.value)}
-                placeholder="Use the page title when available"
-              />
-            </label>
-            <label>
-              Contributor <span>optional</span>
-              <input
-                value={linkContributor}
-                onChange={(event) => setLinkContributor(event.target.value)}
-                placeholder="Defaults to your signed-in name"
-              />
-            </label>
-            <label>
-              Add directly to topic <span>optional</span>
-              <select
-                value={targetTopicId}
-                onChange={(event) => setTargetTopicId(event.target.value)}
-              >
-                <option value="">News inbox only</option>
-                {topics.map((topic) => (
-                  <option value={topic.id} key={topic.id}>
-                    {topic.monthLabel} · {topic.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="modal-note">
-              The link enters News immediately. AI extraction and editorial
-              review can enrich it asynchronously.
-            </p>
-            <div className="modal-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={closeAddLink}
-              >
-                Cancel
-              </button>
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => void addLink()}
-              >
-                Add to workspace
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      {showAddLink && <SourceEditor topics={topics} topicId={targetTopicId} initialNews={{url:linkUrl,title:linkTitle,contributor:linkContributor}} onDraftChange={captureDraftChanged} onNews={addLink} onSaved={message=>setNotice(message)} onClose={closeAddLink}/>}
     </div>
   )
 }

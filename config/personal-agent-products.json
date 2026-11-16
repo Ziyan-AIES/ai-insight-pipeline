@@ -1,0 +1,282 @@
+{
+  "topicTitle": "Personal Agents",
+  "products": [
+    {
+      "id": "43470e1f-4553-459f-84f0-e1faacbbf91b",
+      "name": "Ambi",
+      "company": "",
+      "url": "https://www.ambi.ai/en",
+      "description": "An ambient personal AI system designed to carry context and memory across conversations, devices, and connected tools. It can research topics during conversations, organize relevant information, prepare follow-ups, and advance tasks over time. Long-running Routines track goals as new information arrives. Ambi combines software with planned hardware; its website currently offers early access and a waitlist, so specific capabilities depend on availability and permissions.",
+      "logoUrl": "/product-media/ambi-logo.png",
+      "screenshotUrl": "/product-media/ambi-screen.jpg",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "Ambi — official product overview",
+            "url": "https://www.ambi.ai/en"
+          }
+        ],
+        "originalLogoPath": "/product-media/ambi-logo.png",
+        "originalScreenshotPath": "/product-media/ambi-screen.jpg"
+      }
+    },
+    {
+      "id": "0c143ca5-d3d9-4e51-add4-4faf073d9c11",
+      "name": "ChatGPT Dots",
+      "company": "OpenAI",
+      "url": "https://openai.com/index/introducing-dots/",
+      "description": "OpenAI's always-on personal agents in ChatGPT, designed to pursue ongoing goals across conversations. Each dot has its own cloud computer and browser and can use connected apps to research, create documents, write and test code, and maintain projects. Dots retain context and adapt to feedback. Users can inspect progress, manage app access, and set action rules; background proactive research uses read-only tools.",
+      "logoUrl": "/product-media/dots-logo.svg",
+      "screenshotUrl": "/product-media/dots-screen.webp",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "OpenAI — Introducing dots",
+            "url": "https://openai.com/index/introducing-dots/"
+          }
+        ],
+        "originalLogoPath": "/product-media/dots-logo.svg",
+        "originalScreenshotPath": "/product-media/dots-screen.webp"
+      }
+    },
+    {
+      "id": "64944e43-9b8c-4ecb-b786-95cadcd76af5",
+      "name": "Google CC",
+      "company": "Google Labs",
+      "url": "https://labs.google.com/cc/",
+      "description": "An experimental Google Labs agent for coordinating families and households. Up to six members can share selected information with CC through Google tools. It produces a shared daily brief, maintains calendars and task lists, and helps with logistics such as meal plans and registration forms. CC has its own Google account, shared household memory, and an isolated cloud computer. Members control what they share and permissions for external actions.",
+      "logoUrl": "/product-media/cc-logo.svg",
+      "screenshotUrl": "/product-media/cc-screen.png",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "Google — CC expands to families and households",
+            "url": "https://blog.google/innovation-and-ai/models-and-research/google-labs/cc-expanding-to-groups/"
+          }
+        ],
+        "originalLogoPath": "/product-media/cc-logo.svg",
+        "originalScreenshotPath": "/product-media/cc-screen.png"
+      }
+    },
+    {
+      "id": "c97c0088-58b5-4868-9e28-7bc2aa5d0ed7",
+      "name": "Today.AI",
+      "company": "Today AI",
+      "url": "https://today.ai/",
+      "description": "A personal AI agent focused on continuity across everyday work and life. It combines editable long-term memory with proactive morning briefings, evening reviews, and connected-app actions. Calendar, email, notes, files, and optional health context help it notice changes, prepare replies, suggest schedule adjustments, and follow up on commitments. Its documented design uses cloud computers for multi-step work and asks for confirmation before sending messages or making external changes.",
+      "logoUrl": "/product-media/today-logo.png",
+      "screenshotUrl": "/product-media/today-screen.png",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "Today — What is Today?",
+            "url": "https://today.ai/articles/blog/what-is-today"
+          }
+        ],
+        "originalLogoPath": "/product-media/today-logo.png",
+        "originalScreenshotPath": "/product-media/today-screen.png"
+      }
+    },
+    {
+      "id": "eec03130-3639-4098-a5f5-1c699ddd6f6c",
+      "name": "Muse",
+      "company": "Meta",
+      "url": "https://muse.ai/",
+      "description": "Meta's personal AI agent for carrying out tasks and progressing longer-term goals. It runs on a dedicated Muse Secure VM with its own browser and can work across connected apps, including tasks such as email, travel planning, and research. Users interact through the Muse app or WhatsApp. It learns from conversations and works in the background, with users controlling the services it can access and actions it may take.",
+      "logoUrl": "/product-media/muse-logo.svg",
+      "screenshotUrl": "/product-media/muse-screen.webp",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "Meta — Introducing Muse",
+            "url": "https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/"
+          },
+          {
+            "title": "Meta — How we built safety into Muse",
+            "url": "https://research.meta.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse"
+          }
+        ],
+        "originalLogoPath": "/product-media/muse-logo.svg",
+        "originalScreenshotPath": "/product-media/muse-screen.webp"
+      }
+    },
+    {
+      "id": "34d665ac-3d23-496a-bde1-8bcab0dcc0df",
+      "name": "Instinct",
+      "company": "Spear Street Technology, Inc. (Instinct)",
+      "url": "https://www.humaninstinct.com/",
+      "description": "A personal AI assistant accessed through text messages or calls, designed to understand a user's work and priorities and complete everyday errands. Its stated capabilities include using a phone and computer to order groceries or gifts, arrange appointments, and plan travel. The emphasis is on delegating practical tasks through familiar communication channels. The service is operated by Spear Street Technology, Inc., doing business as Instinct.",
+      "logoUrl": "/product-media/instinct-logo.ico",
+      "screenshotUrl": "/product-media/instinct-screen.png",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "Instinct — official product overview",
+            "url": "https://www.humaninstinct.com/"
+          },
+          {
+            "title": "Instinct — operator information",
+            "url": "https://www.humaninstinct.com/terms"
+          }
+        ],
+        "originalLogoPath": "/product-media/instinct-logo.ico",
+        "originalScreenshotPath": "/product-media/instinct-screen.png"
+      }
+    },
+    {
+      "id": "5e57e478-fd9b-4ff2-b159-8fd5c6610018",
+      "name": "Underdog AI",
+      "company": "Conway",
+      "url": "https://underdog.ai/",
+      "description": "A personal AI product from Conway that emphasizes running AI processing and memory on the user's device. It combines email, calendar, meeting notes, dictation, and assistance with errands. Its local models generate summaries, drafts, and answers; email syncs directly with the user's provider, while approved messages and bookings go to external services. Users can inspect, edit, or delete saved memory. Access is currently described as an invite-only beta.",
+      "logoUrl": "/product-media/underdog-logo.png",
+      "screenshotUrl": "/product-media/underdog-screen.jpg",
+      "provenance": {
+        "origin": "Research Studio",
+        "revision": 68,
+        "checkedAt": "2026-10-17",
+        "descriptionSources": [
+          {
+            "title": "Underdog — official product overview",
+            "url": "https://underdog.ai/"
+          },
+          {
+            "title": "Conway — creator of Underdog",
+            "url": "https://conway.tech/"
+          }
+        ],
+        "originalLogoPath": "/product-media/underdog-logo.png",
+        "originalScreenshotPath": "/product-media/underdog-screen.jpg"
+      }
+    },
+    {
+      "id": "personal-agent-wabi",
+      "name": "Wabi",
+      "description": "A personal AI assistant for scheduling, reminders, research, purchases and other delegated tasks. It can present interactive mini-apps as part of its responses.",
+      "company": "Wabi, Inc.",
+      "url": "https://wabi.ai/",
+      "logoUrl": "/product-media/wabi-logo.svg",
+      "screenshotUrl": "/product-media/wabi-screen.jpg",
+      "provenance": {
+        "origin": "Official product documentation",
+        "checkedAt": "2026-11-09",
+        "descriptionSources": [
+          {
+            "url": "https://wabi.ai/terms"
+          }
+        ],
+        "verificationStatus": "basic_profile_verified_dates_partial"
+      }
+    },
+    {
+      "id": "personal-agent-town",
+      "name": "Town",
+      "description": "A personal assistant called a Townie that learns from connected email, calendars and other tools. It retains context about people, projects and working preferences to help complete work across those services.",
+      "company": "",
+      "url": "https://www.town.com/",
+      "logoUrl": "/product-media/town-logo.png",
+      "screenshotUrl": "/product-media/town-screen.png",
+      "provenance": {
+        "origin": "Official product documentation",
+        "checkedAt": "2026-11-09",
+        "descriptionSources": [
+          {
+            "url": "https://www.town.com/product"
+          },
+          {
+            "url": "https://www.town.com/docs/getting-started"
+          }
+        ],
+        "verificationStatus": "basic_profile_verified_dates_partial"
+      }
+    },
+    {
+      "id": "personal-agent-grok-bot",
+      "name": "Grok Bot",
+      "description": "Always-on agents with their own computers that work across connected tools and websites. Users can delegate projects, run multiple bots and review actions that need approval.",
+      "company": "",
+      "url": "https://x.ai/bot",
+      "logoUrl": "/product-media/grok-bot-logo.png",
+      "screenshotUrl": "/product-media/grok-bot-screen.png",
+      "provenance": {
+        "origin": "Official product documentation",
+        "checkedAt": "2026-11-09",
+        "descriptionSources": [
+          {
+            "url": "https://x.ai/news/introducing-grok-bot"
+          },
+          {
+            "url": "https://x.ai/bot"
+          }
+        ],
+        "verificationStatus": "basic_profile_verified_dates_partial"
+      },
+      "launchDate": "2026-08-11",
+      "launchKind": "public_beta"
+    },
+    {
+      "id": "personal-agent-manus-cue",
+      "name": "Manus Cue",
+      "description": "A standalone Manus application for personal agents with their own email, phone number, wallet and computer. Agents can collaborate in group chats and handle supported online and in-person services within user permissions.",
+      "company": "BUTTERFLY EFFECT PTE. LTD.",
+      "url": "https://manus.im/blog/introducing-manus-2-0",
+      "logoUrl": "/product-media/manus-cue-logo.svg",
+      "screenshotUrl": "/product-media/manus-cue-screen.webp",
+      "provenance": {
+        "origin": "Official product documentation",
+        "checkedAt": "2026-11-09",
+        "descriptionSources": [
+          {
+            "url": "https://manus.im/blog/introducing-manus-2-0"
+          },
+          {
+            "url": "https://apps.apple.com/us/app/cue-by-manus/id6808613358"
+          }
+        ],
+        "verificationStatus": "basic_profile_verified_dates_partial"
+      }
+    },
+    {
+      "id": "personal-agent-claude-duet",
+      "name": "Claude Duet",
+      "description": "A proactive Claude app for professionals and small business owners. It works across connected apps, provides briefings, continues tasks in a cloud computer and requests approval for consequential actions. Initial access is a US research preview through a waitlist.",
+      "company": "Anthropic",
+      "url": "https://claude.com/resources/articles/claude-duet",
+      "logoUrl": "/product-media/claude-duet-logo.svg",
+      "screenshotUrl": "/product-media/claude-duet-screen.png",
+      "provenance": {
+        "origin": "Official product documentation",
+        "checkedAt": "2026-11-09",
+        "descriptionSources": [
+          {
+            "url": "https://claude.com/resources/articles/claude-duet"
+          },
+          {
+            "url": "https://support.claude.com/en/articles/17631495-get-started-with-claude-duet"
+          }
+        ],
+        "verificationStatus": "basic_profile_verified_dates_partial"
+      },
+      "launchDate": "2026-10-21",
+      "launchKind": "public_beta"
+    }
+  ]
+}

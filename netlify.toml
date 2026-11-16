@@ -63,6 +63,16 @@
   status = 302
 
 [[redirects]]
+  from = "/api/visitor-write"
+  to = "/.netlify/functions/visitor-write"
+  status = 200
+
+[[redirects]]
+  from = "/api/public-read"
+  to = "/.netlify/functions/public-read"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

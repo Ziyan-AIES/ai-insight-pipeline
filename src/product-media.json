@@ -1,0 +1,50 @@
+{
+  "43470e1f-4553-459f-84f0-e1faacbbf91b": {
+    "logoUrl": "/product-media/ambi-logo.png",
+    "screenshotUrl": "/product-media/ambi-screen.jpg"
+  },
+  "0c143ca5-d3d9-4e51-add4-4faf073d9c11": {
+    "logoUrl": "/product-media/dots-logo.svg",
+    "screenshotUrl": "/product-media/dots-screen.webp"
+  },
+  "64944e43-9b8c-4ecb-b786-95cadcd76af5": {
+    "logoUrl": "/product-media/cc-logo.svg",
+    "screenshotUrl": "/product-media/cc-screen.png"
+  },
+  "c97c0088-58b5-4868-9e28-7bc2aa5d0ed7": {
+    "logoUrl": "/product-media/today-logo.png",
+    "screenshotUrl": "/product-media/today-screen.png"
+  },
+  "eec03130-3639-4098-a5f5-1c699ddd6f6c": {
+    "logoUrl": "/product-media/muse-logo.svg",
+    "screenshotUrl": "/product-media/muse-screen.webp"
+  },
+  "34d665ac-3d23-496a-bde1-8bcab0dcc0df": {
+    "logoUrl": "/product-media/instinct-logo.ico",
+    "screenshotUrl": "/product-media/instinct-screen.png"
+  },
+  "5e57e478-fd9b-4ff2-b159-8fd5c6610018": {
+    "logoUrl": "/product-media/underdog-logo.png",
+    "screenshotUrl": "/product-media/underdog-screen.jpg"
+  },
+  "personal-agent-wabi": {
+    "logoUrl": "/product-media/wabi-logo.svg",
+    "screenshotUrl": "/product-media/wabi-screen.jpg"
+  },
+  "personal-agent-town": {
+    "logoUrl": "/product-media/town-logo.png",
+    "screenshotUrl": "/product-media/town-screen.png"
+  },
+  "personal-agent-grok-bot": {
+    "logoUrl": "/product-media/grok-bot-logo.png",
+    "screenshotUrl": "/product-media/grok-bot-screen.png"
+  },
+  "personal-agent-manus-cue": {
+    "logoUrl": "/product-media/manus-cue-logo.svg",
+    "screenshotUrl": "/product-media/manus-cue-screen.webp"
+  },
+  "personal-agent-claude-duet": {
+    "logoUrl": "/product-media/claude-duet-logo.svg",
+    "screenshotUrl": "/product-media/claude-duet-screen.png"
+  }
+}

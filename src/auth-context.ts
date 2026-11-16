@@ -14,6 +14,9 @@ export type AuthContextValue = {
   canEdit: boolean
   canAdmin: boolean
   canResearch?: boolean
+  visitorName?: string
+  setVisitorName?: (name: string) => void
+  openEditorLogin?: () => void
   signOut: () => Promise<void>
 }
 

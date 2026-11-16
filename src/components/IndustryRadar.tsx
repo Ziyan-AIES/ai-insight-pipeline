@@ -1,3 +1,5 @@
+import { ReferenceBrief } from './ReferenceBrief'
+import radarDictionary from '../../config/radar-topics.json'
 import { useEffect, useMemo, useState } from 'react'
 import { sourceSetup } from '../source-method'
 import {
@@ -17,6 +19,7 @@ import {
   googleNewsUrl,
   radarSourceHealth,
   radarSourceTypeLabels,
+  radarTopicDescriptions,
 } from '../radar'
 import type {
   RadarItem,
@@ -35,7 +38,7 @@ const sourceTypes = Object.keys(radarSourceTypeLabels) as RadarSourceType[]
 const batchOpenCapabilityAttribute = 'data-ai-signals-batch-open'
 const batchOpenRequestEvent = 'ai-signals:open-urls'
 const batchOpenResultEvent = 'ai-signals:open-urls-result'
-const batchOpenTimeoutMs = 1500
+const batchOpenTimeoutMs = 5000
 
 type BatchOpenResult = {
   ok: boolean
@@ -306,23 +309,23 @@ function SourceManager({
             const health = radarSourceHealth(source)
             const setup = sourceSetup(source.domain)
             return (
-              <article className={`radar-source-row health-${health}`} key={source.id}>
-                <div className="radar-source-order">
+              <article className={`radar-source-row ${canAdmin ? "editable" : "readonly"} health-${health}`} key={source.id}>
+                <div className="radar-source-order" hidden={!canAdmin}>
                   <button type="button" aria-label={`Move ${source.name} up`} disabled={!canAdmin || index === 0} onClick={() => void moveSource(index, -1)}>↑</button>
                   <button type="button" aria-label={`Move ${source.name} down`} disabled={!canAdmin || index === sources.length - 1} onClick={() => void moveSource(index, 1)}>↓</button>
                 </div>
                 <span className={`radar-health-dot ${health}`} title={health} />
                 <div className="radar-source-main">
                   <strong><a href={source.homepageUrl} target="_blank" rel="noreferrer">{source.name}</a></strong>
-                  <span>{source.domain} · {radarSourceTypeLabels[source.sourceType]}{source.connectorType === 'website_agent' ? ' · Website Agent · Mon 12:00 Beijing' : source.connectorType === 'agent_email' ? ' · Agent email subscription' : source.connectorType === 'rss' ? <> · <a href={source.feedUrl} target="_blank" rel="noreferrer">RSS ↗</a> · Every 4 hours</> : ''}</span>
+                  <span>{source.domain} · {radarSourceTypeLabels[source.sourceType]}{source.connectorType === 'website_agent' ? ' · Website Agent · Mon 12:00 Beijing' : source.connectorType === 'agent_email' ? ' · Agent email subscription' : source.connectorType === 'rss' ? <> · {source.feedUrl ? <a href={source.feedUrl} target="_blank" rel="noreferrer">RSS</a> : 'RSS'} · Every 8 hours</> : ''}</span>
                   {setup?.subscription ? <small>{setup.subscription}</small> : null}
                   {setup ? <small title={setup.checkedAt}>Setup checked {new Date(setup.checkedAt).toLocaleString('en-GB', {timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short'})} Beijing</small> : null}
-                  <small>{source.connectorType === 'agent_email' ? 'Inbox checked' : 'Content checked'} {ageLabel(source.lastFetchedAt)}{source.connectorType === 'agent_email' ? ' · Automatic inbox checks not scheduled' : ''}</small>
+                  <small>{source.connectorType === 'agent_email' ? 'Inbox checked' : 'Content checked'} {ageLabel(source.lastFetchedAt)}{source.connectorType === 'agent_email' ? ' · Daily inbox review at 16:15 Beijing' : ''}</small>
                   {setup?.note ? <small>{setup.note}</small> : null}
                   {source.lastError ? <small>{source.lastError}</small> : null}
                 </div>
                 <div className="radar-source-volume"><strong>{source.itemCount7d}</strong><span>7d items</span></div>
-                <label className="radar-source-toggle">
+                <label className="radar-source-toggle" hidden={!canAdmin}>
                   <input type="checkbox" checked={source.enabled} disabled={!canAdmin} onChange={(event) => void updateSource(source, { enabled: event.target.checked })} />
                   <span>{source.enabled ? 'On' : 'Paused'}</span>
                 </label>
@@ -346,7 +349,6 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
   const [selectedEvidence, setSelectedEvidence] = useState<string[]>([])
   const [batchOpenFallback, setBatchOpenFallback] = useState<RadarItem[]>([])
   const [sourcesOpen, setSourcesOpen] = useState(false)
-  const [methodOpen, setMethodOpen] = useState(false)
   const [loading, setLoading] = useState(cloudConfigured)
   const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -381,6 +383,9 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
     [filteredItems, windowDays],
   )
   const selectedTopic = topics.find((topic) => topic.slug === selectedSlug) || topics[0]
+  const windowItems = filteredItems.filter(item => +new Date(item.publishedAt) >= Date.now() - windowDays * 86400000 && +new Date(item.publishedAt) <= Date.now())
+  const matchedCount = windowItems.filter(item => item.topicSlugs.length > 0).length
+  const scopeSources = sources.filter(source => sourceFilter === 'all' || source.sourceType === sourceFilter)
 
   useEffect(() => {
     if (!selectedTopic) {
@@ -392,6 +397,26 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
     setSelectedEvidence(selectedTopic.evidence.slice(0, 4).map((item) => item.id))
     setBatchOpenFallback([])
   }, [selectedTopic, selectedSlug])
+
+  function openInBrowser(selectedItems: RadarItem[]) {
+    const remaining = selectedItems.filter(item => {
+      let tab: Window | null = null
+      try {
+        tab = window.open('about:blank', '_blank')
+        if (!tab) return true
+        tab.opener = null
+        tab.location.replace(normalizedHttpUrl(item.url))
+        return false
+      } catch {
+        tab?.close()
+        return true
+      }
+    })
+    setBatchOpenFallback(remaining)
+    onNotice(remaining.length
+      ? `Opened ${selectedItems.length-remaining.length} of ${selectedItems.length}. Allow pop-ups for this site, then retry the remaining articles below.`
+      : `Opened ${selectedItems.length} selected sources`)
+  }
 
   async function openEvidence(topic: RadarTopic) {
     const selectedItems = topic.evidence
@@ -432,14 +457,9 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
       return
     }
 
-    window.open(urls[0], '_blank', 'noopener,noreferrer')
-    const remaining = selectedItems.slice(1)
-    setBatchOpenFallback(remaining)
-    onNotice(
-      remaining.length
-        ? `Sent the first source to the browser · open ${remaining.length} remaining below`
-        : 'Opened selected source',
-    )
+    // Open during the click gesture, before any asynchronous work. A blank tab
+    // lets us detect blockers and sever opener before navigating externally.
+    openInBrowser(selectedItems)
   }
 
   async function refreshRadar() {
@@ -474,11 +494,12 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
           <p>Official updates and supported feeds, grouped by topic. Reference only: these are not team-endorsed trends.</p>
         </div>
         <div className="radar-hero-actions">
-          <button className="text-action radar-method-toggle" type="button" aria-expanded={methodOpen} onClick={() => setMethodOpen((open) => !open)}>How it works</button>
           {canEdit ? <button className="secondary-button" type="button" disabled={refreshing} onClick={() => void refreshRadar()}>{refreshing ? 'Refreshing…' : 'Refresh now'}</button> : null}
           <button className="secondary-button" type="button" onClick={() => setSourcesOpen(true)}>Sources · {sources.filter((source) => source.enabled).length}</button>
         </div>
       </header>
+
+      <ReferenceBrief />
 
       <div className="radar-control-bar">
         <div className="radar-window" role="group" aria-label="Radar period">
@@ -492,14 +513,12 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         <span className="radar-freshness"><i className={healthySources ? 'healthy' : 'pending'} />{healthySources}/{sources.length} healthy · checked {ageLabel(latestFetch)}</span>
       </div>
 
-      {methodOpen ? (
-        <section className="radar-methodology" aria-label="How Industry Radar works">
-          <div><strong>Collect</strong><span>RSS and supported APIs refresh every 4 hours. Official sites without feeds are checked Mondays at noon Beijing time.</span></div>
-          <div><strong>Cluster</strong><span>Near-identical coverage is consolidated into one distinct development.</span></div>
-          <div><strong>Rank</strong><span>Development count, independent-source breadth, momentum and available engagement.</span></div>
-          <div><strong>AI use</strong><span>An Agent verifies weekly website discoveries. Topic matching and ranking remain deterministic; signals do not automatically become endorsed trends.</span></div>
-        </section>
-      ) : null}
+      {!loading && !loadError && <details className="radar-collected-articles">
+        <summary>{windowItems.length} articles collected in {windowDays} days · {matchedCount} matched to dictionary topics · {topics.length} recurring topics</summary>
+        <p>Collected articles remain available even without a dictionary match. A ranked topic needs at least two distinct developments. Empty rankings do not mean the sources published nothing.</p>
+        <p>{scopeSources.filter(source => source.enabled).length} enabled sources · {scopeSources.filter(source => source.enabled && source.lastError).length} reporting errors · {scopeSources.filter(source => source.enabled && !source.lastSuccessAt).length} without a successful check. Open Sources for individual status.</p>
+        <ul>{windowItems.map(item => <li key={item.id}><a href={item.url} target="_blank" rel="noreferrer">{item.title}</a><span>{item.sourceName} · {new Date(item.publishedAt).toLocaleDateString()} · {item.topicSlugs.length ? 'Topic matched' : 'Not matched to the dictionary'}</span></li>)}</ul>
+      </details>}
 
       {loadError ? (
         <div className="radar-setup-state">
@@ -510,14 +529,14 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         <div className="radar-setup-state">Loading market signals…</div>
       ) : topics.length === 0 ? (
         <div className="radar-setup-state">
-          <strong>No radar topics in this window yet.</strong>
-          <p>Open Sources to review coverage, then run the first refresh.</p>
+          <strong>No recurring topics in this window yet.</strong>
+          <p>{windowItems.length ? `${windowItems.length} articles were collected, but none form a dictionary topic with two distinct developments. Expand the article list above to read them.` : 'No articles are stored for this filter and period. Check individual source errors, feed freshness and pending mail in Sources; this does not establish that the publishers had no news.'}</p>
         </div>
       ) : (
         <div className="radar-workbench">
           <div className="radar-topic-list" aria-label="Rising topics">
             <div className="radar-list-heading">
-              <span>Specific movement</span><span title="Change versus the preceding period">Momentum</span><span title="Distinct developments after similar coverage is consolidated">Coverage</span><span title="Mentions over the selected period">Activity</span>
+              <span>Observed topic</span><span title="Change versus the preceding period">Momentum</span><span title="Distinct developments after similar coverage is consolidated">Coverage</span><span title="Mentions over the selected period">Activity</span>
             </div>
             {topics.map((topic, index) => (
               <button type="button" className={`radar-topic-row ${selectedTopic?.slug === topic.slug ? 'selected' : ''}`} onClick={() => setSelectedSlug(topic.slug)} key={topic.slug}>
@@ -536,8 +555,10 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
                   <span className={`radar-state ${selectedTopic.status}`}>{selectedTopic.status}</span>
                   <h2>{selectedTopic.label}</h2>
                 </div>
-                <a className="secondary-button" href={googleNewsUrl(selectedTopic)} target="_blank" rel="noreferrer">Google News ↗</a>
+                <a className="secondary-button" href={googleNewsUrl(selectedTopic)} target="_blank" rel="noreferrer">Google News </a>
               </header>
+              <p>{radarTopicDescriptions[selectedTopic.slug]}</p>
+              <p className="radar-dictionary-note">{radarDictionary.topics.find(topic => topic.slug === selectedTopic.slug)?.group} · Dictionary reviewed {radarDictionary.reviewedAt} · <a href="/signal-reference-dictionary.md" target="_blank" rel="noreferrer">View dictionary </a></p>
               <p className="radar-topic-readout">
                 A development is one underlying story after similar reports are consolidated. This movement has {selectedTopic.developmentCount} developments across {selectedTopic.sourceCount} sources in the last {windowDays} days. {selectedTopic.mentionCount - selectedTopic.developmentCount > 0 ? `${selectedTopic.mentionCount - selectedTopic.developmentCount} overlapping reports were merged.` : 'No overlapping reports inflated this count.'}
               </p>
@@ -552,7 +573,8 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
                 <div className="radar-open-fallback" role="status">
                   <div>
                     <strong>Open remaining sources</strong>
-                    <span>Use these direct links if browser or extension batch opening is unavailable.</span>
+                    <span>Allow pop-ups for this site to open all selected sources together, or use these links.</span>
+                    <button type="button" className="secondary-button" onClick={()=>openInBrowser(batchOpenFallback)}>Retry remaining · {batchOpenFallback.length}</button>
                   </div>
                   <div className="radar-open-fallback-links">
                     {batchOpenFallback.map((item) => (
@@ -584,7 +606,7 @@ export function IndustryRadar({ canAdmin, canEdit, onNotice }: IndustryRadarProp
         </div>
       )}
 
-      {sourcesOpen ? <SourceManager sources={sources} canAdmin={canAdmin} onClose={() => setSourcesOpen(false)} onSourcesChange={setSources} onNotice={onNotice} /> : null}
+      {sourcesOpen ? <SourceManager sources={sources} canAdmin={canAdmin || canEdit} onClose={() => setSourcesOpen(false)} onSourcesChange={setSources} onNotice={onNotice} /> : null}
     </section>
   )
 }

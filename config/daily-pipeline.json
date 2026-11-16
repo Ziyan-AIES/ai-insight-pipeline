@@ -1,0 +1,12 @@
+{
+  "version": "2026-11-11",
+  "timezone": "Asia/Shanghai",
+  "model": "grok-4.5",
+  "intakeHour": 16,
+  "intakeMinute": 15,
+  "editorialHour": 18,
+  "maxMailPerRun": 10,
+  "maxMailCharacters": 60000,
+  "maxRecommendationsPerDay": 2,
+  "recommendationPreference": "Personal agents, consumer use before enterprise use. Prioritize concrete product updates, memory/context, voice and multimodal interaction, planning and execution, tool/app connections, cross-device experience, privacy, permissions, reliability and supporting model capabilities. Downrank pure robotics, industrial automation, networking and infrastructure unless they directly improve personal-agent experiences. Exclude financing-only news, promotions and generic technology news. Recommend fewer or none when evidence is insufficient."
+}

@@ -1,3 +1,5 @@
+> Historical snapshot. For current task entrypoints and logs, use [daily-pipeline.md](daily-pipeline.md).
+
 # Production baseline — 2026-09-08
 
 Read-only snapshot captured at 2026-09-08 09:08 CST (UTC+08:00). No deploy,

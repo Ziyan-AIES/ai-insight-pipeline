@@ -43,9 +43,31 @@ describe('Industry Radar ingestion helpers', () => {
     expect(topicSlugsFor('Ten tips for a better vegetable garden')).toEqual([])
   })
 
+  it('reads RSS article content rather than only a short promotional description', () => {
+    const [item] = parseFeed('<rss><item><title>Investor research</title><link>https://example.com/research</link><pubDate>Wed, 04 Nov 2026 10:00:00 GMT</pubDate><description>Read our latest report</description><content:encoded><![CDATA[<p>AI agents need scoped permissions and a complete inventory.</p>]]></content:encoded></item></rss>', 'https://example.com/feed')
+    expect(item.summary).toContain('scoped permissions')
+    expect(item.rawMetadata.feed_text).toContain('complete inventory')
+  })
+
   it('gives paraphrased event titles a stable similarity signal', () => {
     expect(titleSimilarity('OpenAI launches a new browser agent', 'OpenAI unveils its browser AI agent')).toBeGreaterThan(0.5)
     expect(storySignature('OpenAI launches a new browser agent')).toHaveLength(24)
+  })
+
+  it('separates cybersecurity, agent access and compute economics from coding', () => {
+    const security = topicSlugsFor('Hackers used Claude and Grok to automate attacks on banks')
+    expect(security).toContain('ai-cybersecurity')
+    expect(security).not.toContain('autonomous-coding')
+    expect(topicSlugsFor('Salesforce will charge fees for outside AI agents that access its data')).toContain('agent-access-governance')
+    expect(topicSlugsFor('AI compute bottlenecks raise financing costs for neoclouds')).toContain('ai-compute-infrastructure')
+    expect(topicSlugsFor('Video AI studios expand AI filmmaking production')).toContain('text-to-video')
+  })
+
+  it('does not infer open weights from a vendor name or an ordinary software price change', () => {
+    expect(topicSlugsFor('Mistral offers an enterprise AI service')).not.toContain('open-weight-models')
+    expect(topicSlugsFor('AI startup hosts datasets on Hugging Face')).not.toContain('open-weight-models')
+    expect(topicSlugsFor('AI software subscription fees increase')).not.toContain('agent-access-governance')
+    expect(topicSlugsFor('An open-source video model generates AI films')).toContain('open-weight-models')
   })
 
   it('returns the DNS shape requested by Undici while keeping the validated address pinned', () => {

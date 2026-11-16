@@ -18,8 +18,20 @@
     "editorial:check": "tsx scripts/run-local-editorial.ts --check",
     "editorial:local": "tsx scripts/run-local-editorial.ts",
     "editorial:drain": "tsx scripts/run-local-editorial.ts --drain",
-    "editorial:schedule": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/register-editorial-task.ps1",
-    "pilot:report": "node scripts/pilot-report.mjs"
+    "editorial:schedule": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/register-pipeline-tasks.ps1",
+    "pilot:report": "node scripts/pilot-report.mjs",
+    "reference:brief": "node scripts/run-reference-brief.mjs",
+    "reference:dictionary": "node scripts/export-reference-dictionary.mjs",
+    "mail:collect": "node scripts/collect-mail-queue.mjs",
+    "research:check": "node scripts/run-research-enrichment.mjs --check",
+    "research:drain": "node scripts/run-research-enrichment.mjs",
+    "test:research-synthesis": "node --test scripts/research-synthesis.test.mjs scripts/research-product-enrichment.test.mjs",
+    "research:import-products": "node scripts/import-research-products.mjs",
+    "test:research-db": "node scripts/validate-research-db.mjs",
+    "pipeline:intake": "node --import ./scripts/local-network.mjs scripts/run-daily-pipeline.mjs --stage=intake",
+    "pipeline:editorial": "node --import ./scripts/local-network.mjs scripts/run-daily-pipeline.mjs --stage=editorial",
+    "pipeline:check": "node --import ./scripts/local-network.mjs scripts/run-daily-pipeline.mjs --check",
+    "pipeline:schedule": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/register-pipeline-tasks.ps1"
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.26",
@@ -31,6 +43,7 @@
     "undici-pinned": "npm:undici@^6.28.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

@@ -1,0 +1,86 @@
+[
+  [
+    "46c0fc02-9233-4738-a051-d736c8cae7b8",
+    6,
+    "Personalization | The Next Wave of Personal Agents",
+    "Examined 12 emerging personal agents to identify common patterns in interaction, context and memory, autonomous execution, security and monetization. The next opportunity is not simply more powerful agents, but reducing the effort users spend managing AI through deeper personal understanding, proactive assistance and reliable execution."
+  ],
+  [
+    "a897e114-75ef-4f4a-98ae-374f8de472a7",
+    4,
+    "Apple & OPPO | Hardware-led Personal AI",
+    "Analyzed Apple's September launch and OPPO's AIOS evolution, focusing on AI entry points, on-device intelligence, personal context and ecosystem integration. Both point toward more accessible, deeply embedded AI experiences, where hardware, local data and system-level capabilities become strategic advantages over standalone AI applications."
+  ],
+  [
+    "750d7a24-3a83-429b-b030-455481525477",
+    4,
+    "Domain Experience | Agentic AI Across Consumer Scenarios",
+    "Tracked how leading AI players extend beyond general-purpose chat into shopping, travel, finance, learning, health and home. AI experiences are evolving from information assistance toward more complete domain workflows, creating opportunities for differentiated user experiences, specialized capabilities and ecosystem partnerships."
+  ],
+  [
+    "ce2e2e1b-4d71-4bd0-b220-6f4748799889",
+    4,
+    "Industry Trends | Model Dynamics & the New Context Layer",
+    "Examined rapid model improvement alongside growing concerns over AI ROI, inference costs, privacy and enterprise adoption. As intelligence becomes more accessible, differentiation shifts toward intelligent model orchestration and context-aware experiences, matching the right intelligence, cost and personal context to each task."
+  ],
+  [
+    "4be89f4d-4fd0-4c4c-aeb3-f62212775a8a",
+    2,
+    "Key Industry Events | WWDC, Build & Google Events",
+    "Compared Apple, Microsoft and Google's AI strategies across consumer experiences, agent platforms, local/cloud computing and ecosystem integration. Their approaches are diverging: Apple emphasizes embedded, local-first consumer AI; Microsoft builds an enterprise agent platform; Google integrates Gemini across products, devices and transactional ecosystems."
+  ],
+  [
+    "b946fd50-c211-47bd-8974-718fe4deebe7",
+    3,
+    "Google I/O | Agent, Hardware & Local Computing",
+    "Explored Google's evolving AI ecosystem across Gemini-powered experiences, agentic capabilities, hardware integration and local computing. The emerging direction is a connected intelligence layer spanning devices, applications and services, with both cloud-scale capabilities and on-device execution shaping the next generation of user experiences."
+  ],
+  [
+    "c1a1354f-10b5-4009-8da9-38dc067e6544",
+    3,
+    "Generative UI & HP IQ | The Evolution of Human-AI Interaction",
+    "Explored how AI interfaces are evolving beyond static chat toward dynamically generated, task-adaptive experiences, alongside emerging human-behavior intelligence capabilities. The opportunity lies in interfaces that better interpret user intent, adapt to context and reduce interaction friction rather than simply adding conversational features."
+  ],
+  [
+    "145d5eae-0c9b-4d26-af3a-aa2d6477d335",
+    4,
+    "OpenClaw | From AI Assistant to Autonomous Execution",
+    "Examined OpenClaw's approach to persistent agents, messaging-based interaction and tool-driven execution. Its emergence highlights a shift from AI as a conversational assistant toward an actionable agent layer, raising strategic questions about who controls user entry points, execution environments, permissions and the broader agent ecosystem."
+  ],
+  [
+    "edd17237-f062-4040-ba4e-a1dcfcf511bd",
+    3,
+    "World Models | Tracking AI Research Progress",
+    "Tracked recent developments in world models and their potential to advance AI beyond language understanding toward richer representations of physical environments, spatial relationships and real-world dynamics."
+  ],
+  [
+    "906951d7-31a4-4f91-8a78-c1b5efb79d31",
+    2,
+    "CES 2026 | AI Hardware & Ecosystem Highlights",
+    "Reviewed AI-related announcements at CES 2026, covering AI PCs, emerging device form factors, intelligent hardware and cross-device experiences. The industry is expanding AI beyond standalone software into a broader hardware ecosystem, where contextual awareness, interaction and device coordination become increasingly important."
+  ],
+  [
+    "a73d207b-0c85-4c66-904f-fa84303fc9b8",
+    2,
+    "Autonomous Agents | From Assistance to Independent Action",
+    "Explored the evolution of autonomous AI agents, focusing on task planning, tool use, multi-step execution and reduced human intervention. As models become more capable of taking action, the key challenges shift toward execution reliability, context continuity, permission management and meaningful real-world utility."
+  ],
+  [
+    "2de3dd8d-f0c4-4b59-afda-4f3c22714d24",
+    2,
+    "Smartphone AI Ecosystems | China's Rapid AI Integration",
+    "Compared AI developments from leading Chinese smartphone makers, including Huawei, HONOR and OPPO, across system-level features, device intelligence and ecosystem integration. Smartphone vendors are moving beyond isolated AI functions toward more integrated experiences, using OS capabilities, hardware access and connected services to strengthen ecosystem differentiation."
+  ],
+  [
+    "99a85671-0174-4fdb-9083-4bd1a768b50b",
+    2,
+    "AI Ecosystem Partnerships | Usage-driven Opportunity Mapping",
+    "Analyzed PC and smartphone application usage patterns to identify priority consumer domains and ecosystem partnership opportunities. Mapped innovative service providers and emerging AI players across verticals, translating user engagement and market dynamics into potential partnership priorities for Lenovo's AI ecosystem."
+  ],
+  [
+    "c6dfc52d-3e8e-48da-93cb-2229ac8c2a6c",
+    2,
+    "Apple Highlights | AI Integration Across Devices & Services",
+    "Reviewed Apple's September product announcements, focusing on AI-related enhancements across devices, operating systems and services. The analysis explored how Apple integrates intelligence into existing user experiences and strengthens ecosystem continuity through hardware-software integration and cross-device capabilities."
+  ]
+]

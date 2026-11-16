@@ -135,6 +135,16 @@ function AuthCard({
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [visitorName, updateVisitorName] = useState(() => {
+    try { return localStorage.getItem('sonata:visitor-name')?.trim() || 'Anonymous' }
+    catch { return 'Anonymous' }
+  })
+  const setVisitorName = useCallback((value: string) => {
+    const name = value.trim().slice(0, 80) || 'Anonymous'
+    updateVisitorName(name)
+    try { localStorage.setItem('sonata:visitor-name', name) } catch { /* Storage may be unavailable. */ }
+  }, [])
   const handshake = useMemo(extensionHandshake, [])
   const dashboardHandshake = useMemo(dashboardSessionHandshake, [])
   const [session, setSession] = useState<Session | null>(null)
@@ -382,12 +392,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const context = useMemo<AuthContextValue>(
     () => ({
       identity,
+      visitorName, setVisitorName, openEditorLogin: () => setLoginOpen(true),
       canEdit: !cloudConfigured || identity?.role === 'editor' || identity?.role === 'admin',
       canResearch: !cloudConfigured || researchAccess,
       canAdmin: !cloudConfigured || identity?.role === 'admin',
       signOut: signOutEverywhere,
     }),
-    [identity, signOutEverywhere, researchAccess],
+    [identity, signOutEverywhere, researchAccess, visitorName, setVisitorName],
   )
 
   async function requestLink() {
@@ -459,7 +470,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               </span>
             </div>
           ) : null}
-          <AuthContext.Provider value={context}>{children}</AuthContext.Provider>
+          <AuthContext.Provider key={identity?.userId || 'visitor'} value={context}>{children}</AuthContext.Provider>
         </>
       )
     }
@@ -509,8 +520,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )
   }
 
+  // Enable only after the public read/write migration and permission checks are ready.
+  if (import.meta.env.VITE_PUBLIC_WORKSPACE_ENABLED !== 'true') {
   if (session && identity) {
-    return <AuthContext.Provider value={context}>{children}</AuthContext.Provider>
+    return <AuthContext.Provider key={identity?.userId || 'visitor'} value={context}>{children}</AuthContext.Provider>
   }
 
   return (
@@ -554,5 +567,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <small>Checking your installed AI Signals extension…</small>
       )}
     </AuthCard>
+  )
+
+  }
+
+  return (
+    <AuthContext.Provider key={identity?.userId || 'visitor'} value={context}>
+      {children}
+      {loginOpen && <div className="modal-backdrop"><section className="analysis-editor editor-sign-in-dialog" role="dialog" aria-modal="true" aria-label="Editor sign in">
+        <header><h2>Editor sign in</h2><button type="button" onClick={() => setLoginOpen(false)}>Close</button></header>
+        <p>Request Editor access from lizy76. Approved editors can manage sources, edit and review news, manage trends, and use the Chrome extension. Signing in does not automatically grant Editor access.</p>
+        {session ? <><p>{identity ? `Signed in as ${identity.displayName}. Role: ${identity.role}.` : 'This account does not have workspace permissions. Contact lizy76 to request access.'}</p>{signOutButton}</> : <>
+          <label>Work email<input type="email" value={email} onChange={event => { setEmail(event.target.value); setLinkRequestState('idle') }} placeholder="name@company.com" /></label>
+          <button className="primary-button auth-submit" type="button" disabled={linkRequestState !== 'idle'} onClick={requestLink}>{signInButtonLabel}</button>
+        </>}
+        {message && <p role="status">{message}</p>}
+        {checkingExtension && <small>Checking your installed extension…</small>}
+      </section></div>}
+    </AuthContext.Provider>
   )
 }

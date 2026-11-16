@@ -27,6 +27,9 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - run: npx playwright test --config playwright.public.config.ts
+      - run: node scripts/validate-public-migrations.mjs
+      - run: npm run test:research-synthesis
       - run: npm run test:extension
 
   database:

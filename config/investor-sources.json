@@ -41,13 +41,14 @@
   },
   {
     "key": "lightspeed-newsletter",
+    "senderEmails": ["lsvp@mail.beehiiv.com"],
     "name": "Lightspeed — Newsletter",
     "domain": "newsletter.lsvp.com",
     "homepageUrl": "https://newsletter.lsvp.com/",
     "feedUrl": "https://rss.beehiiv.com/feeds/oj8diHp4G5.xml",
     "method": "rss",
     "checkedAt": "2026-10-21T03:37:47.041Z",
-    "subscription": "Submitted; email delivery not yet verified",
+    "subscription": "Confirmed; October 28, 2026 Cyber 60 newsletter received and matched to publisher archive",
     "note": "Newsletter RSS; latest entry September 1 at setup. Main Stories is a separate RSS source."
   },
   {

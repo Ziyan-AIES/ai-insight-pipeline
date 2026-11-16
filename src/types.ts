@@ -96,9 +96,15 @@ export interface ResearchProduct {
   url: string
   logoUrl: string
   screenshotUrl: string
+  companyDescription?: string
+  foundedDate?: string
+  launchDate?: string
+  launchKind?: 'initial' | 'major_release' | 'public_beta' | 'announcement'
 }
 
 export interface TopicAnalysis {
+  description?: string
+  authorName?: string
   workflowStage?: 'trend' | 'research'
   products?: ResearchProduct[]
   keyQuestion: string

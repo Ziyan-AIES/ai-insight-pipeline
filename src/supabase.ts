@@ -1,3 +1,4 @@
+import { publicWorkspaceEnabled, visitorWrite, visitorDisplayName, publicRead } from './visitor'
 import { createClient } from '@supabase/supabase-js'
 import { sourceConnector } from './source-method'
 import { parseNativeAnalysis } from './analysis'
@@ -6,7 +7,6 @@ import { emptyTopicAnalysis, threadStatusFromLegacy } from './labels'
 import type {
   ActivityEvent,
   DiscussionStatus,
-  EditorialReadout,
   EditorialHealth,
   NewsCategory,
   NewsItem,
@@ -43,6 +43,22 @@ export const supabase = cloudConfigured
       },
     })
   : null
+
+// Cache by access token, so account changes and refreshes re-check membership.
+let membershipToken = ''
+let membershipCheck: Promise<boolean> | null = null
+export async function isVisitorAccess() {
+  if (!publicWorkspaceEnabled || !supabase) return false
+  const {data} = await supabase.auth.getSession()
+  const session = data.session
+  if (!session) return true
+  if (membershipToken !== session.access_token || !membershipCheck) {
+    membershipToken = session.access_token
+    membershipCheck = Promise.resolve(supabase.from('team_members').select('user_id').eq('user_id',session.user.id).maybeSingle())
+      .then(({data,error}) => Boolean(error || !data)).catch(() => true)
+  }
+  return membershipCheck
+}
 
 type NewsRow = {
   id: string
@@ -167,6 +183,8 @@ export function parseTopicAnalysis(value: unknown): TopicAnalysis {
   }
   const record = value as Record<string, unknown>
   return {
+    description: typeof record.description === 'string' ? record.description : undefined,
+    authorName: typeof record.authorName === 'string' ? record.authorName : undefined,
     keyQuestion: String(record.keyQuestion || record.key_question || ''),
     observed: String(record.observed || ''),
     currentView: String(record.currentView || record.current_view || ''),
@@ -228,23 +246,22 @@ export async function loadWorkspace(includeDeleted = false) {
   }
   const session = await supabase.auth.getSession()
   const userId = session.data.session?.user.id
-  const [newsResult, topicResult, thesisResult, trendResult, memberResult, readoutResult, voteResult, ideaResult] =
-    await Promise.all([
+  const loadMemberRows = () => Promise.all([
       newsQuery,
       topicQuery,
       thesisQuery,
       trendQuery,
-      supabase.from('team_members').select('user_id,display_name,email'),
-      supabase
-        .from('editorial_readouts')
-        .select('period_type,period_key,lede,bullets,generated_at')
-        .order('generated_at', { ascending: false })
-        .limit(1),
+      supabase!.from('team_members').select('user_id,display_name,email'),
       userId
-        ? supabase.from('news_votes').select('news_id').eq('user_id', userId)
+        ? supabase!.from('news_votes').select('news_id').eq('user_id', userId)
         : Promise.resolve({ data: [] as Array<{ news_id: string }>, error: null }),
-      supabase.from('news_ideas').select('news_id'),
+      supabase!.from('news_ideas').select('news_id'),
     ])
+  const visitor = await isVisitorAccess()
+  const rows = visitor ? await Promise.all(['news', 'topics', 'trends'].map(resource => publicRead(resource))) : null
+  const [newsResult, topicResult, thesisResult, trendResult, memberResult, voteResult, ideaResult] = rows
+    ? [ {data:rows[0],error:null}, {data:rows[1],error:null}, {data:[],error:null}, {data:rows[2],error:null}, {data:[],error:null}, {data:[],error:null}, {data:[],error:null} ] as unknown as Awaited<ReturnType<typeof loadMemberRows>>
+    : await loadMemberRows()
   let effectiveNewsData: unknown = newsResult.data
   let effectiveNewsError = newsResult.error
   if (
@@ -268,7 +285,6 @@ export async function loadWorkspace(includeDeleted = false) {
     thesisResult.error ||
     (missingTrendSchema(trendResult.error) ? null : trendResult.error) ||
     memberResult.error ||
-    readoutResult.error ||
     voteResult.error ||
     ideaResult.error
   if (error) throw error
@@ -483,21 +499,7 @@ export async function loadWorkspace(includeDeleted = false) {
       .filter((topic) => topic.thesisId === row.id)
       .map((topic) => topic.id),
   }))
-  const latestReadout = readoutResult.data?.[0]
-  const readout: EditorialReadout | null = latestReadout
-    ? {
-        periodType: latestReadout.period_type as EditorialReadout['periodType'],
-        periodKey: latestReadout.period_key,
-        lede: latestReadout.lede,
-        bullets: Array.isArray(latestReadout.bullets)
-          ? latestReadout.bullets.filter(
-              (item): item is string => typeof item === 'string',
-            )
-          : [],
-        generatedAt: latestReadout.generated_at,
-      }
-    : null
-  return { news, topics, trends, theses, readout }
+  return { news, topics, trends, theses, readout: null }
 }
 
 type TrendRow = {
@@ -539,6 +541,17 @@ export async function searchWorkspace(
   contributor = 'all',
 ) {
   if (!supabase || !query.trim()) return [] as WorkspaceSearchResult[]
+  if (await isVisitorAccess()) {
+    const workspace = await loadWorkspace()
+    if (!workspace) return []
+    const needle = query.trim().toLowerCase()
+    const results: WorkspaceSearchResult[] = [
+      ...workspace.news.map(item => ({entityType:'news' as const,id:item.id,title:item.title,category:item.category,url:item.url,contributor:item.capturedBy,archived:false,evidenceCount:0,matchedAt:item.capturedAt})),
+      ...workspace.trends.map(item => ({entityType:'trend' as const,id:item.id,title:item.title,category:item.category,archived:item.status==='archived',evidenceCount:item.evidence.length,matchedAt:item.updatedAt||''})),
+      ...workspace.topics.map(item => ({entityType:'topic' as const,id:item.id,title:item.title,category:item.category,archived:false,evidenceCount:item.supportingNews.length,matchedAt:item.updatedAt||''})),
+    ]
+    return results.filter(item => item.title.toLowerCase().includes(needle) && (category==='all'||item.category===category) && (contributor==='all'||item.contributor===contributor)).slice(0,24)
+  }
   const { data, error } = await supabase.rpc('search_workspace', {
     p_query: query.trim(),
     p_category: category === 'all' ? null : category,
@@ -708,8 +721,17 @@ export async function persistNewsLink(input: {
   title: string
   source: string
   contributorName?: string
+  topicId?: string
 }) {
   if (!supabase) return null
+  if (await isVisitorAccess()) {
+    return visitorWrite<{id:string;canonicalUrl:string;alreadyExisted:boolean;removed:boolean;contributorName:string}>({ action: 'capture', url: canonicalizeUrl(input.url), title: input.title, contributor: input.contributorName?.trim() || visitorDisplayName(), topicId: input.topicId || null })
+  }
+  if(input.topicId !== undefined){
+    const {data,error}=await supabase.rpc('capture_research_news',{p_url:canonicalizeUrl(input.url),p_title:input.title,p_publisher:input.source,p_topic_id:input.topicId || null})
+    if(error)throw new Error(error.message)
+    return data as {id:string;canonicalUrl:string;alreadyExisted:boolean;removed:boolean;contributorName:string}
+  }
   const session = await supabase.auth.getSession()
   const user = session.data.session?.user || null
   const contributorName =
@@ -998,6 +1020,9 @@ export async function createTrend(input: {
   status?: TrendStatus
 }) {
   if (!supabase) return null
+  if (await isVisitorAccess()) {
+    return visitorWrite<{id:string;display_order:number;created_at:string;updated_at:string;version:number}>({ action: 'create_trend', ...input })
+  }
   const session = await supabase.auth.getSession()
   const userId = session.data.session?.user.id || null
   const { data, error } = await supabase
@@ -1086,6 +1111,10 @@ export async function persistTrendNews(
   displayOrder = 1,
 ) {
   if (!supabase) return
+  if (await isVisitorAccess()) {
+    await visitorWrite({ action: 'link_trend_source', trendId, newsId })
+    return
+  }
   const session = await supabase.auth.getSession()
   const { error } = await supabase.from('trend_news').upsert(
     {
@@ -1105,6 +1134,10 @@ export async function persistTrendNews(
 
 export async function unlinkTrendNews(trendId: string, newsId: string) {
   if (!supabase) return
+  if (await isVisitorAccess()) {
+    await visitorWrite({ action: 'unlink_trend_source', trendId, newsId })
+    return
+  }
   const session = await supabase.auth.getSession()
   const { error } = await supabase
     .from('trend_news')
@@ -1401,7 +1434,6 @@ export function subscribeToWorkspace(
     'topics',
     'theses',
     'topic_news',
-    'editorial_readouts',
     'editorial_job_runs',
     'news_votes',
     'news_ideas',
@@ -1574,29 +1606,38 @@ function mapRadarSource(row: RadarSourceRow, itemCount7d = 0): RadarSource {
 
 export async function loadRadarData() {
   if (!supabase) return null
+  const visitor = await isVisitorAccess()
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-  const [sourceResult, itemResult] = await Promise.all([
-    supabase
+  const allItemRows = async () => {
+    const rows: RadarItemRow[] = []
+    for (let offset = 0; ; offset += 500) {
+      const result = await supabase!
+        .from('radar_items')
+        .select('id,source_id,external_id,canonical_url,title,summary,author,published_at,story_key,topic_slugs,engagement,radar_sources(name,source_type)')
+        .gte('published_at', since)
+        .order('published_at', { ascending: false }).order('id')
+        .range(offset, offset + 499)
+      if (result.error) throw result.error
+      const page = (result.data || []) as unknown as RadarItemRow[]
+      rows.push(...page)
+      if (page.length < 500) return rows
+    }
+  }
+  const memberRows = () => Promise.all([
+    supabase!
       .from('radar_sources')
       .select(
         'id,name,domain,homepage_url,feed_url,source_type,connector_type,enabled,priority,display_order,last_fetched_at,last_success_at,last_error',
       )
       .is('deleted_at', null)
       .order('display_order'),
-    supabase
-      .from('radar_items')
-      .select(
-        'id,source_id,external_id,canonical_url,title,summary,author,published_at,story_key,topic_slugs,engagement,radar_sources(name,source_type)',
-      )
-      .gte('published_at', since)
-      .order('published_at', { ascending: false })
-      .limit(2500),
+    allItemRows(),
   ])
+  const [sourceResult, itemRows] = visitor
+    ? [{data:await publicRead<RadarSourceRow>('radarSources'),error:null}, await publicRead<RadarItemRow>('radarItems')]
+    : await memberRows()
   if (sourceResult.error) throw sourceResult.error
-  if (itemResult.error) throw itemResult.error
-
-  const itemRows = (itemResult.data || []) as unknown as RadarItemRow[]
   const counts = new Map<string, number>()
   const items = itemRows.map((row): RadarItem => {
     if (row.published_at >= sevenDaysAgo) {
@@ -1745,4 +1786,24 @@ export function triggerRadarIngest() {
     method: 'POST',
     body: JSON.stringify({}),
   }) as Promise<{ ok: true; fetched: number; inserted: number; failed: number }>
+}
+
+// Signal Reference owns namespaced snapshots; legacy Selected Sources readouts are not loaded.
+export async function loadReferenceBriefs(): Promise<import('./components/ReferenceBrief').ReferenceBriefData[]> {
+  if (!supabase) return []
+  const memberBriefs = () => supabase!.from('editorial_readouts')
+    .select('lede,bullets,generated_at').eq('generated_by', 'signal-reference-v1')
+    .order('generated_at', { ascending: false }).limit(10)
+  const {data,error} = await isVisitorAccess()
+    ? {data:await publicRead<{lede:string;bullets:unknown[];generated_at:string}>('briefs'),error:null}
+    : await memberBriefs()
+  if (error) throw error
+  return (data || []).flatMap(row => {
+    try {
+      const meta = JSON.parse(row.lede)
+      if (![1, 2].includes(meta.version) || !['daily', 'weekly'].includes(meta.period) || !Number.isFinite(Date.parse(meta.start)) || !Number.isFinite(Date.parse(meta.end)) || !Array.isArray(row.bullets)) return []
+      const cards = row.bullets.filter((card: {title?: unknown; body?: unknown; sources?: Array<{url: string}>}) => typeof card.title === 'string' && typeof card.body === 'string' && Array.isArray(card.sources) && card.sources.every(source => /^https?:\/\//.test(source.url)))
+      return [{ ...meta, coverageWarnings: Array.isArray(meta.coverageWarnings) ? meta.coverageWarnings : [], cards, generatedAt: row.generated_at }]
+    } catch { return [] }
+  }).sort((a, b) => Date.parse(b.end) - Date.parse(a.end) || Date.parse(b.generatedAt) - Date.parse(a.generatedAt))
 }

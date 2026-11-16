@@ -1,3 +1,4 @@
+import { sourceLanguage, useSourceLanguage } from '../source-language'
 import { useState } from 'react'
 import { categoryLabels } from '../labels'
 import { safeUrl } from '../analysis'
@@ -6,9 +7,9 @@ import type { NewsCategory, NewsItem } from '../types'
 export function SharedSources({ news, canLink, onLink, targetTitle, linkedIds = [], onClose, onDragChange, initialLinked = false }: {
   news: NewsItem[]; canLink: boolean; onLink?: (id: string) => void; targetTitle?: string; linkedIds?: string[]; onClose?: () => void; onDragChange?: (id: string) => void; initialLinked?: boolean
 }) {
-  const [query, setQuery] = useState(''), [category, setCategory] = useState('all'), [type, setType] = useState('all'), [language, setLanguage] = useState('all'), [scope, setScope] = useState(initialLinked ? 'linked' : 'all')
+  const [query, setQuery] = useState(''), [category, setCategory] = useState('all'), [type, setType] = useState('all'), [language,setLanguage]=useSourceLanguage(), [scope, setScope] = useState(initialLinked ? 'linked' : 'all')
   const kind = (item: NewsItem) => String(item.metadata?.content_type || (item.sourceType === 'manual_note' ? 'idea' : /youtu\.be|youtube\.com/.test(item.url) ? 'video' : /xiaoyuzhou|podcast|spotify/.test(item.url) ? 'podcast' : 'article'))
-  const lang = (item: NewsItem) => String(item.metadata?.language || 'unknown')
+  const lang = (item: NewsItem) => sourceLanguage(item.url,item.metadata)
   const visible = news.filter(item => !item.deletedAt && !item.archivedAt && (category === 'all' || item.category === category) && (type === 'all' || kind(item) === type) && (language === 'all' || lang(item) === language) && (scope !== 'linked' || linkedIds.includes(item.id)) && (scope !== 'unassigned' || (!item.trendLinks.length && !item.topicLinks.length)) && (scope !== 'no-trend' || !item.trendLinks.length) && (scope !== 'no-research' || !item.topicLinks.length) && `${item.title} ${item.summary}`.toLowerCase().includes(query.toLowerCase()))
   return <aside className="shared-sources" aria-label="Selected Sources panel"><header><h2>Selected Sources</h2>{onClose && <button className="unlink-button" aria-label="Close sources" title="Close sources" onClick={onClose}>×</button>}</header>
     {targetTitle && <p>Link to: <strong>{targetTitle}</strong></p>}

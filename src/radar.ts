@@ -1,3 +1,4 @@
+import radarDictionary from '../config/radar-topics.json'
 import type {
   RadarItem,
   RadarSource,
@@ -13,45 +14,13 @@ export const radarSourceTypeLabels: Record<RadarSourceType, string> = {
   community: 'Community / Discussion',
 }
 
-export const radarTopicLabels: Record<string, string> = {
-  'browser-agents': 'Browser agents',
-  'agent-orchestration': 'Multi-agent orchestration',
-  'autonomous-coding': 'Autonomous software engineering',
-  'agent-evaluation': 'Agent evaluation and reliability',
-  'ai-workspaces': 'Collaborative AI workspaces',
-  'agent-platforms': 'Agent development platforms',
-  'ai-search-engines': 'AI search and answer engines',
-  'browser-model-inference': 'In-browser model inference',
-  'voice-agents': 'Real-time voice agents',
-  'speech-models': 'Speech and audio models',
-  'text-to-video': 'Text-to-video models',
-  'image-generation': 'Image generation models',
-  'humanoid-robotics': 'Humanoid robotics',
-  'robot-learning': 'Robot foundation models',
-  'ai-wearables': 'AI wearables and smart glasses',
-  'inference-chips': 'AI inference chips',
-  'on-device-ai': 'On-device AI',
-  'open-weight-models': 'Open-weight models',
-  'reasoning-models': 'Reasoning models',
-  'multimodal-models': 'Multimodal models',
-  'long-context-models': 'Long-context models',
-  'model-evaluation': 'Model evaluation and benchmarks',
-  'model-observability': 'Model observability and guardrails',
-  'content-authenticity': 'AI content authenticity',
-  'clinical-ai': 'Clinical AI systems',
-  'ai-marketing': 'AI marketing workflows',
-  'enterprise-customer-service': 'AI customer-service agents',
-  'enterprise-sales-ai': 'AI sales copilots',
-  'enterprise-workflow-automation': 'Enterprise AI workflow automation',
-  'ai-companions': 'AI companions',
-  'ai-shopping-assistants': 'AI shopping assistants',
-  'ai-creator-tools': 'AI creator tools',
-  'ai-funding-rounds': 'AI funding rounds',
-  'ai-acquisitions': 'AI acquisitions',
-  'ai-regulation': 'AI regulation',
-  'ai-copyright': 'AI copyright disputes',
-  'model-safety': 'Frontier-model safety',
-}
+export const radarTopicLabels: Record<string, string> = Object.fromEntries(
+  radarDictionary.topics.map(({ slug, label }) => [slug, label]),
+)
+
+export const radarTopicDescriptions: Record<string, string> = Object.fromEntries(
+  radarDictionary.topics.map(({ slug, description }) => [slug, description]),
+)
 
 function hoursAgo(hours: number) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()

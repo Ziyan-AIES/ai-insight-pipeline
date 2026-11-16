@@ -19,10 +19,10 @@ it('accepts native source payloads from the shared library at the new Trend drop
   expect(within(created.closest('article')!).getByRole('link',{name:'DataFlow-Harness turns agent reliability into an engineering discipline'})).toBeInTheDocument()
   expect(screen.queryByText('Needs review')).toBeNull()
 })
-it('keeps source dates in the Selected Sources heading row and links to the private workspace',()=>{
+it('keeps source dates in the Selected Sources heading row without a private workspace link',()=>{
   window.localStorage.clear();window.sessionStorage.clear();window.history.replaceState(null,'','/?workspace=signals')
   render(<App/>);
   const heading=screen.getByRole('heading',{name:'Selected Sources'}).closest('.pane-heading')!
   expect(within(heading as HTMLElement).getByRole('group',{name:'Time range'})).toBeInTheDocument()
-  expect(screen.getByRole('link',{name:'Workspace'})).toHaveAttribute('href','https://personal-agent-research-studio.ziyan-li-pku.chatgpt.site/')
+  expect(screen.queryByRole('link',{name:'Workspace'})).toBeNull()
 })

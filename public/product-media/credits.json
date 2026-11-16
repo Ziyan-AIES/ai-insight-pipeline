@@ -1,0 +1,61 @@
+{
+  "purpose": "Product research reference images; trademarks and images belong to their owners.",
+  "assets": {
+    "ambi-logo.png": {
+      "url": "https://www.ambi.ai/favicon-96x96.png",
+      "size": 1143
+    },
+    "ambi-screen.jpg": {
+      "url": "https://ambi.cachely.io/images/x14x1n6x/production/b0e923e718988f54c0c5b06d81d3caf4ae9e92fa-752x1212.png?w=1200&fm=jpg&q=80&fit=max",
+      "size": 50759
+    },
+    "dots-logo.svg": {
+      "url": "https://images.ctfassets.net/kftzwdyauwt9/KKSjto3MtJguvsLQsM1Bp/1704a6937d22b1bb3cac38dc5f43f9df/dots-o.svg",
+      "size": 513
+    },
+    "dots-screen.webp": {
+      "url": "https://images.ctfassets.net/kftzwdyauwt9/2ADI0hAjbA1bMau54PP90I/449d54baf7746f6f73a3c5fdfe5fecb3/introducing-dots-carousel-analysis.png?w=1200&q=85&fm=webp",
+      "size": 47782
+    },
+    "cc-logo.svg": {
+      "url": "https://blog.google/static/blogv2/images/super-g-aurora.svg?version=pr20261009-1701",
+      "size": 2533
+    },
+    "cc-screen.png": {
+      "url": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/CC_hero.width-1300.png",
+      "size": 499788
+    },
+    "today-logo.png": {
+      "url": "https://today.ai/today-logo-icon.png",
+      "size": 6300
+    },
+    "today-screen.png": {
+      "url": "https://today.ai/_next/static/media/mobile-tab-today.3a9waemitgl6r.png",
+      "size": 790459
+    },
+    "muse-logo.svg": {
+      "url": "https://introducing.muse.ai/icon.svg?icon.38rus2eykume6.svg",
+      "size": 2628
+    },
+    "muse-screen.webp": {
+      "url": "https://introducing.muse.ai/_next/image?url=%2F_next%2Fstatic%2Fimmutable%2Fmedia%2Fstatus.38zbywac8-xmc.png&w=1920&q=75",
+      "size": 61328
+    },
+    "instinct-logo.ico": {
+      "url": "https://www.humaninstinct.com/redesign/favicon.ico",
+      "size": 1482
+    },
+    "instinct-screen.png": {
+      "url": "https://instinct.com/redesign/og-image-v4.png",
+      "size": 28603
+    },
+    "underdog-logo.png": {
+      "url": "https://underdog.ai/icon.png",
+      "size": 136917
+    },
+    "underdog-screen.jpg": {
+      "url": "https://underdog.ai/landing/posts/ivanfioravanti-unsubscribe.jpg",
+      "size": 47620
+    }
+  }
+}

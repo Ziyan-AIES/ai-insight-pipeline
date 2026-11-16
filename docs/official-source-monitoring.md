@@ -10,7 +10,7 @@ Anthropic's `/news/rss.xml`, `/rss.xml`, and `/news/feed` returned 404; its news
 
 ## Collection and display
 
-RSS retains the existing four-hour scheduled ingest. Website Agent sources have an empty feed URL and source_type=official. The existing database connector_type field retains its legacy default; the application derives website_agent from official + empty feed URL. Both the four-hour ingester and the manual Refresh exclude these website sources from RSS fetching, preserving their independently recorded weekly status. The UI labels the actual method and Monday noon Beijing schedule. Clicking a source name opens its original newsroom; the RSS link opens the actual feed.
+RSS retains the existing eight-hour scheduled ingest. Website Agent sources have an empty feed URL and source_type=official. The existing database connector_type field retains its legacy default; the application derives website_agent from official + empty feed URL. Both the eight-hour ingester and the manual Refresh exclude these website sources from RSS fetching, preserving their independently recorded weekly status. The UI labels the actual method and Monday noon Beijing schedule. Clicking a source name opens its original newsroom; the RSS link opens the actual feed.
 
 Agent discoveries use the same radar_items table and topic metrics as RSS, with raw_metadata.acquisition_method=website_agent and original date evidence. URL deduplication prevents rescans from inflating story counts. Source pauses are respected. Failed or incomplete scans record an error and do not advance last_success_at.
 

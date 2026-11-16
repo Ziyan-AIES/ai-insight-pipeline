@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -29,6 +29,9 @@ vi.mock('./supabase', () => ({
 }))
 
 import { AuthGate } from './AuthGate'
+import { useTeamAuth } from './auth-context'
+function VisitorProbe(){const auth=useTeamAuth();return <><span>{auth.visitorName}</span><span>{String(auth.canEdit)}</span><button onClick={()=>auth.setVisitorName?.('Test Reader')}>Set name</button><button onClick={()=>auth.openEditorLogin?.()}>Editor login</button></>}
+afterEach(()=>vi.unstubAllEnvs())
 
 function handshakeRequestBody() {
   const init = vi.mocked(fetch).mock.calls[0]?.[1]
@@ -402,4 +405,34 @@ describe('extension handshake', () => {
     const body = handshakeRequestBody()
     expect(body.state).toBe('stored-handshake-state-plain-1')
   })
+})
+
+
+describe('public access',()=>{
+ beforeEach(()=>{
+  vi.stubEnv('VITE_PUBLIC_WORKSPACE_ENABLED','true')
+  localStorage.clear()
+  window.history.replaceState({},'', '/')
+  mocks.getSession.mockResolvedValue({data:{session:null}})
+  mocks.onAuthStateChange.mockReturnValue({data:{subscription:{unsubscribe:vi.fn()}}})
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false,json:async()=>({})}))
+ })
+ it('opens without email and persists a local name without edit permissions',async()=>{
+  render(<AuthGate><VisitorProbe/></AuthGate>)
+  expect(await screen.findByText('Anonymous')).toBeInTheDocument()
+  expect(screen.getByText('false')).toBeInTheDocument()
+  expect(screen.queryByPlaceholderText('name@company.com')).toBeNull()
+  fireEvent.click(screen.getByText('Set name'))
+  expect(localStorage.getItem('sonata:visitor-name')).toBe('Test Reader')
+  fireEvent.click(screen.getByText('Editor login'))
+  expect(screen.getByRole('dialog',{name:'Editor sign in'})).toBeInTheDocument()
+  expect(screen.getByText(/Request Editor access from lizy76/)).toBeInTheDocument()
+ })
+ it('lets an authenticated non-member read as a Visitor',async()=>{
+  mocks.getSession.mockResolvedValue({data:{session}})
+  mocks.maybeSingle.mockResolvedValue({data:null,error:null})
+  render(<AuthGate><VisitorProbe/></AuthGate>)
+  expect(await screen.findByText('Anonymous')).toBeInTheDocument()
+  expect(screen.getByText('false')).toBeInTheDocument()
+ })
 })

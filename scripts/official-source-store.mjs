@@ -1,5 +1,5 @@
 import { canonicalizeUrl, supabase } from '../netlify/functions/_supabase.mjs'
-import { storySignature, topicSlugsFor } from '../netlify/functions/_radar.mjs'
+import { storySignature, topicSlugsFor, hasAiContext } from '../netlify/functions/_radar.mjs'
 
 export function officialHost(url, domain) {
   const u = new URL(url)
@@ -16,7 +16,7 @@ export function validateAgentItem(item, source, now = new Date()) {
   if (typeof item.promote !== 'boolean') throw Error('Promotion must be an explicit boolean decision')
   if (!item.title?.trim() || item.title.length > 500 || !item.summary || item.summary.length < 60) throw Error('A factual English title and summary are required')
   const topics = topicSlugsFor(item.title + ' ' + item.summary)
-  if (!topics.length) throw Error('Article has no supported intelligence topic; do not force a trend')
+  if (!hasAiContext(item.title + ' ' + item.summary)) throw Error('Reviewed website discovery must establish AI relevance; dictionary matching is optional')
   if (item.promote && (!item.importanceReason || item.importanceReason.length < 40)) throw Error('Promotion needs a specific evidence-backed reason')
   if (item.promote && !['interaction','ai_software','ai_hardware','ecosystem','ai_capability','industry_events'].includes(item.category)) throw Error('Promotion needs one existing news category')
   return { ...item, url: canonicalizeUrl(item.url), topics }
@@ -24,18 +24,24 @@ export function validateAgentItem(item, source, now = new Date()) {
 
 export async function saveRadarCandidates(source, items, method) {
   // URL is stable across RSS GUID changes and Agent rescans. Keep existing evidence unchanged.
-  const existing = await supabase(`radar_items?source_id=eq.${source.id}&select=canonical_url,external_id`)
+  const existing = await supabase(`radar_items?source_id=eq.${source.id}&select=id,canonical_url,external_id,summary,topic_slugs,raw_metadata`)
   const urls = new Set(existing.map(n => canonicalizeUrl(n.canonical_url)))
   const rows = []
   for (const item of items) {
     const url = canonicalizeUrl(item.url)
     const topics = item.topics || topicSlugsFor(item.title + ' ' + item.summary)
-    if (urls.has(url) || !topics.length) continue
+    if (urls.has(url)) {
+      const prior = existing.find(row => canonicalizeUrl(row.canonical_url) === url)
+      if (method === 'rss' && prior && (!prior.raw_metadata?.acquisition_method || prior.raw_metadata.acquisition_method === 'rss') && item.summary.length > (prior.summary || '').length) {
+        await supabase(`radar_items?id=eq.${prior.id}`, {method:'PATCH',body:JSON.stringify({summary:item.summary.slice(0,2000),topic_slugs:[...new Set([...(prior.topic_slugs || []),...topics])],raw_metadata:{...prior.raw_metadata,...item.rawMetadata,acquisition_method:'rss'}})})
+      }
+      continue
+    }
     urls.add(url)
     rows.push({ source_id:source.id,external_id:method === 'rss' ? String(item.externalId || url).slice(0,500) : url,
       canonical_url:url,title:item.title.slice(0,500),summary:item.summary.slice(0,2000),author:item.author || '',
       published_at:item.publishedAt,story_key:storySignature(item.title),topic_slugs:topics,
-      raw_metadata:{acquisition_method:method,date_evidence:item.dateEvidence || 'Original RSS publication date',
+      raw_metadata:{...item.rawMetadata,acquisition_method:method,date_evidence:item.dateEvidence || 'Original RSS publication date',
         article_read:item.articleRead === true,importance_reason:item.importanceReason || ''} })
   }
   if (rows.length) await supabase('radar_items?on_conflict=source_id,external_id', {

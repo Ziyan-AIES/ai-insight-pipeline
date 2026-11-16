@@ -1,0 +1,331 @@
+{
+  "reviewedAt": "2026-11-06",
+  "topics": [
+    {
+      "slug": "browser-agents",
+      "label": "Browser agents",
+      "description": "Agents that operate websites and complete tasks through browser interfaces.",
+      "pattern": "\\b(browser agents?|agentic browsers?|agents? (?:in|for) (?:the )?browser|browser-based agents?)\\b",
+      "group": "Agent systems"
+    },
+    {
+      "slug": "agent-orchestration",
+      "label": "Multi-agent orchestration",
+      "description": "Systems that delegate tasks between multiple agents and coordinate their work.",
+      "pattern": "\\b(agent orchestration|multi-agent|agent-to-agent|agentic workflow|orchestrat(?:e|ion).{0,30}agents?)\\b",
+      "group": "Agent systems"
+    },
+    {
+      "slug": "autonomous-coding",
+      "label": "AI coding agents",
+      "description": "Agents that inspect a codebase, edit code and run tests. Human review is still needed; ordinary code completion is outside this topic.",
+      "pattern": "\\b(coding agents?|agentic coding|autonomous (?:coding|software)|software engineering agents?|repository.{0,24}agents?|agents?.{0,24}repositories)\\b",
+      "group": "Agent systems"
+    },
+    {
+      "slug": "agent-evaluation",
+      "label": "Agent evaluation and reliability",
+      "description": "Testing, tracing and measuring whether agents complete real tasks reliably.",
+      "pattern": "\\b(agent evals?|agent evaluation|evaluat(?:e|ing|ion).{0,25}agents?|agent reliability|agent observability)\\b",
+      "group": "Agent systems"
+    },
+    {
+      "slug": "ai-workspaces",
+      "label": "Collaborative AI workspaces",
+      "description": "Shared workspaces where people and AI collaborate on projects and documents.",
+      "pattern": "\\b(ai-powered (?:project |team )?(?:workspace|collaboration)|agentic workspace|collaborative ai workspace)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "agent-platforms",
+      "label": "Agent development platforms",
+      "description": "Tools and managed services for building, deploying and operating agents.",
+      "pattern": "\\b(managed agents?|agent platforms?|agents? sdk|agent development platforms?|build.{0,18}production-ready agents?)\\b",
+      "group": "Agent systems"
+    },
+    {
+      "slug": "ai-search-engines",
+      "label": "AI search and answer engines",
+      "description": "Search products that generate answers or conduct research from retrieved sources.",
+      "pattern": "\\b(ai search|answer engines?|perplexity|search copilots?|generative search|ai-powered search|ai mode.{0,48}search|search.{0,48}ai mode)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "browser-model-inference",
+      "label": "In-browser model inference",
+      "description": "Models executed inside a web browser rather than a remote inference service.",
+      "pattern": "\\b(webllm|in-browser (?:llm|model|ai|inference)|browser-based (?:llm|model) inference)\\b",
+      "group": "Infrastructure and devices"
+    },
+    {
+      "slug": "voice-agents",
+      "label": "Real-time voice agents",
+      "description": "Interactive agents that listen and respond through live speech.",
+      "pattern": "\\b(voice agents?|voice assistants?|conversational voice|real-time voice ai)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "speech-models",
+      "label": "Speech and audio models",
+      "description": "Models for speech recognition, synthesis, cloning and audio understanding.",
+      "pattern": "\\b(speech models?|text.to.speech|speech.to.text|tts\\b|voice cloning|audio models?)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "text-to-video",
+      "label": "AI video generation and production",
+      "description": "AI video generation and its use in film, advertising and production workflows.",
+      "pattern": "\\b(text.to.video|video (?:generation|ai)|generative video|ai video models?|ai.generated (?:video|film)|ai film(?:making)?|video ai models?)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "image-generation",
+      "label": "Image generation models",
+      "description": "Models and tools that generate or edit images.",
+      "pattern": "\\b(image generation|image creation|generative image|ai image models?|diffusion models?)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "humanoid-robotics",
+      "label": "Humanoid robotics",
+      "description": "Human-shaped robots and their real deployments.",
+      "pattern": "\\b(humanoid robots?|humanoid robotics)\\b",
+      "group": "Robotics and physical AI"
+    },
+    {
+      "slug": "robot-learning",
+      "label": "Robot foundation models",
+      "description": "Models that learn perception and actions for robots in the physical world.",
+      "pattern": "\\b(robot learning|robot foundation models?|vision.language.action|vla models?|physical ai)\\b",
+      "group": "Robotics and physical AI"
+    },
+    {
+      "slug": "ai-wearables",
+      "label": "AI wearables and smart glasses",
+      "description": "Glasses, pendants and other wearable devices with concrete AI capabilities.",
+      "pattern": "\\b(ai wearables?|ai pins?|smart glasses|ai glasses|ambient devices?)\\b",
+      "group": "Infrastructure and devices"
+    },
+    {
+      "slug": "inference-chips",
+      "label": "AI inference chips",
+      "description": "Processors and accelerators used to execute AI models.",
+      "pattern": "\\b(inference chips?|ai accelerators?|gpus?.{0,24}inference|npus?|ai semiconductors?)\\b",
+      "group": "Infrastructure and devices"
+    },
+    {
+      "slug": "on-device-ai",
+      "label": "On-device AI",
+      "description": "AI inference on local phones, PCs and edge devices.",
+      "pattern": "\\b(on-device ai|edge ai|local inference|offline (?:ai|llm)|models? run locally)\\b",
+      "group": "Infrastructure and devices"
+    },
+    {
+      "slug": "open-weight-models",
+      "label": "Open-weight models",
+      "description": "Models released with downloadable weights; a vendor mention alone is insufficient.",
+      "pattern": "\\b(open weights?|open-weight|open.source (?:ai |video |language |speech )?models?|downloadable model weights)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "reasoning-models",
+      "label": "Reasoning models",
+      "description": "Models and inference methods that spend additional computation on reasoning.",
+      "pattern": "\\b(reasoning models?|test-time compute|chain.of.thought|reasoning benchmarks?)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "multimodal-models",
+      "label": "Multimodal models",
+      "description": "Models that combine vision, text, audio or other input and output modalities.",
+      "pattern": "\\b(multimodal models?|vision.language models?|vlms?\\b|omnimodal)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "long-context-models",
+      "label": "Long-context models",
+      "description": "Changes in how much context models can process and use reliably.",
+      "pattern": "\\b(long context|context windows?|million.token|extended context)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "model-evaluation",
+      "label": "Model evaluation and benchmarks",
+      "description": "Benchmarks and evaluations of model capabilities and limitations.",
+      "pattern": "\\b(model evals?|model evaluation|ai benchmarks?|llm evaluation|benchmarking (?:ai )?models?)\\b",
+      "group": "Models and media"
+    },
+    {
+      "slug": "model-observability",
+      "label": "Model observability and guardrails",
+      "description": "Monitoring model behavior, detecting failures and applying runtime guardrails.",
+      "pattern": "\\b(model observability|llm observability|hallucination monitoring|ai monitoring|guardrails?)\\b",
+      "group": "Trust and governance"
+    },
+    {
+      "slug": "content-authenticity",
+      "label": "AI content authenticity",
+      "description": "Provenance, watermarking and verification of AI-generated media.",
+      "pattern": "\\b(ai provenance|content credentials|ai watermark|watermarking ai|detect(?:ing|ion).{0,25}ai.generated|made with (?:claude|chatgpt|gemini))\\b",
+      "group": "Trust and governance"
+    },
+    {
+      "slug": "clinical-ai",
+      "label": "Clinical AI systems",
+      "description": "AI used in clinical diagnosis, treatment and medical workflows.",
+      "pattern": "\\b(medical ai|clinical ai|ai (?:diagnosis|diagnostics)|clinical.{0,24}ai|ai.{0,24}clinical consultation)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "ai-marketing",
+      "label": "AI marketing workflows",
+      "description": "AI used in marketing production, campaigns and measurement, including ads explicitly designed for AI agents.",
+      "pattern": "\\b(ai marketing|ads? for ai agents?|advertis(?:ing|ements?).{0,30}ai agents?|marketing copilots?|marketing.{0,24}ai tools?|ai.{0,24}marketing workflow)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "enterprise-customer-service",
+      "label": "AI customer-service agents",
+      "description": "Agents and automation for customer support and contact centers.",
+      "pattern": "\\b(ai customer service|customer service agents?|contact cent(?:er|re).{0,24}ai|support agents?.{0,24}ai)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "enterprise-sales-ai",
+      "label": "AI sales copilots",
+      "description": "AI used in prospecting, sales assistance and revenue workflows.",
+      "pattern": "\\b(ai sales agents?|sales copilots?|ai-powered sales|revenue intelligence.{0,20}ai)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "enterprise-workflow-automation",
+      "label": "Enterprise AI workflow automation",
+      "description": "AI agents that carry out enterprise processes, including legal and recruiting workflows. Ordinary non-AI business software is excluded.",
+      "pattern": "\\b(ai workflow automation|enterprise automation.{0,20}ai|agentic process automation|business workflow agents?|legal ai agents?|(?:legal|recruiting|hiring) (?:ai )?(?:agents?|assistants?))\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "ai-companions",
+      "label": "AI companions",
+      "description": "AI products designed for ongoing social or emotional companionship.",
+      "pattern": "\\b(ai companions?|companion bots?|virtual companions?)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "ai-shopping-assistants",
+      "label": "AI shopping assistants",
+      "description": "Agents that discover products, assist purchases or conduct commerce.",
+      "pattern": "\\b(ai shopping|shopping assistants?|commerce agents?|agentic commerce)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "ai-creator-tools",
+      "label": "AI creator tools",
+      "description": "AI production tools used by creators across media formats.",
+      "pattern": "\\b(ai creator tools?|creator copilots?|generative creator tools?)\\b",
+      "group": "Products and workflows"
+    },
+    {
+      "slug": "ai-funding-rounds",
+      "label": "AI funding rounds",
+      "description": "Financing of AI companies; funding is context rather than proof of product adoption.",
+      "pattern": "\\b(?:ai|artificial intelligence).{0,45}(?:funding|raises? \\$|seed round|series [a-f]|valuation)|(?:funding|raises? \\$|seed round|series [a-f]).{0,45}(?:ai|artificial intelligence)\\b",
+      "group": "Capital and market structure"
+    },
+    {
+      "slug": "ai-acquisitions",
+      "label": "AI acquisitions",
+      "description": "Acquisitions and mergers involving AI products or companies.",
+      "pattern": "\\b(?:ai|artificial intelligence).{0,45}(?:acqui(?:res|red|sition)|merger)|(?:acqui(?:res|red|sition)|merger).{0,45}(?:ai|artificial intelligence)\\b",
+      "group": "Capital and market structure"
+    },
+    {
+      "slug": "ai-regulation",
+      "label": "AI regulation",
+      "description": "Proposed and enacted AI regulation; distinguish proposals from binding rules.",
+      "pattern": "\\b(ai regulation|ai act|regulat(?:e|ing|ion).{0,24}(?:ai|models?)|lawmakers?.{0,24}ai)\\b",
+      "group": "Trust and governance"
+    },
+    {
+      "slug": "ai-copyright",
+      "label": "AI copyright disputes",
+      "description": "Disputes over copyright, training data and AI-generated works.",
+      "pattern": "\\b(ai copyright|copyright.{0,24}(?:ai|training data)|ai training.{0,24}copyright)\\b",
+      "group": "Trust and governance"
+    },
+    {
+      "slug": "model-safety",
+      "label": "Frontier-model safety",
+      "description": "Research and controls addressing harmful or misaligned frontier-model behavior.",
+      "pattern": "\\b(model safety|ai safety testing|alignment research|frontier model safety|responsible ai)\\b",
+      "group": "Trust and governance"
+    },
+    {
+      "slug": "ai-cybersecurity",
+      "label": "AI cybersecurity and misuse",
+      "description": "AI used to discover vulnerabilities, defend systems or automate attacks. Distinct from ordinary coding agents and general model safety.",
+      "pattern": "\\b(ai.powered cyber|ai.enabled cyber|ai.driven cyber|ai.orchestrated cyber|ai.{0,25}(?:cyberattacks?|cybersecurity|vulnerabilit)|(?:claude|grok|agents?).{0,45}(?:hack(?:ers?|ing)?|cyberattacks?|attacks? on banks)|cyber verification|cyber mission)\\b",
+      "group": "Trust and governance"
+    },
+    {
+      "slug": "agent-access-governance",
+      "label": "Agent identity, permissions and access",
+      "description": "Agent ownership, identity, least-privilege permissions, runtime access controls and external-agent access fees. Ordinary SaaS pricing and general cybersecurity are outside this topic.",
+      "pattern": "\\b(agent(?:ic)? (?:identity|identities|permissions?|governance|runtime security)|(?:external|outside|third.party) (?:ai )?agents?.{0,70}(?:fees?|charg|register|access|permissions?)|(?:fees?|charg|register).{0,70}(?:external|outside|third.party) (?:ai )?agents?|agents?.{0,30}(?:access controls?|temporary permissions|least.privilege|ownership)|non.human identit)",
+      "group": "Agent systems"
+    },
+    {
+      "slug": "ai-compute-infrastructure",
+      "label": "AI compute capacity and economics",
+      "description": "AI data-center capacity, power constraints, GPU-cloud financing and inference costs. Distinct from chip designs and generic corporate earnings.",
+      "pattern": "\\b(ai (?:data.cent(?:er|re)s?|compute|infrastructure)|gpu cloud|neoclouds?|(?:compute|inference).{0,25}(?:bottlenecks?|financing|costs?|capacity)|data.cent(?:er|re).{0,35}(?:ai|gpu))\\b",
+      "group": "Infrastructure and devices"
+    },
+    {
+      "slug": "industrial-robotics",
+      "label": "AI industrial robotics",
+      "description": "AI-controlled industrial arms, flexible factories and manufacturing robots. Do not infer humanoid deployment from general robotics news.",
+      "pattern": "\\b(physical ai|ai.powered robots?|autonomous factories|ai.{0,35}(?:industrial robots?|manufacturing robots?)|robotic.{0,25}manufacturing)\\b",
+      "group": "Robotics and physical AI"
+    },
+    {
+      "slug": "model-efficiency",
+      "label": "Model efficiency and distillation",
+      "description": "Distillation, compression and task-specific small models that reduce inference cost. Separate technical efficiency from cloud capacity and financing.",
+      "pattern": "\\b(model distillation|distill(?:ation|ing).{0,35}(?:models?|llms?)|(?:models?|llms?).{0,35}distill|model quantization|model compression|small language models?)\\b",
+      "group": "Models and media"
+    }
+  ],
+  "version": "2026-11",
+  "reviewCadence": "monthly",
+  "groups": [
+    {
+      "label": "Agent systems",
+      "description": "Agent construction, execution and control"
+    },
+    {
+      "label": "Models and media",
+      "description": "Model capability, evaluation and media generation"
+    },
+    {
+      "label": "Infrastructure and devices",
+      "description": "Deployment, compute capacity, chips and devices"
+    },
+    {
+      "label": "Robotics and physical AI",
+      "description": "Robotic learning and real-world deployment"
+    },
+    {
+      "label": "Products and workflows",
+      "description": "Specific user and business workflows"
+    },
+    {
+      "label": "Trust and governance",
+      "description": "Safety, security, provenance and policy"
+    },
+    {
+      "label": "Capital and market structure",
+      "description": "Financing and ownership changes"
+    }
+  ]
+}

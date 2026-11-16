@@ -48,3 +48,7 @@ This registration does not install a weekly mailbox collection job. The UI expli
 When implementing collection, retain the existing Signal Reference processing rules: AI/technology relevance, original publication date separate from email receipt date, canonical article URL deduplication across RSS/email, publisher attribution, and an explicit `email_newsletter` acquisition method. Macro analysis is primarily reference material and research direction; receiving a newsletter does not make it a breaking event or automatically promote it to Selected Sources. Confirmation/welcome messages, unsubscribe links and account notices are operational mail and must not enter research content. Paywalled excerpts remain excerpts and must not be described as full articles.
 
 Private screenshots, mailbox evidence and operational deployment receipts are retained outside the repository or in ignored logs. Confirmation links and mailbox credentials are never included in the browser bundle.
+
+## 2026-11-06 collection update
+
+Daily Agent Mail review now runs through the Windows/Cursor pipeline at 16:15 Beijing, including weekends; Codex monitors exceptions only. See `docs/daily-pipeline.md`. See `docs/agent-mail-ingestion.md`. Historical setup notes above describe the original registration only. Successful body retrieval is distinct from completed analysis and database import; incomplete messages remain pending.

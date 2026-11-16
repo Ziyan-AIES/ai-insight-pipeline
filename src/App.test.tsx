@@ -31,7 +31,7 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
     expect(
-      screen.getByRole('region', { name: 'Action Threads' }),
+      screen.getByRole('region', { name: 'Research Topics' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Trends' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Expand Evidence' })).toBeInTheDocument()
@@ -54,8 +54,7 @@ describe('dashboard pilot shell', () => {
     expect(within(radar).getByRole('heading', { name: 'Signal Reference' })).toBeInTheDocument()
     expect(within(radar).getAllByText('Collaborative AI workspaces')).toHaveLength(2)
     expect(within(radar).getByText(/A development is one underlying story/)).toBeInTheDocument()
-    fireEvent.click(within(radar).getByRole('button', { name: 'How it works' }))
-    expect(within(radar).getByText(/An Agent verifies weekly website discoveries/i)).toBeInTheDocument()
+    expect(within(radar).queryByRole('button', { name: 'How it works' })).toBeNull()
 
     fireEvent.click(within(radar).getByRole('button', { name: /Sources ·/ }))
     const sources = screen.getByRole('dialog', { name: 'Sources' })
@@ -63,13 +62,13 @@ describe('dashboard pilot shell', () => {
     expect(within(sources).getByRole('button', { name: '+ Add source' })).toBeInTheDocument()
   })
 
-  it('falls back to one browser tab and direct links without a batch-capable extension', async () => {
+  it('attempts every selected tab and preserves links when popups are blocked', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Signal Reference' }))
     const radar = screen.getByRole('region', { name: 'Signal Reference' })
     fireEvent.click(within(radar).getByRole('button', { name: /Open selected/ }))
-    expect(open).toHaveBeenCalledTimes(1)
+    expect(open.mock.calls.length).toBeGreaterThan(1)
     expect(await within(radar).findByText('Open remaining sources')).toBeInTheDocument()
     expect(within(radar).getAllByRole('link', { name: /·/ }).length).toBeGreaterThan(0)
   })
@@ -140,7 +139,9 @@ describe('dashboard pilot shell', () => {
     expect(screen.queryByRole('dialog', { name: 'Search results' })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile menu' }))
-    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Edit name' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Editor sign in' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).toBeNull()
   })
 
   it('filters Evidence to unassigned signals and scopes Show evidence to one Trend', () => {
@@ -192,7 +193,7 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByText('Archived · 1')).toBeInTheDocument()
   })
 
-  it('drags a Trend into a new Action Thread with inherited framing and Evidence', () => {
+  it('drags a Trend into a new Research Topic with inherited framing and Evidence', () => {
     render(<App />)
     const trend = screen
       .getByRole('button', { name: 'Wearables are becoming ambient control layers' })
@@ -204,10 +205,10 @@ describe('dashboard pilot shell', () => {
       getData: () => '',
     }
     fireEvent.dragStart(trend as HTMLElement, { dataTransfer })
-    fireEvent.drop(screen.getByText('Drop here to create an Action Thread'), {
+    fireEvent.drop(screen.getByText('Drop here to create an Research Topic'), {
       dataTransfer,
     })
-    const editor = screen.getByRole('dialog', { name: 'New Action Thread' })
+    const editor = screen.getByRole('dialog', { name: 'New Research Topic' })
     expect(within(editor).getByDisplayValue('Wearables are becoming ambient control layers')).toBeInTheDocument()
     expect(
       (within(editor).getByLabelText('Team decision') as HTMLTextAreaElement).value,
@@ -289,18 +290,18 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('folds closed Action Threads below active work in the recent view', async () => {
+  it('folds closed Research Topics below active work in the recent view', async () => {
     render(<App />)
     fireEvent.click(screen.getByRole('heading', { name: 'Generative UI as software' }))
-    const editor = screen.getByRole('dialog', { name: 'Edit Action Thread' })
+    const editor = screen.getByRole('dialog', { name: 'Edit Research Topic' })
     fireEvent.change(within(editor).getByLabelText('Status'), {
       target: { value: 'closed' },
     })
     fireEvent.click(within(editor).getByRole('button', { name: 'Save changes' }))
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Edit Action Thread' })).toBeNull(),
+      expect(screen.queryByRole('dialog', { name: 'Edit Research Topic' })).toBeNull(),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Open Action Threads dashboard' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Research Topics dashboard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Most recent' }))
     const activeTitles = Array.from(
       document.querySelectorAll('.topic-list.kind-pipeline > .topic-card h3'),
@@ -317,14 +318,14 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('collapses Action Threads so Trends owns the remaining workspace', () => {
+  it('collapses Research Topics so Trends owns the remaining workspace', () => {
     render(<App />)
-    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse Action Threads' }))
-    expect(screen.queryByRole('region', { name: 'Action Threads' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Research Topics' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Research Topics' }))
+    expect(screen.queryByRole('region', { name: 'Research Topics' })).toBeNull()
     expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Action Threads' }))
-    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Research Topics' }))
+    expect(screen.getByRole('region', { name: 'Research Topics' })).toBeInTheDocument()
   })
 
   it('maximizes Trends and restores the exact previous side-column state', () => {
@@ -334,12 +335,12 @@ describe('dashboard pilot shell', () => {
 
     fireEvent.doubleClick(screen.getByTestId('trend-column-heading'))
     expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull()
-    expect(screen.queryByRole('region', { name: 'Action Threads' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Research Topics' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Restore Trend layout' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore Trend layout' }))
     expect(screen.getByRole('region', { name: 'Evidence' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Action Threads' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Research Topics' })).toBeInTheDocument()
   })
 
   it('discards the Trend layout snapshot when a side column is expanded manually', () => {
@@ -360,7 +361,7 @@ describe('dashboard pilot shell', () => {
 
   it('does not create a restore snapshot when both side columns are already closed', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse Action Threads' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Research Topics' }))
     fireEvent.click(screen.getByRole('button', { name: 'Maximize Trends' }))
 
     expect(screen.getByRole('button', { name: 'Maximize Trends' })).toBeInTheDocument()
@@ -451,18 +452,18 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('keeps Action Threads beside Trends with aligned workflow controls', () => {
+  it('keeps Research Topics beside Trends with aligned workflow controls', () => {
     render(<App />)
     expect(screen.getByRole('region', { name: 'Trends' })).toBeInTheDocument()
     expect(
-      screen.getByRole('region', { name: 'Action Threads' }),
+      screen.getByRole('region', { name: 'Research Topics' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '+ New Action Thread' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ New Research Topic' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Harness engineering' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
     expect(screen.getAllByRole('button', { name: 'View linked sources' }).length).toBeGreaterThan(0)
     expect(screen.getByText('Drop here to create a Trend')).toBeInTheDocument()
-    expect(screen.getByText('Drop here to create an Action Thread')).toBeInTheDocument()
+    expect(screen.getByText('Drop here to create an Research Topic')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull()
   })
 
@@ -539,10 +540,10 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('removes drag chrome from the full Action Threads dashboard', () => {
+  it('removes drag chrome from the full Research Topics dashboard', () => {
     render(<App />)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+      screen.getByRole('button', { name: 'Open Research Topics dashboard' }),
     )
     expect(screen.queryByText(/Drop a signal/)).toBeNull()
     expect(screen.queryByRole('button', { name: /Add signal/i })).toBeNull()
@@ -550,10 +551,10 @@ describe('dashboard pilot shell', () => {
     expect(screen.getByRole('button', { name: '← Synthesis' })).toBeInTheDocument()
   })
 
-  it('defaults full Action Threads to a clear month and backlog board', () => {
+  it('defaults full Research Topics to a clear month and backlog board', () => {
     render(<App />)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+      screen.getByRole('button', { name: 'Open Research Topics dashboard' }),
     )
 
     const status = screen.getByRole('group', { name: 'Status' })
@@ -574,7 +575,7 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
 
     expect(
-      screen.getByLabelText('Action Threads grouped by work month'),
+      screen.getByLabelText('Research Topics grouped by work month'),
     ).toBeInTheDocument()
     expect(screen.getByText('Work by month')).toBeInTheDocument()
     expect(
@@ -587,18 +588,18 @@ describe('dashboard pilot shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'By category' }))
     expect(
-      screen.getByLabelText('Action Threads grouped by category'),
+      screen.getByLabelText('Research Topics grouped by category'),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Most recent' }))
     expect(
-      screen.queryByLabelText('Action Threads grouped by category'),
+      screen.queryByLabelText('Research Topics grouped by category'),
     ).toBeNull()
   })
 
-  it('moves an Action Thread to another category by drag and drop', async () => {
+  it('moves an Research Topic to another category by drag and drop', async () => {
     render(<App />)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+      screen.getByRole('button', { name: 'Open Research Topics dashboard' }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'By category' }))
 
@@ -615,10 +616,10 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('moves Action Threads between a month and the Unscheduled backlog', async () => {
+  it('moves Research Topics between a month and the Unscheduled backlog', async () => {
     render(<App />)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Open Action Threads dashboard' }),
+      screen.getByRole('button', { name: 'Open Research Topics dashboard' }),
     )
 
     const unscheduledCard = screen
@@ -646,11 +647,11 @@ describe('dashboard pilot shell', () => {
     ).toBeInTheDocument()
   })
 
-  it('redesigns the Action Thread editor into three sections', () => {
+  it('redesigns the Research Topic editor into three sections', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('heading', { name: 'Harness engineering' }))
     expect(
-      screen.getByRole('dialog', { name: 'Edit Action Thread' }),
+      screen.getByRole('dialog', { name: 'Edit Research Topic' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Thread basics')).toBeInTheDocument()
     expect(screen.getByText('Linked signals')).toBeInTheDocument()
@@ -718,7 +719,7 @@ describe('dashboard pilot shell', () => {
  expect(within(sources).getByRole('heading',{name:'DataFlow-Harness turns agent reliability into an engineering discipline'})).toBeInTheDocument();
 })
 
-  it('drags Evidence directly into an existing Action Thread without removing it', async () => {
+  it('drags Evidence directly into an existing Research Topic without removing it', async () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Expand Evidence' }))
     const evidence = screen.getByRole('region', { name: 'Evidence' })
@@ -756,7 +757,7 @@ describe('dashboard pilot shell', () => {
   it('exposes a link capture action', () => {
     render(<App />)
     expect(
-      screen.getByRole('button', { name: '+ Add News' }),
+      screen.getByRole('button', { name: '+ New source' }),
     ).toBeInTheDocument()
   })
 
@@ -780,9 +781,9 @@ describe('dashboard pilot shell', () => {
     expect(publicationDate).toHaveValue('2026-07-01')
   })
 
-  it('restores an unfinished Add News draft after a remount', () => {
+  it('restores an unfinished New source draft after a remount', () => {
     const firstRender = render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Add News' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ New source' }))
     fireEvent.change(screen.getByLabelText('URL'), {
       target: { value: 'https://example.com/unfinished' },
     })
@@ -793,16 +794,16 @@ describe('dashboard pilot shell', () => {
 
     render(<App />)
 
-    expect(screen.getByRole('dialog', { name: 'Add News' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'New source' })).toBeInTheDocument()
     expect(screen.getByLabelText('URL')).toHaveValue(
       'https://example.com/unfinished',
     )
     expect(screen.getByLabelText(/Title/)).toHaveValue('Unfinished signal')
   })
 
-  it('clears the Add News draft when the user cancels it', () => {
+  it('clears the New source draft when the user cancels it', () => {
     const firstRender = render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Add News' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ New source' }))
     fireEvent.change(screen.getByLabelText('URL'), {
       target: { value: 'https://example.com/cancelled' },
     })
@@ -810,7 +811,7 @@ describe('dashboard pilot shell', () => {
     firstRender.unmount()
 
     render(<App />)
-    expect(screen.queryByRole('dialog', { name: 'Add News' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'New source' })).toBeNull()
   })
 
   it('shows one merged Qira implication', () => {

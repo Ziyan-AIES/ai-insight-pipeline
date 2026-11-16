@@ -1,5 +1,7 @@
 # Editorial automation
 
+Current pipeline entrypoints, shared policy, mail review and recommendation scheduling are documented in [daily-pipeline.md](daily-pipeline.md).
+
 ## Schedule
 
 Run Monday through Friday at 18:00 in the team's operating timezone.
@@ -16,7 +18,7 @@ after a missed start.
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `EDITORIAL_SYNC_URL`
 - `EDITORIAL_WRITE_TOKEN` for the Netlify endpoint and local runner
-- Optional `EDITORIAL_MODEL` (defaults to `grok-4.5`). Team admin settings may
+- Optional `EDITORIAL_MODEL` for direct commands; pipeline tasks use `EDITORIAL_SCHEDULED_MODEL` or the shared model in `config/daily-pipeline.json`. Team admin settings may
   block Auto/`default`, so the runner uses an explicit model ID.
 
 The endpoint uses `EDITORIAL_WRITE_TOKEN`, falling back to the server's
@@ -40,7 +42,7 @@ the repository, logs, prompts, or task arguments.
   queue is empty or a batch produces no publishable items.
 - `npm run editorial:schedule` creates or replaces the Windows task named
   `Signal Intelligence Editorial Review` for weekdays at 18:00 local time.
-- Scheduled output is appended to `logs/local-editorial.log`, which is ignored
+- Scheduled output is appended to `logs/pipeline/editorial.log`, which is ignored
   by Git.
 
 The registered Windows task uses `editorial:drain`, so a backlog larger than a
@@ -52,7 +54,7 @@ reliable.
 
 1. Use `npm run editorial:local` or `npm run editorial:drain`; the runner claims
    the queue and retains the trusted row versions and lease identity.
-2. If the queue is empty, keep existing curation unchanged and still verify the current period readout.
+2. If the queue is empty, leave curation unchanged. The wrapper still runs the independent Signal Reference briefing.
 3. For each pending item:
    - preserve deliberate human edits;
    - translate Chinese source material into concise English;
@@ -65,7 +67,7 @@ reliable.
    - merge the directional implication and main watchpoint in that sentence;
    - leave implications empty when Qira relevance is generic, speculative, or
      only repeats the summary.
-4. Generate or update the current week-to-date readout with a one- or two-sentence lede and two or three specific bullets.
+4. Do not generate a Selected Sources cross-news readout; submit an empty readouts array.
 5. Let the runner POST the validated payload to `EDITORIAL_SYNC_URL` with
    `x-editorial-token`. Do not handcraft the concurrency fields or copy them
    from model output. Never print the token.
@@ -73,7 +75,7 @@ reliable.
    - every submitted URL is `processed`;
    - no existing Topic or News–Topic relation was removed;
    - pending items that were not submitted remain pending;
-   - the current period readout exists.
+   - the separate Signal Reference briefing reports its own result.
 7. Report counts, failures, and URLs that need manual review. Do not create editorial churn when no new signals exist.
 
 ## Reliability method
@@ -186,17 +188,30 @@ The sync endpoint accepts:
   "run_id": "trusted-external-run-id",
   "claim_run_id": "trusted-claim-uuid",
   "lease_owner": "trusted-runner-owner",
-  "readouts": [
-    {
-      "period_type": "week",
-      "period_key": "2026-W32",
-      "lede": "Current synthesis.",
-      "bullets": ["Specific takeaway"]
-    }
-  ]
+  "readouts": []
 }
 ```
 
 The runner injects `id`, `expected_version`, `run_id`, `claim_run_id`, and
 `lease_owner` from the claim snapshot after validating model output. They are
 transport fields, not fields the model is allowed to choose.
+
+## Signal Reference briefing (2026-11-06)
+
+The weekday 18:00 wrapper runs `node scripts/run-reference-brief.mjs` independently after editorial, even when the news queue is empty or fails. RSS runs daily at 00:00 / 08:00 / 16:00 Beijing; mail review starts daily at 16:15. The briefing uses a 17:00 cutoff to allow the 16:00 collection to finish. Late-arriving items enter the next daily brief by discovery time, retaining original publication dates. Monday continues from the last successful cutoff. Both daily and rolling seven-day snapshots publish together; failed synthesis advances neither.
+
+The existing `editorial_readouts` JSON storage holds separate versioned Signal Reference snapshots with `generated_by=signal-reference-v1` and `period_key=radar-daily:YYYY-MM-DD` / `radar-weekly:YYYY-MM-DD`. `period_type=week` is a legacy storage compatibility field, not the UI period. `lede` holds versioned coverage metadata; `bullets` holds validated cards with evidence references. Existing team access policies apply. Old Selected Sources readouts remain archived and are no longer fetched or generated. No database schema change is needed.
+
+### Period-wide synthesis, version 2
+
+Collection retains RSS/API articles even without dictionary matches, with feed article content preferred over short descriptions. A refresh preserves original discovery time. The briefing reviews every collected article in bounded batches, including alternate accounts of the same event, classifies observations or explicit exclusions, then reduces all observations within topic areas before generating up to three cross-article themes. There is no newest-250 cap. Each final card must cite at least two distinct developments; a single company headline cannot be a takeaway. Repeated coverage does not count as distinct evidence. Investor arguments remain attributed theses, not evidence of broad adoption.
+
+The version-2 metadata exposes collected/reviewed/distinct/excluded counts and topic-area count. Private audit files in `logs/reference-briefs` preserve every classification and all considered IDs. Feed excerpts are not full-article verification; missing sources and partial inbox reviews remain coverage warnings. `--rebuild-latest` explicitly revises the last successful coverage window using subsequently recovered articles with publication dates in that window; ordinary scheduled runs continue advancing from the previous successful cutoff.
+
+## Recovery verified 2026-11-11
+
+The Windows wrapper uses `grok-4.5`, overridable with `EDITORIAL_SCHEDULED_MODEL`, independently of the user-level `EDITORIAL_MODEL`. Direct commands share the configured default unless explicitly overridden; `gpt-5.6-sol` returned a provider-region availability error on this machine, not a quota error. The common runner loads `scripts/local-network.mjs` from the repository root with a relative import. This supplies bounded curl transport retries for Supabase and the Cursor authentication exchange; credentials are passed through stdin, never command arguments. The task retries failures twice at ten-minute intervals.
+
+Reference extraction runs at most three independent batches concurrently, preserves input order, and still validates every article before publishing. Completed model steps are cached. A failed daily/weekly pair never advances the cutoff. Late ingestions after a cutoff enter the next daily period.
+
+Daily and weekly extraction also share exact per-article caches keyed by model, prompt and the full article input, so overlapping windows do not pay for classification twice. Changed text or prompts invalidate the entry.

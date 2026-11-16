@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { validPartialDate } from '../research-order'
 import { safeUrl } from '../analysis'
+import { productImageUrl } from '../products'
 import type { ResearchProduct } from '../types'
 
 export function ProductEditor({initial,onSave,onClose}:{initial?:ResearchProduct;onSave:(product:ResearchProduct)=>Promise<void>;onClose:()=>void}) {
@@ -8,7 +10,8 @@ export function ProductEditor({initial,onSave,onClose}:{initial?:ResearchProduct
   function field(key:keyof ResearchProduct,value:string){setProduct(current=>({...current,[key]:value}))}
   async function save(){
     if(!product.name.trim()){setError('Enter a product name.');return}
-    for(const key of ['url','logoUrl','screenshotUrl'] as const)if(product[key].trim()&&!safeUrl(product[key].trim())){setError('Use a complete http or https URL for website and images.');return}
+    for(const key of ['url','logoUrl','screenshotUrl'] as const)if(product[key].trim()&&!(key==='url'?safeUrl(product[key].trim()):productImageUrl(product[key].trim()))){setError('Use a complete http or https URL for website and images.');return}
+    for(const date of [product.foundedDate,product.launchDate]) if(date && !validPartialDate(date)){setError('Use a valid year, YYYY-MM or YYYY-MM-DD.');return}
     setBusy(true);setError('')
     try{await onSave({...product,name:product.name.trim(),url:product.url.trim(),logoUrl:product.logoUrl.trim(),screenshotUrl:product.screenshotUrl.trim()});onClose()}
     catch(error){setError(error instanceof Error?error.message:'Product could not be saved. Your entries are still here.')}
@@ -17,6 +20,10 @@ export function ProductEditor({initial,onSave,onClose}:{initial?:ResearchProduct
   return <div className="modal-backdrop"><section className="analysis-editor product-editor" role="dialog" aria-modal="true" aria-labelledby="product-editor-title"><header><h2 id="product-editor-title">{initial?'Edit product':'New product'}</h2><button className="unlink-button" aria-label="Close product editor" disabled={busy} onClick={onClose}>×</button></header><p>A name and a short description are enough to start. Saved products are visible to approved members of this research.</p>
     <label>Name<input required value={product.name} onChange={event=>field('name',event.target.value)} placeholder="e.g. Siri"/></label>
     <label>Description<textarea value={product.description} onChange={event=>field('description',event.target.value)} placeholder="What it does and why it matters to this research"/></label>
+    <label>Company background<textarea value={product.companyDescription || ''} onChange={event=>field('companyDescription',event.target.value)}/></label>
+    <label>Founded<input value={product.foundedDate || ''} placeholder="YYYY, YYYY-MM or YYYY-MM-DD" onChange={event=>field('foundedDate',event.target.value)}/></label>
+    <label>Launch date<input value={product.launchDate || ''} placeholder="YYYY, YYYY-MM or YYYY-MM-DD" onChange={event=>field('launchDate',event.target.value)}/></label>
+    <label>Launch event<select value={product.launchKind || 'initial'} onChange={event=>field('launchKind',event.target.value)}><option value="initial">Initial launch</option><option value="major_release">Major release</option><option value="public_beta">Public beta</option><option value="announcement">Announcement</option></select></label>
     <details><summary>Company, website and images · optional</summary><label>Company<input value={product.company} onChange={event=>field('company',event.target.value)}/></label><label>Website URL<input type="url" value={product.url} onChange={event=>field('url',event.target.value)}/></label><label>Logo URL<input type="url" value={product.logoUrl} onChange={event=>field('logoUrl',event.target.value)}/></label><label>Screenshot URL<input type="url" value={product.screenshotUrl} onChange={event=>field('screenshotUrl',event.target.value)}/></label></details>
     {error&&<p role="alert">{error}</p>}<footer className="analysis-controls"><button disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} onClick={()=>void save()}>{busy?'Saving…':'Save product'}</button></footer>
   </section></div>

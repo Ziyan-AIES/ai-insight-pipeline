@@ -5,7 +5,7 @@ import type { AnalysisBlock, TopicOutput } from '../types'
 export function AnalysisBody({ item }: { item: TopicOutput }) {
   const [page, setPage] = useState(0)
   const content = item.content
-  if (!content) return <>{safeUrl(item.link) ? <a href={safeUrl(item.link)!} target="_blank" rel="noreferrer">Open original {item.kind || 'file'} ↗</a> : <p>No valid file link has been added.</p>}</>
+  if (!content) return <>{safeUrl(item.link) ? <a href={safeUrl(item.link)!} target="_blank" rel="noreferrer">Open original {item.kind || 'file'} </a> : <p>No valid file link has been added.</p>}</>
   const slides = content.format === 'slides'
   const activePage = Math.min(page, Math.max(0, content.blocks.length - 1))
   const visible = slides ? content.blocks.slice(activePage, activePage + 1) : content.blocks

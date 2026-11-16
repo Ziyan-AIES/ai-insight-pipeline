@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { SharedSources } from './SharedSources'
 import { ResearchLibrary } from './ResearchLibrary'
@@ -12,7 +12,7 @@ it('filters the shared library by missing Trend and Research relationships',()=>
   fireEvent.change(screen.getByRole('combobox',{name:'Relationship'}),{target:{value:'no-research'}})
   expect(screen.getByRole('heading',{name:'Assigned'})).toBeInTheDocument()
 })
-it('links a source dropped onto an open research topic and reuses the cross removal action',()=>{
+it('links and removes research sources without exposing the private workspace',async()=>{
   const topic={...demoTopics[0],status:'researching' as const,supportingNews:[demoNews[0].id]}
   window.history.replaceState(null,'','/?workspace=threads&reader=1&research='+topic.id)
   const onLink=vi.fn(),onUnlink=vi.fn()
@@ -20,8 +20,8 @@ it('links a source dropped onto an open research topic and reuses the cross remo
   const panel=screen.getByRole('heading',{name:topic.title}).closest('.sonata-research')!
   fireEvent.drop(panel,{dataTransfer:{getData:()=>demoNews[1].id}})
   expect(onLink).toHaveBeenCalledWith(topic,demoNews[1].id)
-  fireEvent.click(screen.getByRole('button',{name:'Sources'}))
-  fireEvent.click(screen.getByRole('button',{name:'Remove source from Research'}))
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Sources'}))})
+  fireEvent.click(screen.getByRole('button',{name:'Remove from research'}))
   expect(onUnlink).toHaveBeenCalledWith(topic,demoNews[0].id)
-  expect(screen.getByRole('link',{name:'Open private workspace'})).toHaveAttribute('href','https://personal-agent-research-studio.ziyan-li-pku.chatgpt.site/')
+  expect(screen.queryByRole('link',{name:'Open private workspace'})).toBeNull()
 })

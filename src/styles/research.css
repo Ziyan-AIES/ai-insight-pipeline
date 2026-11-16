@@ -1,0 +1,49 @@
+/* Studio's two-column cards, using the existing Sonata palette and controls. */
+.app-shell .research-product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:stretch; }
+.app-shell .research-product-card,.app-shell .research-source-card { display:flex; flex-direction:column; min-width:0; padding:24px; border:1px solid var(--color-line); border-radius:12px; background:var(--color-surface); overflow-wrap:anywhere; }
+.app-shell .research-product-card h3 { font-size:20px; line-height:1.35; margin:2px 0 6px; letter-spacing:-.4px; }
+.app-shell .research-product-card p,.app-shell .research-source-card p { font:400 14px/1.75 'Source Sans 3','Segoe UI',sans-serif; margin:14px 0; }
+.app-shell .research-product-card small,.app-shell .research-source-card small { font-size:12px; line-height:1.6; }
+.app-shell .research-product-card .product-company-background { font-size:13px; color:var(--color-muted); }
+.app-shell .research-product-logo { width:56px; height:56px; border:1px solid #e9e5f1; border-radius:15px; padding:7px; background:#fff; }
+.app-shell .research-product-screen { display:block; aspect-ratio:16/10; padding:14px; border:1px solid #e8e3ee; border-radius:12px; background:linear-gradient(135deg,#f3f0fa,#eef2f6); margin:18px 0; }
+.app-shell .product-dates { gap:8px 16px; line-height:1.6; margin-top:2px; }
+.app-shell .research-product-card>.text-action { align-self:flex-start; margin-top:auto; }
+.app-shell .research-source-card h3 { font-size:17px; line-height:1.5; margin:12px 0 6px; }
+.app-shell .research-source-cover { width:100%; aspect-ratio:16/9; object-fit:contain; border-radius:9px; background:var(--color-surface-soft); margin:0 0 16px; }
+.app-shell .source-card-meta { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; font-size:12px; color:var(--color-muted); }
+.app-shell .source-kind { padding:3px 8px; border-radius:6px; background:var(--color-accent-soft); color:var(--color-accent); text-transform:capitalize; }
+.app-shell .source-card-actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:18px; margin-top:auto; align-items:center; }
+.app-shell .source-card-management { display:flex; flex-wrap:wrap; gap:8px 18px; border-top:1px solid #e9e5ef; margin-top:16px; padding-top:12px; }
+.app-shell .research-source-card a,.app-shell .research-source-card button,.app-shell .sonata-research .text-action { font:600 12px/1.5 'Manrope','Segoe UI',sans-serif; color:var(--color-accent); text-decoration:none; }
+.app-shell .source-card-actions>a,.app-shell .source-card-actions>button,.app-shell .research-filters>button { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:9px 13px; border:1px solid var(--color-line); border-radius:9px; background:var(--color-surface); }
+.app-shell .source-card-management>button,.app-shell .sonata-research .text-action { min-height:32px; padding:5px 0; border:0; background:transparent; box-shadow:none; text-align:left; }
+.app-shell .source-card-management>button { font-size:11px; color:var(--color-muted); }
+.app-shell .source-card-actions>:hover,.app-shell .research-filters>button:hover { background:var(--color-accent-soft); }
+.app-shell .source-card-management>button:hover,.app-shell .sonata-research .text-action:hover { color:var(--color-accent); text-decoration:underline; text-underline-offset:4px; }
+.app-shell .research-filters { display:grid; grid-template-columns:minmax(140px,1.5fr) repeat(3,minmax(110px,1fr)) auto; gap:14px; align-items:end; }
+.app-shell .research-filters label,.app-shell .analysis-controls label { display:flex; flex-direction:column; gap:7px; min-width:0; font:600 12px/1.5 'Manrope','Segoe UI',sans-serif; color:var(--color-accent); }
+.app-shell .research-filters input,.app-shell .research-filters select,.app-shell .analysis-controls select { width:100%; min-width:0; height:40px; padding:8px 12px; border:1px solid var(--color-line); border-radius:9px; background:#fff; color:var(--color-ink); font:400 14px/1.5 'Source Sans 3','Segoe UI',sans-serif; }
+.app-shell .analysis-controls { gap:16px; margin:0 0 22px; align-items:end; }
+.app-shell .analysis-controls h2 { margin:0 auto 0 0; }
+.app-shell .analysis-editor { box-sizing:border-box; width:min(760px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); padding:24px; overflow-wrap:anywhere; }
+.app-shell .analysis-editor>header { gap:16px; align-items:flex-start; margin-bottom:20px; }
+.app-shell .analysis-editor>header h2 { margin:0; font-size:22px; line-height:1.4; min-width:0; }
+.app-shell .analysis-editor>header button { flex-shrink:0; }
+.app-shell .source-editor fieldset { gap:18px; }
+.app-shell .source-editor label { margin:0; min-width:0; }
+.app-shell .source-editor input,.app-shell .source-editor select,.app-shell .source-editor textarea { width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
+.app-shell .source-editor textarea { white-space:pre-wrap; overflow-wrap:anywhere; }
+.app-shell .source-editor p { max-width:100%; margin:0; font:400 13px/1.65 'Source Sans 3','Segoe UI',sans-serif; white-space:normal; }
+.app-shell .analysis-editor footer { display:flex; justify-content:flex-end; gap:12px; flex-wrap:wrap; margin-top:24px; bottom:-24px; padding:18px 0; }
+.app-shell .analysis-editor button { font:600 13px/1.5 'Manrope','Segoe UI',sans-serif; border-radius:9px; }
+.app-shell .research-filters>button { font:600 13px/1.5 'Manrope','Segoe UI',sans-serif; color:var(--color-accent); }
+.app-shell .analysis-editor p,.app-shell .analysis-editor li { font:400 14px/1.7 'Source Sans 3','Segoe UI',sans-serif; }
+.app-shell .analysis-editor li { margin-block:8px; }
+.app-shell .product-media-caption { margin:-8px 0 16px; color:var(--color-muted); }
+.app-shell .sonata-research :focus-visible,.app-shell .source-editor :focus-visible { outline:2px solid #8f75af; outline-offset:3px; }
+.app-shell .analysis-editor .primary-button { background:#3d3255; color:#fff; border-color:#3d3255; }
+.app-shell .research-transcript { font:400 14px/1.7 'Source Sans 3','Segoe UI',sans-serif; border:1px solid var(--color-line); border-radius:9px; padding:16px; background:#f7f5fa; }
+@media(max-width:900px) { .app-shell .research-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:750px) { .app-shell .research-product-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .app-shell .research-product-card,.app-shell .research-source-card { padding:20px; } .app-shell .sonata-reading { padding:18px; } .app-shell .research-sections { flex-wrap:wrap; } .app-shell .analysis-editor { padding:20px; } .app-shell .analysis-editor footer { bottom:-20px; } }
+@media(max-width:380px) { .app-shell .research-filters { grid-template-columns:minmax(0,1fr); } }
